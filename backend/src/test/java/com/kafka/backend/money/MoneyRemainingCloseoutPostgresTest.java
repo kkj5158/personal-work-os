@@ -1,6 +1,5 @@
 package com.kafka.backend.money;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import java.util.*;
 import java.nio.file.*;
 import java.time.*;
@@ -11,7 +10,7 @@ import static com.kafka.backend.money.MoneyRemainingCloseoutService.*;
 import static com.kafka.backend.money.MoneyStatementReconciliationService.*;
 
 /** Real PostgreSQL, synthetic run-owned schemas only; no shared credentials or source files. */
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*")
+@org.junit.jupiter.api.condition.EnabledIf("com.kafka.backend.money.MoneyPostgresIntegrationTest#contractFixture")
 class MoneyRemainingCloseoutPostgresTest {
  final MoneyStatementReconciliationPostgresTest b=new MoneyStatementReconciliationPostgresTest();
  final MoneyRecommendationPostgresTest f=b.f;

@@ -127,7 +127,8 @@ public class MoneyUnifiedBookkeepingService {
  @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount,String repaymentGroup,RepaymentPart repaymentPart){
   return ledger(from,to,unresolved,search,accountIds,limit,offset,categoryIds,type,minAmount,maxAmount,repaymentGroup,repaymentPart,false);
  }
- @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount,String repaymentGroup,RepaymentPart repaymentPart,boolean bookkeepingScope){
+ @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount,String repaymentGroup,RepaymentPart repaymentPart,boolean bookkeepingScope){return ledger(from,to,unresolved,search,accountIds,limit,offset,categoryIds,type,minAmount,maxAmount,repaymentGroup,repaymentPart,bookkeepingScope,null);}
+ @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount,String repaymentGroup,RepaymentPart repaymentPart,boolean bookkeepingScope,String baseDirection){
   MoneyService.page(limit,offset);MoneyService.text(search,200,false,"검색");var args=new ArrayList<Object>(List.of(owner()));String where=" from money_transactions t"+MoneyOwnerFinancialDecision.JOIN+ACTIVE_FACTS;
   boolean repaymentDrilldown=repaymentGroup!=null||repaymentPart!=null;
   require(!bookkeepingScope||repaymentDrilldown,"가계부 상환 상세 필터를 선택하세요.");
@@ -146,6 +147,11 @@ public class MoneyUnifiedBookkeepingService {
   if(search!=null&&!search.isBlank()){where+=" and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.memo,'')||' '||coalesce(t.counterparty_text,'')))>0";args.add(search);}
   where+=accountFilter(accountIds,args,bookkeepingScope);
   if(categoryIds!=null){var ids=Arrays.stream(categoryIds.split(",")).filter(v->!v.isBlank()).map(UUID::fromString).toArray(UUID[]::new);where+=" and t.id in ("+MoneyWebService.BOOK_BASE+" select id from effective where \"categoryId\"=any(?))";args.add(owner());args.add(ids);}
+  if(baseDirection!=null&&!baseDirection.isBlank()){
+   require(Set.of("INCOME","EXPENSE","TRANSFER").contains(baseDirection),"입금·출금·이체 방향을 선택하세요.");
+   if(repaymentDrilldown){if(!"EXPENSE".equals(baseDirection))where+=" and false";}
+   else{where+=" and ("+MoneyOwnerFinancialDecision.CASH_DIRECTION+")=?";args.add(baseDirection);}
+  }
   if(!repaymentDrilldown&&type!=null&&!type.isBlank()){require(Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(type)||Arrays.stream(TransactionType.values()).anyMatch(t->t.name().equals(type)),"금융 유형 필터를 확인하세요.");where+=" and coalesce(d.declared_type,"+MoneySavingsReadService.displayTypeSql("t")+")=?";args.add(type);}
   MoneyWebRevisionService.amountRange(minAmount,maxAmount);if(minAmount!=null){where+=" and t.amount>=?";args.add(minAmount);}if(maxAmount!=null){where+=" and t.amount<=?";args.add(maxAmount);}
   long count=db.queryForObject("select count(*)"+where,Long.class,args.toArray());args.add(limit);args.add(offset);

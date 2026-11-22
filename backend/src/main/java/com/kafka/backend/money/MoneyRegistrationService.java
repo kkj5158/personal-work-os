@@ -1,5 +1,8 @@
 package com.kafka.backend.money;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
 import com.kafka.backend.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,7 +18,10 @@ import static com.kafka.backend.money.MoneyService.require;
 public class MoneyRegistrationService {
  private final JdbcTemplate db;private final CurrentUserProvider users;private final ObjectMapper json;private final MoneyService money;private final MoneyCommandService commands;
  public MoneyRegistrationService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,MoneyService money,MoneyCommandService commands){this.db=db;this.users=users;this.json=json;this.money=money;this.commands=commands;}
- public record Change(UUID requestId,Long expectedVersion,UUID cancellationId,Long expectedLoanVersion){}
+ public record Change(UUID requestId,Long expectedVersion,UUID cancellationId,Long expectedLoanVersion,
+      @JsonInclude(NON_NULL) Boolean simpleDelete){
+  public Change(UUID requestId,Long expectedVersion,UUID cancellationId,Long expectedLoanVersion){this(requestId,expectedVersion,cancellationId,expectedLoanVersion,null);}
+ }
  private UUID owner(){return users.getCurrentUserId();}
  private Map<String,Object> object(Object value){return json.readValue(value.toString(),Map.class);}
  private Map<String,Object> fact(UUID id){var rows=db.queryForList("select * from money_transactions where user_id=? and id=? for update",owner(),id);if(rows.isEmpty())throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");return rows.getFirst();}
@@ -23,6 +29,7 @@ public class MoneyRegistrationService {
   require(row.get("merged_into")==null,"연결된 이체의 원래 행은 개별 취소·복원할 수 없습니다. 대표 이체를 선택하세요.");
   require(!Set.of("INITIAL_BALANCE","BALANCE_ADJUSTMENT").contains(row.get("type")),"잔액 기준 거래는 전용 잔액 정정에서 처리하세요.");
   UUID id=(UUID)row.get("id");
+  if(!restore)require(MoneyStatementProtection.sources(db,owner(),id).isEmpty(),"명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.");
   if(!restore)require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=? and not excluded)",Boolean.class,owner(),id)),"연결된 활성 환불을 먼저 취소하세요.");
   if(restore&&row.get("refund_of")!=null){
    var original=fact((UUID)row.get("refund_of"));require("EXPENSE".equals(original.get("type"))&&!Boolean.TRUE.equals(original.get("excluded")),"원래 지출을 먼저 복원하세요.");
@@ -38,6 +45,10 @@ public class MoneyRegistrationService {
   return commands.execute(owner(),input.requestId(),restore?"RESTORE_REGISTRATION":"CANCEL_REGISTRATION",Arrays.asList(id,input),()->{
    var row=fact(id);MoneyMeaningService.version(((Number)row.get("version")).longValue(),input.expectedVersion());
    require(Boolean.TRUE.equals(row.get("excluded"))==restore,restore?"현재 취소된 거래만 복원할 수 있습니다.":"이미 제외된 거래는 새로 취소할 수 없습니다.");
+   if (!restore && Boolean.TRUE.equals(input.simpleDelete())) {
+    var impact=impact(id);
+    require(Boolean.TRUE.equals(impact.get("canDelete")),impact.get("reason").toString());
+   }
    guard(row,restore);
    UUID cancellationId;
    if(restore){
@@ -62,6 +73,25 @@ public class MoneyRegistrationService {
   });
  }
  @Transactional(readOnly=true) public Map<String,Object> history(UUID id){money.transaction(id);var rows=db.queryForList("select id,kind,payload::text,created_at as \"createdAt\" from money_ai_events where user_id=? and subject_id=? and kind in ('REGISTRATION_CANCELLED','REGISTRATION_RESTORED') order by created_at,id",owner(),id);rows.forEach(r->{r.put("payload",object(r.get("payload")));r.replaceAll((k,v)->v instanceof Timestamp t?t.toInstant():v);});return Map.of("items",rows);}
+ @Transactional(readOnly=true) public Map<String,Object> impact(UUID id){
+  var fact=money.transaction(id);
+  String reason=null;
+  if(fact.excluded() || fact.mergedInto()!=null)reason="이미 취소되었거나 병합된 거래입니다. 취소 이력 또는 대표 거래를 확인하세요.";
+  else if(!MoneyStatementProtection.sources(db,owner(),id).isEmpty())reason="명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.";
+  else if(!Set.of("EXPENSE","INCOME").contains(fact.type().name()))reason=switch(fact.type().name()){
+   case "TRANSFER" -> "이체 연결을 전용 이체 정정에서 확인하세요.";
+   case "REFUND" -> "환불 정정에서 원소비와 환불 한도를 확인하세요.";
+   case "LOAN_PAYMENT","LOAN_RECEIPT" -> "대출 원금과 연결된 거래입니다. 대출 내역에서 정정하세요.";
+   default -> "잔액 기준 거래입니다. 전용 잔액 정정에서 확인하세요.";
+  };
+  else if(Boolean.TRUE.equals(db.queryForObject("""
+    select exists(select 1 from money_transactions where user_id=? and refund_of=?)
+       or exists(select 1 from money_owner_financial_decisions where user_id=? and transaction_id=?
+                 and declared_type in ('REFUND','LOAN_PAYMENT','LOAN_RECEIPT','TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL'))
+    """,Boolean.class,owner(),id,owner(),id)))reason="환불·대출·이체 관계가 있습니다. 거래의 금융 관계 정정에서 확인하세요.";
+  return Map.of("canDelete",reason==null,"reason",reason==null?"등록을 취소하면 활성 원장과 통계에서 제외됩니다. 원본과 이력은 보존됩니다.":reason,
+     "amount",fact.amount(),"currency",fact.currency(),"version",fact.version(),"sourceCount",fact.sources().size());
+ }
  @Transactional(readOnly=true) public Map<String,Object> context(UUID id){money.transaction(id);var rows=db.queryForList("select t.version,t.loan_id as \"loanId\",l.version as \"loanVersion\" from money_transactions t left join money_loans l on l.user_id=t.user_id and l.id=t.loan_id where t.user_id=? and t.id=?",owner(),id);return rows.getFirst();}
  @Transactional(readOnly=true) public Map<String,Object> cancelled(String search,String from,String to,UUID accountId,UUID categoryId,int offset){
   MoneyService.page(50,offset);MoneyService.text(search,200,false,"검색");var args=new ArrayList<Object>(List.of(owner()));String where=" from money_ai_events e join money_transactions t on t.user_id=e.user_id and t.id=e.subject_id left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id and b.slot=0 where e.user_id=? and e.kind='REGISTRATION_CANCELLED' and t.excluded and not exists(select 1 from money_ai_events r where r.user_id=e.user_id and r.subject_id=e.subject_id and r.kind='REGISTRATION_RESTORED' and r.payload->>'cancellationId'=e.id::text)";

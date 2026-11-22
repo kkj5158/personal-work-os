@@ -1,4 +1,7 @@
 package com.kafka.backend.money;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 import com.kafka.backend.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,7 +18,11 @@ import static com.kafka.backend.money.MoneyService.require;
 public class MoneyOwnerReviewService {
  private final JdbcTemplate db;private final CurrentUserProvider users;private final ObjectMapper json;private final MoneyService money;private final MoneyCommandService commands;
  public MoneyOwnerReviewService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,MoneyService money,MoneyCommandService commands){this.db=db;this.users=users;this.json=json;this.money=money;this.commands=commands;}
- public record Decision(UUID requestId,String fingerprint,String action,UUID accountId,UUID otherAccountId,UUID existingTransactionId,Long accountVersion,Long otherAccountVersion,Long existingTransactionVersion,Financial financial){
+ public record Decision(UUID requestId,String fingerprint,String action,UUID accountId,UUID otherAccountId,UUID existingTransactionId,Long accountVersion,Long otherAccountVersion,Long existingTransactionVersion,Financial financial,
+      @JsonInclude(NON_NULL) UUID semanticCategoryId,
+      @JsonInclude(NON_NULL) Long semanticPolicyVersion){
+  public Decision(UUID requestId,String fingerprint,String action,UUID accountId,UUID otherAccountId,UUID existingTransactionId,Long accountVersion,Long otherAccountVersion,Long existingTransactionVersion,Financial financial){this(requestId,fingerprint,action,accountId,otherAccountId,existingTransactionId,accountVersion,otherAccountVersion,existingTransactionVersion,financial,null,null);}
+
   public Decision(UUID requestId,String fingerprint,String action,UUID accountId,UUID otherAccountId,UUID existingTransactionId,Long accountVersion,Long otherAccountVersion,Long existingTransactionVersion){this(requestId,fingerprint,action,accountId,otherAccountId,existingTransactionId,accountVersion,otherAccountVersion,existingTransactionVersion,null);}
  }
  /** Additive wire contract: legacy Android/owner commands retain their original shape. */
@@ -97,6 +104,7 @@ public class MoneyOwnerReviewService {
   if(!"LINK_DUPLICATE".equals(input.action())){MoneyService.text(v.title(),300,false,"제목");MoneyService.text(v.memo(),2000,false,"메모");
    if(v.categoryId()!=null){require(!unresolved&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(type),"분류와 금융 유형을 독립적으로 확인하세요.");require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c where c.user_id=? and c.id=? and not c.archived and c.kind=?)",Boolean.class,owner(),v.categoryId(),type.name())),"소유한 활성 분류를 선택하세요.");db.update("update money_transactions set category_id=? where user_id=? and id=?",v.categoryId(),owner(),fact);}
    db.update("update money_transactions set title=?,memo=? where user_id=? and id=?",v.title(),v.memo(),owner(),fact);}
+  bindCategory(input,fact);
   db.update("update money_raw_notifications set review_deferred=false where user_id=? and id=?",owner(),id);
   db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,'OWNER_REVIEW_MANUAL_FINANCIAL_V2',cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner(),fact,json.writeValueAsString(Map.of("rawId",id,"version",source.get("version"),"fingerprint",source.get("fingerprint"))),json.writeValueAsString(input));return result;
  }
@@ -202,12 +210,18 @@ public class MoneyOwnerReviewService {
     MoneyService.text(v.title(),300,false,"제목");MoneyService.text(v.memo(),2000,false,"메모");
     db.update("update money_transactions set title=?,memo=?,category_id=?,version=version+1 where user_id=? and id=?",v.title(),v.memo(),v.categoryId(),owner(),transaction);
    }
+   bindCategory(input,transaction);
    for(UUID raw:ids){money.finishProcessing(raw,ProcessingState.PROCESSED,"USER_CONFIRMED");db.update("update money_raw_notifications set review_deferred=false where user_id=? and id=?",owner(),raw);}
    db.update("update money_classification_jobs set status='PROTECTED',result='{}'::jsonb,updated_at=now() where user_id=? and transaction_id=? and not requested and status='QUEUED'",owner(),transaction);
    db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,'OWNER_REVIEW_FINANCIAL_V2',cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner(),transaction,json.writeValueAsString(Map.of("raw",c)),json.writeValueAsString(input));
    UUID event=UUID.randomUUID();for(UUID raw:ids)db.update("insert into money_ai_events(id,user_id,subject_id,kind,payload) values(?,?,?,'MOVE_TO_BOOKKEEPING',cast(? as jsonb))",raw.equals(id)?event:UUID.randomUUID(),owner(),raw,json.writeValueAsString(Map.of("kind","RAW","transactionId",transaction,"requestId",input.requestId(),"after",Map.of("version",money.notification(raw).processingVersion(),"state","COMPLETED"))));
    return Map.of("transactionId",transaction,"transaction",money.transaction(transaction),"eventId",event,"sourceIds",ids);
   });
+ }
+ private void bindCategory(Decision input,UUID transaction){
+  if(input.semanticCategoryId()==null && input.semanticPolicyVersion()==null)return;
+  require("REGISTER".equals(input.action()),"출처 연결은 기존 거래의 금융 의미를 변경할 수 없습니다.");
+  new MoneyCategoryFinancialPolicy(db,owner()).bind(transaction,input.requestId(),input.semanticCategoryId(),input.semanticPolicyVersion(),input.financial().type());
  }
  public Map<String,Object> decide(UUID id,Decision input){
   require(input!=null&&input.fingerprint()!=null,"원래 금융 근거와 요청 ID가 필요합니다.");

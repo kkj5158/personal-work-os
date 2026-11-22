@@ -1,7 +1,6 @@
 package com.kafka.backend.money;
 
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import java.util.*;
 import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +11,7 @@ import static com.kafka.backend.money.MoneyStatementReconciliationService.*;
 import static com.kafka.backend.money.MoneyTypes.*;
 
 /** Synthetic loopback database only. Private golden source is read, never committed to Git. */
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*")
+@org.junit.jupiter.api.condition.EnabledIf("com.kafka.backend.money.MoneyPostgresIntegrationTest#contractFixture")
 class MoneyStatementReconciliationPostgresTest {
  final MoneyRecommendationPostgresTest f=new MoneyRecommendationPostgresTest();MoneyStatementReconciliationService service;
  String csv="no,time,out,inc,balance,desc,page\n1,2026-11-11 02:03:35,80000,0,78125,synthetic transfer,1\n";

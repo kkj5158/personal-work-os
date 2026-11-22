@@ -222,7 +222,7 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("920000");
   assertThat(e.product().balance(a.id())).isEqualTo(before);
   assertThat(tracking.tracking()).isEqualTo(settings);
-  assertThat(items(read(l,null,50,0))).singleElement().satisfies(row->assertThat(row).containsEntry("id",t.id()).containsEntry("categoryEligible",false));
+  assertThat(items(read(l,null,50,0))).singleElement().satisfies(row->assertThat(row).containsEntry("id",t.id()).containsEntry("categoryEligible",true));
  });}
 
  @Test void allHasOneCanonicalTransferAndAccountLensesHaveOppositeExactSignedLegs(){base.check(e->{
@@ -248,7 +248,7 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(e.money().transaction(t.id()).type()).isEqualTo(TransactionType.INCOME);assertThat(e.money().transaction(t.id()).version()).isZero();assertThat(e.web().loan(loan.id()).remainingPrincipal()).isZero();
   assertThat(e.unified().outcome(edit.requestId()).get("status")).isEqualTo("UNKNOWN");assertThat(e.db().queryForObject("select count(*) from money_meaning_audit where subject_id=?",Integer.class,t.id())).isZero();
   assertThat(l.execute(t.id(),execute).get("status")).isEqualTo("APPLIED");assertThat(l.execute(t.id(),execute).get("status")).isEqualTo("APPLIED");assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("100");assertThat(e.db().queryForObject("select count(*) from money_transactions where user_id=?",Integer.class,MoneyPostgresIntegrationTest.OWNER)).isEqualTo(1);
-  assertThat(items(read(l,null,50,0))).singleElement().satisfies(row->{assertThat(row.get("display_type")).isEqualTo("LOAN_RECEIPT");assertThat(row.get("categoryEligible")).isEqualTo(false);});
+  assertThat(items(read(l,null,50,0))).singleElement().satisfies(row->{assertThat(row.get("display_type")).isEqualTo("LOAN_RECEIPT");assertThat(row.get("categoryEligible")).isEqualTo(true);});
  });}
  @Test void exactDraftTokenAndStaleAccountFingerprintBlockMoneyMutation(){base.check(e->{
   var a=base.account(e,AccountRole.SPENDING);var t=base.tx(e,a.id(),true,100,true);var l=ledger(e);var draft=draft(l,t,"EXPENSE");var execute=approved(l,t.id(),draft);
@@ -314,5 +314,65 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(row.get("from_account_id")).isEqualTo(debit.id());assertThat(row.get("to_account_id")).isEqualTo(credit.id());
   assertThatThrownBy(()->l.financialType(transfer.id(),new FinancialType(UUID.randomUUID(),current.version(),"UNRESOLVED")))
       .isInstanceOf(OptimisticLockConflictException.class);
+ });}
+
+ @Test void mappedCategoryPreservesCashAndRequestIdentityUntilAnOwnerVerifiesLoanSplit(){base.check(e->{
+  UUID owner=MoneyPostgresIntegrationTest.OWNER;
+  var a=base.account(e,AccountRole.SPENDING);
+  e.db().queryForList("select money_seed_financial_categories(?)",owner);
+  var category=e.product().categories().stream().filter(c->"LOAN_PAYMENT".equals(c.semanticCode())).findFirst().orElseThrow();
+  var loan=e.web().saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","은행","PERSONAL",BigDecimal.valueOf(500),
+      BigDecimal.valueOf(500),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));
+  var fact=base.tx(e,a.id(),true,100,false);
+  var l=ledger(e);
+  var request=new Category(UUID.randomUUID(),fact.version(),l.row(fact.id()).get("fingerprint").toString(),
+      category.id(),0L,true,category.semanticPolicyVersion());
+  var baseline=e.product().balance(a.id());
+  assertThat(l.category(fact.id(),request)).containsEntry("status","APPLIED");
+  assertThat(l.category(fact.id(),request)).containsEntry("status","APPLIED");
+  var pending=l.row(fact.id());
+  assertThat(pending).containsEntry("relationStatus","LOAN_SPLIT_PENDING").containsEntry("semanticCategoryId",category.id());
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("500");
+  var edit=new MoneyUnifiedBookkeepingService.Edit(UUID.randomUUID(),((Number)pending.get("version")).longValue(),
+      "TYPE","LOAN_PAYMENT",null,null,loan.id(),loan.version(),BigDecimal.valueOf(75),BigDecimal.valueOf(20),BigDecimal.valueOf(5),
+      null,null,null,null,"합성 원금과 이자·수수료 확인",null);
+  var draft=new EditRequest(pending.get("fingerprint").toString(),edit,null,category.id(),category.semanticPolicyVersion());
+  var preview=l.preview(fact.id(),draft);
+  assertThat(preview).containsEntry("status","APPLIED");
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("500");
+  var execute=new EditRequest(draft.fingerprint(),edit,preview.get("previewToken").toString(),category.id(),category.semanticPolicyVersion());
+  assertThat(l.execute(fact.id(),execute)).containsEntry("status","APPLIED");
+  assertThat(l.execute(fact.id(),execute)).containsEntry("status","APPLIED");
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("425");
+  assertThat(e.product().balance(a.id())).isEqualTo(baseline);
+  assertThat(items(l.read("2026-09-01","2026-09-30",null,null,"ALL",null,10,0,"EXPENSE")))
+      .extracting(r->r.get("id")).contains(fact.id());
+  var json=JsonMapper.builder().build();var manager=new DataSourceTransactionManager(e.db().getDataSource());
+  var reg=new MoneyRegistrationService(e.db(),()->owner,json,e.money(),new MoneyCommandService(e.db(),json,manager));
+  assertThat(reg.impact(fact.id())).containsEntry("canDelete",false);
+  var cancel=new MoneyRegistrationService.Change(UUID.randomUUID(),e.money().transaction(fact.id()).version(),null,loan.version(),true);
+  assertThat(reg.change(fact.id(),cancel,false)).containsEntry("status","NOT_APPLIED");
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("425");
+ });}
+ @Test void semanticMappingRequiresAnOwnedActiveIdAndCurrentPolicyEvenAfterRename(){base.check(e->{
+  UUID owner=MoneyPostgresIntegrationTest.OWNER;
+  var a=base.account(e,AccountRole.INCOME_HUB);
+  e.db().queryForList("select money_seed_financial_categories(?)",owner);
+  var mapped=e.product().categories().stream().filter(c->"REFUND".equals(c.semanticCode())).findFirst().orElseThrow();
+  e.db().update("update money_categories set name=? where id=?","원금 반환",mapped.id());
+  var policy=new MoneyCategoryFinancialPolicy(e.db(),owner);
+  assertThat(policy.resolve(mapped.id(),mapped.semanticPolicyVersion())).isEqualTo("REFUND");
+  var custom=new MoneyCategories(e.db(),owner,JsonMapper.builder().build()).save(null,
+      new MoneyProductService.CategoryInput("환불 금액","#64748b",false,null,"INCOME",null,99));
+  assertThat(custom.semanticCode()).isNull();
+  assertThatThrownBy(()->policy.resolve(custom.id(),1L)).isInstanceOf(InvalidRequestException.class);
+  assertThatThrownBy(()->policy.resolve(mapped.id(),0L)).isInstanceOf(OptimisticLockConflictException.class);
+  var fact=base.tx(e,a.id(),false,50,false);
+  policy.bind(fact.id(),UUID.randomUUID(),mapped.id(),1L,"INCOME");
+  assertThat(e.money().transaction(fact.id()).type()).isEqualTo(TransactionType.REFUND);
+  assertThat(ledger(e).row(fact.id())).containsEntry("relationStatus","REFUND_ORIGINAL_PENDING");
+  assertThat(e.money().transaction(fact.id()).refundOf()).isNull();
+  e.db().update("update money_categories set archived=true where id=?",mapped.id());
+  assertThatThrownBy(()->policy.resolve(mapped.id(),1L)).isInstanceOf(InvalidRequestException.class);
  });}
 }

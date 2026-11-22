@@ -1,13 +1,12 @@
 package com.kafka.backend.money;
 
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import java.time.*;import java.util.*;
 import static com.kafka.backend.money.MoneyTypes.*;
 import static org.assertj.core.api.Assertions.*;
 
 /** Never runs on owner DEV/PROD: committed synthetic schemas in the owned loopback cluster only. */
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*")
+@org.junit.jupiter.api.condition.EnabledIf("com.kafka.backend.money.MoneyPostgresIntegrationTest#contractFixture")
 class MoneyKakaoSignedBalancePostgresTest {
  final MoneyRecommendationPostgresTest f=new MoneyRecommendationPostgresTest();UUID kakao;final Instant at=Instant.parse("2026-11-02T13:19:33.491Z");
  @BeforeEach void setup()throws Exception{

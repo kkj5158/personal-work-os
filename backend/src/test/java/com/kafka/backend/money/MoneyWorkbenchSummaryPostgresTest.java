@@ -1,12 +1,11 @@
 package com.kafka.backend.money;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import java.math.BigDecimal;import java.time.*;import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 /** Exact count-only/legacy row-filter equivalence in a disposable loopback schema. */
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*")
+@org.junit.jupiter.api.condition.EnabledIf("com.kafka.backend.money.MoneyPostgresIntegrationTest#contractFixture")
 class MoneyWorkbenchSummaryPostgresTest {
  final MoneyRecommendationDraftReadPostgresTest f=new MoneyRecommendationDraftReadPostgresTest();
  @BeforeEach void setup()throws Exception{f.setup();}@AfterEach void cleanup(){f.cleanup();}
