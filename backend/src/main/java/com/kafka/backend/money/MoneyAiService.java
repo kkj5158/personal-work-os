@@ -33,6 +33,11 @@ public class MoneyAiService {
  private Map<String,Object> latest(UUID id){return events(id,1).stream().findFirst().orElse(null);}
 
  @Transactional(readOnly=true)
+ public Map<String,Object> gate0(String state,String type,String search,UUID accountId,int limit,int offset,String reason){
+  return new MoneyGateZeroReview(db,users,json,money).list(state,type,search,accountId,limit,offset,reason);
+ }
+
+ @Transactional(readOnly=true)
  public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset){return workbench(state,type,search,accountId,limit,offset,null);}
  @Transactional(readOnly=true) public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset,String reason){
   return workbench(state,type,search,accountId,limit,offset,reason,false);
@@ -186,6 +191,7 @@ public class MoneyAiService {
    require(db.queryForObject(MoneyReviewService.QUEUE+"select count(*) from queue where id=? and kind='TRANSACTION' and state in ('PENDING','DEFERRED')",Long.class,owner(),input.id())>0,"현재 검토 의무가 없습니다. 분류는 가계부에서 저장해 주세요.");
   if(input.kind().equals("RAW")){
    version(before.get("version"),input.version());
+   if(Set.of("DEFER","REOPEN","REVIEW_TRANSACTION").contains(action))requireUnlinkedRaw(input.id());
    switch(action){case "DEFER"->web.deferReview(input.id(),input.version());case "REOPEN","REVIEW_TRANSACTION"->{var raw=money.notification(input.id());if(raw.state()==ProcessingState.PROCESSED)product.restoreNotification(input.id(),input.version());else db.update("update money_raw_notifications set review_deferred=false,processing_version=processing_version+1 where user_id=? and id=?",owner(),input.id());action="REOPEN";}case "NON_TRANSACTION"->review.ignore(new MoneyReviewService.RawSelections(List.of(new MoneyReviewService.RawSelection(input.id(),input.version()))));default->throw new InvalidRequestException("미등록 알림은 기존 거래 검토에서 계좌·금액을 확인하여 등록하세요.");}
   }else{
    var book=web.bookkeepingRow(input.id());version(book.get("transactionVersion"),input.transactionVersion());version(book.get("version"),input.overrideVersion());version(book.get("projectionVersion"),input.projectionVersion());
@@ -199,7 +205,7 @@ public class MoneyAiService {
  }
  public Map<String,Object> undo(UUID id){
   lock();var matches=rows("select id,subject_id as \"subjectId\",kind,payload::text,active,created_at as \"createdAt\" from money_ai_events where user_id=? and id=?",owner(),id);if(matches.isEmpty())throw new ResourceNotFoundException("결정 이력을 찾을 수 없습니다.");var event=matches.getFirst();event.put("payload",object(event.get("payload")));require(Boolean.TRUE.equals(event.get("active")),"이미 취소된 결정입니다.");UUID subject=(UUID)event.get("subjectId");var last=latest(subject);require(id.equals(last.get("id")),"이후 결정이 있어 취소할 수 없습니다.");var payload=(Map<String,Object>)event.get("payload");var after=(Map<String,Object>)payload.get("after");String kind=Objects.toString(payload.get("kind"));String action=Objects.toString(event.get("kind"));
-  if(kind.equals("RAW")){var raw=money.notification(subject);version(raw.processingVersion(),number(after.get("version")));if(action.equals("NON_TRANSACTION"))product.restoreNotification(subject,raw.processingVersion());else if(action.equals("DEFER")){var before=(Map<String,Object>)payload.get("before");db.update("update money_raw_notifications set review_deferred=?,processing_version=processing_version+1 where user_id=? and id=?","DEFERRED".equals(before.get("state")),owner(),subject);}else throw new InvalidRequestException("이 결정은 취소할 수 없습니다.");}
+  if(kind.equals("RAW")){var raw=money.notification(subject);version(raw.processingVersion(),number(after.get("version")));requireUnlinkedRaw(subject);if(action.equals("NON_TRANSACTION"))product.restoreNotification(subject,raw.processingVersion());else if(action.equals("DEFER")){require(Set.of(ProcessingState.REVIEW_REQUIRED,ProcessingState.FAILED).contains(raw.state()),"이미 처리된 알림입니다. 거래 근거를 확인하세요.");var before=(Map<String,Object>)payload.get("before");db.update("update money_raw_notifications set review_deferred=?,processing_version=processing_version+1 where user_id=? and id=?","DEFERRED".equals(before.get("state")),owner(),subject);}else throw new InvalidRequestException("이 결정은 취소할 수 없습니다.");}
   else if(action.equals("CONFIRM")){var book=web.bookkeepingRow(subject);version(book.get("transactionVersion"),number(after.get("transactionVersion")));version(book.get("version"),number(after.get("overrideVersion")));version(book.get("projectionVersion"),number(after.get("projectionVersion")));var restored=web.saveBookkeeping(subject,new MoneyWebTypes.BookkeepingEdit(number(book.get("version")),number(book.get("transactionVersion")),(Map<String,Object>)payload.get("beforeOverrides"),number(book.get("projectionVersion"))));
    var beforeDecision=(Map<String,Object>)payload.get("beforeDecision");if(beforeDecision==null)db.update("delete from money_review_decisions where user_id=? and transaction_id=?",owner(),subject);else db.update("update money_review_decisions set transaction_version=?,override_version=?,projection_version=?,displayed=cast(? as jsonb),completed_at=? where user_id=? and transaction_id=?",restored.get("transactionVersion"),restored.get("version"),restored.get("projectionVersion"),json.writeValueAsString(restored),Timestamp.from(Instant.parse(beforeDecision.get("completedAt").toString())),owner(),subject);
    var priorEvents=(List<Object>)payload.get("previousConfirmedEventIds");if(priorEvents!=null)for(Object prior:priorEvents)db.update("update money_ai_events set active=true where user_id=? and id=?",owner(),uuid(prior));
@@ -210,6 +216,9 @@ public class MoneyAiService {
  }
 
  public record TransferInput(UUID expenseId,UUID incomeId,Long expenseVersion,Long incomeVersion,String idempotencyKey){}
+ private void requireUnlinkedRaw(UUID subject){
+  require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transaction_sources where user_id=? and raw_event_id=?)",Boolean.class,owner(),subject)),"이미 거래장에 연결된 알림입니다. 거래장에서 근거를 확인하세요.");
+ }
  @Transactional(readOnly=true) public Map<String,Object> transfers(){
   var pairs=rows("""
    select e.id as "expenseId",i.id as "incomeId" from money_transactions e join money_transactions i on i.user_id=e.user_id

@@ -132,6 +132,15 @@ class MoneyRecommendationPostgresTest {
   assertThat(rows).hasSize(9).noneMatch(r->"CATEGORY_UNCONFIRMED".equals(r.get("reason")));
   assertThat(rows.stream().map(r->r.get("id"))).contains(pair,income,refund,payment).doesNotContain(ordinary,linked,transfer,resolved);
   assertThat(queue).containsEntry("total",9L);assertThat(queue.get("reasons")).asList().doesNotContain("CATEGORY_UNCONFIRMED");assertThat(db.queryForObject(MoneyReviewService.DECISION_COUNT,Long.class,owner)).isEqualTo(8L);
+  var gate0=new MoneyGateZeroReview(db,()->owner,json,money);
+  var page=gate0.list("PENDING",null,null,null,2,0,null);
+  assertThat(page).containsEntry("total",5L).containsEntry("counts",Map.of("PENDING",5L,"DEFERRED",0L,"COMPLETED",0L));
+  assertThat((List<Map<String,Object>>)page.get("items")).hasSize(2).allMatch(r->"RAW".equals(r.get("kind")));
+  var next=(List<Map<String,Object>>)gate0.list("PENDING",null,null,null,2,2,null).get("items");
+  assertThat(next).doesNotContainAnyElementsOf((List<Map<String,Object>>)page.get("items"));
+  assertThat(gate0.list("PENDING",null,null,null,10,0,"LOAN_SPLIT_REQUIRED")).containsEntry("total",0L);
+  assertThat(gate0.list("PENDING",null,null,null,10,0,"UNRECOGNIZED_SHAPE")).containsEntry("total",1L);
+  assertThat(db.queryForObject(MoneyGateZeroReview.PENDING_COUNT,Long.class,owner)).isEqualTo(5L);
   var filtered=review().queue("DECISION","POSSIBLE_INTERNAL_TRANSFER",null,null,null,null,null,1,0);assertThat(filtered).containsEntry("total",2L);assertThat((List<?>)filtered.get("items")).hasSize(1);
   assertThatThrownBy(()->review().complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(pair,0L,0L,0L,Map.of("categoryId",category.toString())))))).isInstanceOf(InvalidRequestException.class);
   assertThat(db.queryForList("select to_jsonb(t)::text from money_transactions t order by id")).isEqualTo(facts);assertThat(db.queryForObject("select count(*) from money_review_decisions",Long.class)).isZero();

@@ -46,7 +46,7 @@ const laneLabels: Record<Lane, string> = {
   FORMAT: "알림 형식 확인",
   IGNORED: "무시된 알림",
 };
-export function ReviewWorkbench(p: Props) {
+export function ReviewWorkbench(p: Props & {onPendingCount?: (count: number) => void}) {
   const query=useSearchParams();
   return query.get("ai")==="transfers"?<><button onClick={()=>p.navigate?.("/money/review")}>검토 목록으로 돌아가기</button><AiTransfers {...p}/></>:<NotificationReview {...p}/>;
 }

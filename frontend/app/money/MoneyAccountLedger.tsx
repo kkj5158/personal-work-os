@@ -19,6 +19,9 @@ type CategoryPending={id:string;command:{requestId:string;expectedVersion:number
 type MetadataPending={id:string;field:"title"|"memo";command:{requestId:string;expectedVersion:number;fingerprint:string;title:string;memo:string|null}};
 export function AccountLedger(p:Props){
  const query=useSearchParams(),cache=useMoneyCache();
+ const transactionId=query.get('transactionId');
+ const validLink=transactionId!==null&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(transactionId);
+ const [closedLink,setClosedLink]=useState<string|null>(null);
  const [filters,setFilters]=useMoneyViewState<LedgerFilters>('account-ledger-filters',()=>({accountId:query.get('accountId')??query.get('account'),type:'',state:'ALL',search:'',view:'ledger',offset:0}));
  const [selected,setSelected]=useState<string[]>([]),[expanded,setExpanded]=useState<{id:string;type?:string}|null>(null),[context,setContext]=useState(0),[message,setMessage]=useState(''),[error,setError]=useState('');
  const [pending,setPending]=useMoneyViewState<Pending|null>('account-ledger-pending',()=>null),[recovering,setRecovering]=useState(false);
@@ -56,6 +59,13 @@ export function AccountLedger(p:Props){
  }
  const visible=rows.filter(row=>categoryEligible(row)&&!!row.book).map(r=>r.id);
  return <RecommendationProvider filters={{}} selected={selected} visible={visible} categories={p.categories} accounts={p.accounts} workbench={false}><section className="money-account-ledger" aria-label="계좌 거래장">
+  {transactionId&&!validLink&&<p role="alert">연결된 거래 식별자를 확인해 주세요.</p>}
+  {validLink&&closedLink!==transactionId&&expanded?.id!==transactionId&&<section aria-label="연결된 원장 거래">
+   <h2>검토 이력에서 연결된 거래</h2>
+   <AccountLedgerEditor key={transactionId} id={transactionId} accounts={p.accounts} categories={p.categories}
+    pending={pending?.operation??null}
+    onPending={operation=>setPending(operation?{id:transactionId,operation}:null)} onClose={()=>setClosedLink(transactionId)}/>
+  </section>}
   <div className="al-engine-switch"><button type="button" aria-expanded={engineOpen} onClick={()=>setEngineOpen(open=>!open)}>{engineOpen?'계좌 거래장으로 돌아가기':'금융유형 자동분류'}</button></div>
   {engineOpen?<MoneyFinancialEngine rows={rows}/>:<>
   <div className="al-summary" aria-label="조회 요약">{filters.accountId&&filters.view!=='pending'?<><div><small>선택 계좌 입금 · 필터 기준</small><strong>{data?.summary.incoming!=null?moneyAmount(data.summary.incoming,data.summary.currencies[0]??'KRW'):'—'}</strong></div><div><small>선택 계좌 출금 · 필터 기준</small><strong>{data?.summary.outgoing!=null?moneyAmount(data.summary.outgoing,data.summary.currencies[0]??'KRW'):'—'}</strong></div></>:<div><small>{filters.view==='pending'?'금융 이동 집계':'금융 의미 미확정'}</small><strong>{filters.view==='pending'?'집계 제외':data?.summary.unresolved??'—'}</strong></div>}<div><small>조회 거래</small><strong>{data?.total??'—'}<span>건</span></strong></div><div className="al-summary-note">{filters.accountId?<><strong>{scope}</strong><span>해당 계좌 입출금 · 잔액 — / 확인 근거 없음</span></>:<><strong>전체 계좌 잔액 합산은 제공하지 않습니다</strong><span>이체 한 건은 한 행 · 원본 연결 보존</span></>}</div></div>

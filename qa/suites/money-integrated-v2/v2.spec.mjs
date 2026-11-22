@@ -1,30 +1,76 @@
 import {test,expect} from '../../helpers/browser.mjs';
+
 test.describe.configure({mode:'serial',timeout:180000});
 test.use({actionTimeout:60000});
-const base=()=>process.env.QA_API_URL+'/api/money';
-async function call(request,url,method='GET',data){const r=await request.fetch(base()+url,{method,data});expect(r.ok(),`${method} ${url}: ${r.status()} ${r.ok()?'':await r.text()}`).toBe(true);return r.status()===204?null:r.json();}
-async function open(page){await page.goto('/money/review');await expect(page.getByRole('region',{name:'검토 필요 알림 작업함'})).toBeVisible();await page.getByRole('searchbox',{name:'알림 검색'}).fill('V2 review');await expect(page.locator('.money-notice-ledger tbody tr')).toHaveCount(50);}
+
+async function read(request,path){
+ const response=await request.get(process.env.QA_API_URL+'/api/money'+path);
+ expect(response.ok()).toBe(true);
+ return response.json();
+}
+
+async function open(page,search){
+ await page.goto('/money/review');
+ await page.getByRole('searchbox',{name:'거래처·알림 검색'}).fill(search);
+}
+
 test('money.v2.review-bulk-undo',async({request,page},info)=>{
- test.setTimeout(780000);
- expect(process.env.QA_SYSTEM).toBe('money-integrated-v2');await open(page);
- await expect(page.getByRole('button',{name:/AI 추천/})).toHaveCount(0);
- await page.getByRole('button',{name:'현재 페이지 전체 선택'}).click();await expect(page.locator('.money-notice-toolbar')).toContainText('선택 50건');
- await page.getByRole('button',{name:'다음',exact:true}).click();await expect(page.locator('.money-notice-toolbar')).toContainText('현재 화면 밖 50건');
- await page.getByRole('button',{name:/필터 결과 전체 선택/}).click();await expect(page.locator('.money-notice-toolbar')).toContainText('선택 53건');
- await page.getByRole('button',{name:'선택 알림 일괄 처리'}).click();const modal=page.getByRole('dialog',{name:'알림 일괄 처리 미리보기'});await expect(modal).toBeVisible({timeout:120000});const bounds=await modal.boundingBox(),viewport=page.viewportSize();expect(Math.abs(bounds.x+bounds.width/2-viewport.width/2)).toBeLessThanOrEqual(2);expect(Math.abs(bounds.y+bounds.height/2-viewport.height/2)).toBeLessThanOrEqual(2);expect(bounds.height).toBeLessThanOrEqual(viewport.height*.92+1);await expect(modal).toContainText('처리 예정');await expect(modal.getByRole('tab',{name:'처리 예정 52건'})).toBeVisible();
- await modal.getByRole('tab',{name:'제외 항목 1건'}).click();await expect(modal).toContainText('계좌 미확인');await expect(modal).toContainText('개별 금융 확인');await page.screenshot({path:info.outputPath('review-bulk-exclusion.png'),fullPage:true});
- await modal.getByRole('tab',{name:'처리 예정 52건'}).click();await expect(modal.locator('tbody tr')).toHaveCount(52);let releaseResponse;const responseGate=new Promise(resolve=>{releaseResponse=resolve;});let executeCount=0;await page.route('**/api/money/review/batches/execute',async route=>{executeCount++;const response=await route.fetch({timeout:600000});expect(response.status()).toBe(200);await responseGate;await route.fulfill({response});});try{await modal.getByRole('button',{name:'52건 정보성 알림 정리',exact:true}).click();await expect(modal.locator('footer')).toContainText('서버 결과 확인 52/52건',{timeout:600000});await expect(modal.getByRole('button',{name:'처리 중…',exact:true})).toBeDisabled();await expect(page.locator('.money-notice-results')).toHaveCount(0);expect(executeCount).toBe(1);await page.screenshot({path:info.outputPath('review-server-confirmed-progress.png'),fullPage:true});}finally{releaseResponse();}await expect(modal).toHaveCount(0,{timeout:120000});await page.unroute('**/api/money/review/batches/execute');await expect(page.locator('.money-notice-results')).toContainText('52/52건');await expect(page.locator('.money-notice-toolbar')).toContainText('선택 1건');
- await page.locator('.money-notice-results').getByRole('button',{name:'실행 취소',exact:true}).first().click();await expect(page.locator('.money-notice-results')).toContainText('취소 완료');
- const raws=await call(request,'/notifications?limit=100');expect(raws.every(r=>r.rawPayload?.synthetic)).toBe(true);const queue=await call(request,'/ai/workbench?state=PENDING&search=V2%20review');expect(queue.total).toBe(2);expect(queue.items.some(r=>r.reason==='ACCOUNT_RESOLUTION_REQUIRED')).toBe(true);
- await page.screenshot({path:info.outputPath('review-bulk-confirmed-results-undo.png'),fullPage:true});
+ expect(process.env.QA_SYSTEM).toBe('money-integrated-v2');
+ await open(page,'V2 review');
+ const rows=page.locator('.money-notice-record');
+ await expect(rows).toHaveCount(50);
+ await page.getByRole('checkbox',{name:'현재 페이지 전체 선택'}).check();
+ await page.getByRole('button',{name:'다음',exact:true}).click();
+ await expect(rows).toHaveCount(3);
+ await expect(page.locator('.money-notice-toolbar')).toContainText('현재 화면 밖 50건');
+ await page.getByRole('checkbox',{name:'현재 페이지 전체 선택'}).check();
+ await page.getByRole('button',{name:'선택 제외',exact:true}).click();
+ const preview=page.getByRole('region',{name:'선택 항목 일괄 처리 미리보기'});
+ await expect(preview.getByRole('listitem')).toHaveCount(53);
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('review-bulk-exclusion.png')});
+ const applied=page.waitForResponse(r=>r.url().endsWith('/review/batches/execute')&&r.request().method()==='POST');
+ await preview.getByRole('button',{name:'53건 제외'}).click();
+ const receipt=await (await applied).json();
+ expect(receipt.items).toHaveLength(53);
+ expect(receipt.items.every(item=>item.status==='SAVED'&&item.canUndo)).toBe(true);
+ const results=page.locator('.money-notice-results');
+ await expect(results).toContainText('성공 53건');
+ await results.getByRole('button',{name:'실행 취소',exact:true}).first().click();
+ await expect(results).toContainText('취소 완료');
+ const query='/ai/workbench?scope=GATE0&search=V2%20review&state=';
+ expect((await read(request,query+'PENDING')).total).toBe(1);
+ expect((await read(request,query+'DEFERRED')).total).toBe(52);
 });
+
 test('money.v2.review-unknown-recovery',async({request,page,runtimeErrors},info)=>{
- await page.goto('/money/review');await expect(page.getByRole('region',{name:'검토 필요 알림 작업함'})).toBeVisible();await page.getByRole('searchbox',{name:'알림 검색'}).fill('V2 recovery');await expect(page.locator('.money-notice-ledger tbody tr')).toHaveCount(2);
- await page.getByRole('button',{name:'현재 페이지 전체 선택'}).click();await page.getByRole('button',{name:'선택 보류',exact:true}).click();const modal=page.getByRole('dialog',{name:'알림 일괄 처리 미리보기'});await expect(modal).toBeVisible();let command;
- await page.route('**/api/money/review/batches/execute',async route=>{command=route.request().postDataJSON();const response=await route.fetch();expect(response.status()).toBe(200);await route.abort('failed');});
- await modal.getByRole('button',{name:'2건 보류',exact:true}).click();await expect(page.getByRole('button',{name:'원래 요청 결과 조회',exact:true})).toBeEnabled({timeout:120000});expect(command?.requestId).toBeTruthy();await page.unroute('**/api/money/review/batches/execute');
- const before=await call(request,'/review/batches/outcomes/'+command.requestId);expect(before.items.every(i=>i.status==='SAVED')).toBe(true);await page.getByRole('button',{name:'원래 요청 결과 조회',exact:true}).click();await expect(page.getByRole('button',{name:'원래 요청 결과 조회',exact:true})).toHaveCount(0);expect(await call(request,'/review/batches/outcomes/'+command.requestId)).toEqual(before);
- const injected=runtimeErrors.filter(e=>e.type==='console'&&e.message==='Failed to load resource: net::ERR_FAILED');expect(injected).toHaveLength(1);runtimeErrors.splice(runtimeErrors.indexOf(injected[0]),1);
- await page.getByRole('tab',{name:'보류',exact:true}).click();await expect(page.locator('.money-notice-ledger tbody tr')).toHaveCount(2);await page.screenshot({path:info.outputPath('review-original-request-recovery.png'),fullPage:true});
- await info.attach('original-request-recovery',{body:Buffer.from(JSON.stringify({requestId:command.requestId,serverConfirmed:true,readOnlyRecovery:true})),contentType:'application/json'});
+ expect(process.env.QA_SYSTEM).toBe('money-integrated-v2');
+ await open(page,'V2 recovery');
+ const rows=page.locator('.money-notice-record');
+ await expect(rows).toHaveCount(2);
+ let command,posts=0;
+ await page.route('**/api/money/review/batches/single',async route=>{
+  command=route.request().postDataJSON();
+  posts++;
+  const response=await route.fetch();
+  expect(response.ok()).toBe(true);
+  await route.abort('failed');
+ });
+ await rows.first().getByRole('button',{name:'제외',exact:true}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ const recovery=page.getByRole('button',{name:'원래 요청 결과 조회',exact:true});
+ await expect(recovery).toBeEnabled();
+ await expect(rows.last().getByRole('button',{name:'제외',exact:true})).toBeEnabled();
+ const path='/review/batches/outcomes/'+command.requestId;
+ const receipt=await read(request,path);
+ expect(receipt.items[0].status).toBe('SAVED');
+ await recovery.click();
+ await expect(recovery).toHaveCount(0);
+ await expect(rows).toHaveCount(1);
+ expect(await read(request,path)).toEqual(receipt);
+ expect(posts).toBe(1);
+ await page.unroute('**/api/money/review/batches/single');
+ const injected=runtimeErrors.findIndex(e=>e.type==='console'&&e.message.includes('net::ERR_FAILED'));
+ if(injected>=0)runtimeErrors.splice(injected,1);
+ await page.screenshot({path:info.outputPath('review-original-request-recovery.png')});
 });

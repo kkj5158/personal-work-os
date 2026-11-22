@@ -82,11 +82,8 @@ public class MoneyReviewService {
   )
   """.formatted(PAIR_WINDOW_SECONDS,String.join(",",FORMAT_REASONS.stream().map(r->"'"+r+"'").toList()));
  // Current projection only: keep REASON_CONTEXT unchanged because immutable recommendations stamp it.
- static final String QUEUE=REASON_CONTEXT+"""
-  , queue as (
-   select q.id,q.kind,q.reason,q.lane,q.state,q."occurredAt",q.title,q.merchant,q.amount,
-    coalesce(q."accountId",own.id) as "accountId",q."categoryId",q.memo,q.type,q.version,q."overrideVersion",q."projectionVersion",q.candidate,q."transferPartnerId",q."transferCandidates",q.currency
-   from reason_context q left join lateral (
+ static final String RAW_ACCOUNT_JOIN="""
+   left join lateral (
     with hint as (select q.candidate::jsonb->>'provider' provider,case q.candidate::jsonb->>'direction' when 'OUT' then q.candidate::jsonb->>'sourceAccountHint' when 'IN' then q.candidate::jsonb->>'destinationAccountHint' end value),
     matches as (
      select a.id,a.display_name,h.value,regexp_replace(h.value,'^([가-힣A-Za-z]+)[[:space:]]*\\(([0-9]{1,4})\\)$','\\1') product
@@ -96,6 +93,13 @@ public class MoneyReviewService {
     ) select id from matches where (select count(*) from matches)=1 or
      (display_name in (product,value) and (select count(*) from matches where display_name in (product,value))=1)
    ) own on q.kind='RAW'
+  """;
+ static final String QUEUE=REASON_CONTEXT+"""
+  , queue as (
+   select q.id,q.kind,q.reason,q.lane,q.state,q."occurredAt",q.title,q.merchant,q.amount,
+    coalesce(q."accountId",own.id) as "accountId",q."categoryId",q.memo,q.type,q.version,q."overrideVersion",q."projectionVersion",q.candidate,q."transferPartnerId",q."transferCandidates",q.currency
+   from reason_context q
+  """ + RAW_ACCOUNT_JOIN + """
    where q.reason<>'CATEGORY_UNCONFIRMED' and (q.kind<>'RAW' or not exists(select 1 from money_transaction_sources s where s.user_id=(select uid from me) and s.raw_event_id=q.id))
     and (q.reason<>'POSSIBLE_INTERNAL_TRANSFER' or not exists(select 1 from money_transaction_sources s where s.user_id=(select uid from me) and s.transaction_id in(q.id,q."transferPartnerId") and (s.evidence->>'meaningProof'='VERIFIED_EXTERNAL_ACTIVITY' or (s.evidence->>'rule'='OWNER_ASSERTED_REVIEW_V2' and s.evidence->'decision'->>'type' in ('EXPENSE','INCOME')))))
   )

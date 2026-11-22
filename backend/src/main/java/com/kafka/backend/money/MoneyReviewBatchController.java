@@ -8,5 +8,6 @@ public class MoneyReviewBatchController {
  public MoneyReviewBatchController(MoneyReviewBatchService service){this.service=service;}
  @PostMapping("/preview") public Map<String,Object> preview(@RequestBody MoneyReviewBatchService.Preview input){return service.preview(input);}
  @PostMapping("/execute") public Map<String,Object> execute(@RequestBody MoneyReviewBatchService.Execute input){return service.execute(input);}
+ @PostMapping("/single") public Map<String,Object> single(@RequestBody MoneyReviewBatchService.Single input){return service.single(input);}
  @GetMapping("/outcomes/{requestId}") public Map<String,Object> outcome(@PathVariable UUID requestId){return service.outcome(requestId);}
 }
