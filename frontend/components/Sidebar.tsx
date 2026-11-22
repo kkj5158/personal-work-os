@@ -32,6 +32,7 @@ export type NavSection = {
     label: string;
     icon: LucideIcon;
     iconText?: string;
+    count?: number;
     active?: boolean;
     action?: () => void;
     destination?: string;
@@ -125,11 +126,11 @@ export function SharedSidebar({
             // Reveal an active child on route entry, while still allowing a manual fold.
             const closed = closedGroups[group.section] ?? (group.revealActive && hasActiveItem ? false : group.defaultCollapsed ?? false);
             const items = group.content ? group.content({ compact, done: () => setMobile(false) }) : group.items.map(
-                ({ label, icon: Icon, iconText, active, action, destination }) => (
+                ({ label, icon: Icon, iconText, count, active, action, destination }) => (
                   <button
                     key={label}
                     type="button"
-                    aria-label={label}
+                    aria-label={count === undefined ? label : label + " " + count + "건"}
                     aria-current={active ? "page" : undefined}
                     title={
                       compact
@@ -155,6 +156,7 @@ export function SharedSidebar({
                   >
                     {iconText ? <span aria-hidden="true" style={{ width: 20, flexShrink: 0, textAlign: "center" }}>{iconText}</span> : <Icon size={20} strokeWidth={1.75} />}
                     {!compact && <span>{label}</span>}
+                    {!compact && count !== undefined && <small className="money-notice-nav-count">{count}</small>}
                   </button>
                 ),
               );

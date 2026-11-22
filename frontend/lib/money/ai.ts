@@ -9,6 +9,8 @@ export type AiItem = ReviewItem & {
   book?:BookRow;classificationVersion?:number;classificationOrigin?:string|null;classificationEventId?:string|null;futureReferenceExcluded?:boolean;classificationJobStatus?:string|null;
   currency?: string | null;
   effectiveCurrency?: string | null;
+  admissionFingerprint?: string | null;
+  transactionId?: string | null;
   moveToBookkeepingEligible?: boolean;
   moveToBookkeepingBlockReason?: string | null;
   reviewType: "CLASSIFICATION" | "TRANSFER" | "NOISE";

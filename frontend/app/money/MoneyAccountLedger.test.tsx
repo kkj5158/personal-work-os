@@ -101,3 +101,15 @@ test('Shadow Mode reports stored results and recovers with the same run ID',asyn
   assert.match(document.querySelector('.al-engine-receipt')!.textContent!,/확정 후보 1건/);
  }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
 });
+
+test('review link opens the canonical ledger row outside the current period and page',async()=>{
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get;
+ const id='4d5fc7a9-6472-48f2-8408-800642610020',reads:string[]=[];
+ api.get=async<T,>(path:string)=>{reads.push(path);return (path==='/account-ledger/rows/'+id?{...expense,id,title:'연결된 합성 거래'}:page(path)) as T;};
+ try{
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams({transactionId:id})}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));
+  await tick();
+  assert.ok(reads.includes('/account-ledger/rows/'+id));
+  assert.ok(document.querySelector('[aria-label="연결된 원장 거래"] .al-editor'));
+ }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
+});

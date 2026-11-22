@@ -149,6 +149,9 @@ export default function MoneyApp() {
     }
   };
   const reviewWithoutPanel = section === "review" && query.get("ai") !== "transfers";
+  const [inboxCount, setInboxCount] = useState<number | undefined>(undefined);
+  const bridgeStatus = useMoneyData<{reviewCount: number}>(reviewWithoutPanel ? null : '/connection-status', {autoRefresh:false});
+  const reviewCount = reviewWithoutPanel ? inboxCount : bridgeStatus.data?.reviewCount;
   // Bookkeeping and the dedicated transfer workflow retain their existing detail panels.
   const workbench = ["bookkeeping","workbench"].includes(section) || section === "review" && !reviewWithoutPanel;
   const [classificationTab] = useMoneyViewState("classification-tab",()=>"categories");
@@ -290,6 +293,7 @@ export default function MoneyApp() {
                 return {
                 label,
                 icon,
+                count: key === "review" ? reviewCount : undefined,
                 active: section === key,
                 destination: "/money" + (key ? "/" + key : ""),
                 };
@@ -302,7 +306,7 @@ export default function MoneyApp() {
               <p className="money-eyebrow">MONEY SYS</p>
               <h1>{title}</h1>
               <p className="money-muted">
-                {section === "ledger" ? "모든 계좌의 입출금과 금융 유형을 한곳에서 확인하고, 필요한 항목만 표에서 바로 수정합니다."
+                {section === "review" ? "은행 알림이 실제 금융거래인지 판단합니다." : section === "ledger" ? "모든 계좌의 입출금과 금융 유형을 한곳에서 확인하고, 필요한 항목만 표에서 바로 수정합니다."
                   : section === "bookkeeping"
                   ? "일상에 의미를 더하는 수입과 지출"
                   : section === "coupang-work-calendar" ? "근무일별 확정 일당과 일–토 주급 총액을 기록"
@@ -348,7 +352,7 @@ export default function MoneyApp() {
               {section === "bookkeeping" && <BookkeepingView {...props} initialAll={rawSection==='transactions'}/>}{" "}
               {section === "workbench" && <BookkeepingView {...props} mode="workbench" />}
               {section === "analysis" && <section className="money-card money-analysis-boundary"><h2>통계 / AI 분석</h2><p>기간 비교 · 장기 추이 · 소비 패턴 · AI 인사이트</p><p className="money-muted">월간 가계부는 해당 월의 거래 관리에 집중합니다. 장기 통계와 AI 분석의 상세 기능은 후속 기획에서 제공합니다.</p><button onClick={()=>navigate('/money/bookkeeping')}>월간 가계부로 이동</button></section>}
-              {section === "review" && <ReviewView {...props} />}{" "}
+              {section === "review" && <ReviewView {...props} onPendingCount={setInboxCount} />}{" "}
               {section === "classification" && <Classification {...props} />}
               {section === "settings" && <SettingsView />}
             </>

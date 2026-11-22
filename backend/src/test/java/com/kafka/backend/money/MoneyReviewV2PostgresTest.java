@@ -30,7 +30,25 @@ class MoneyReviewV2PostgresTest {
  MoneyProcessingService processor(){return new MoneyProcessingService(f.db,f.json,f.manager,Clock.systemUTC(),Duration.ZERO,Duration.ofSeconds(60));}
  void schedule(UUID id){f.db.update("update money_raw_notifications set processing_due_at=now(),received_at=now()-interval '30 seconds' where id=?",id);}
  @Test void unknownMeaningAutoAdmitsCashAndDoesNotInflateConsumption(){var id=raw(true,"의미불명상대");schedule(id);assertThat(processor().runOwner(f.owner)).isEqualTo(1);var t=f.db.queryForMap("select * from money_transactions");assertThat(t.get("meaning_state")).isEqualTo("UNRESOLVED");assertThat(f.product.balance(f.account).amount()).isEqualByComparingTo("50000");assertThat(f.db.queryForObject("select count(*) from money_transactions where meaning_state='CONFIRMED'",Long.class)).isZero();assertThat(processor().runOwner(f.owner)).isZero();}
- @Test void ordinaryOutAndInAdmitWithoutCategory(){for(boolean out:List.of(true,false)){var id=raw(out,out?"합성카페":"합성 급여");schedule(id);assertThat(processor().runOwner(f.owner)).isEqualTo(1);}assertThat(f.db.queryForObject("select count(*) from money_transactions where meaning_state='CONFIRMED' and category_id is null",Long.class)).isEqualTo(2);}
+ void assertUnresolvedSource(UUID raw,boolean outgoing,UUID account){
+  var row=f.db.queryForMap("""
+   select t.type,t.meaning_state,t.category_id,t.from_account_id,t.to_account_id,t.amount,t.currency
+   from money_transactions t join money_transaction_sources s on s.transaction_id=t.id and s.user_id=t.user_id
+   where t.user_id=? and s.raw_event_id=? and s.relationship='PRIMARY'
+   """,f.owner,raw);
+  assertThat(row).containsEntry("type",outgoing?"EXPENSE":"INCOME").containsEntry("meaning_state","UNRESOLVED")
+   .containsEntry("category_id",null).containsEntry("from_account_id",outgoing?account:null)
+   .containsEntry("to_account_id",outgoing?null:account).containsEntry("currency","KRW");
+  assertThat((java.math.BigDecimal)row.get("amount")).isEqualByComparingTo("5800");
+ }
+ @Test void ordinaryOutAndInAdmitWithoutCategory(){
+  for(boolean outgoing:List.of(true,false)){
+   UUID id=raw(outgoing,outgoing?"합성카페":"합성 급여");schedule(id);
+   assertThat(processor().runOwner(f.owner)).isEqualTo(1);
+   assertUnresolvedSource(id,outgoing,f.account);
+  }
+  assertThat(f.db.queryForObject("select count(*) from money_transactions",Long.class)).isEqualTo(2L);
+ }
  @Test void dedicatedWordingAdmitsUnresolvedWithoutInventingLoan(){var id=raw(true,"대출상환");schedule(id);assertThat(processor().runOwner(f.owner)).isEqualTo(1);assertThat(f.db.queryForMap("select meaning_state,loan_id from money_transactions")).containsEntry("meaning_state","UNRESOLVED").containsEntry("loan_id",null);}
  @Test void archivedSourceIsNeverRescheduledOrConsumed(){var id=raw(true,"합성카페");f.db.update("update money_raw_notifications set review_deferred=true where id=?",id);schedule(id);assertThat(processor().runOwner(f.owner)).isZero();assertThat(f.money.notification(id).state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);assertThat(f.db.queryForObject("select review_deferred from money_raw_notifications where id=?",Boolean.class,id)).isTrue();}
  @Test void archivedNeighborPreventsAutomaticOppositeConsumption(){UUID a=raw(true,"내계좌"),b=raw(false,"내계좌","975-******-01-015");f.money.createAccount(new AccountInput("IBK","다른 소유 계좌",AccountRole.SPENDING,"975-******-01-015",null));f.db.update("update money_raw_notifications set review_deferred=true where id=?",a);schedule(b);assertThat(processor().runOwner(f.owner)).isZero();assertThat(f.db.queryForObject("select count(*) from money_transactions",Long.class)).isZero();}
@@ -54,6 +72,15 @@ class MoneyReviewV2PostgresTest {
 
  @Test void twoRawSourcesLinkToExistingCanonicalTransferWithoutAnotherCashFact(){UUID a=raw(true,"내계좌"),b=raw(false,"내계좌","975-******-01-015");var other=f.money.createAccount(new AccountInput("IBK","다른 소유 계좌",AccountRole.SPENDING,"975-******-01-015",null));var existing=f.product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,f.account,other.id(),new BigDecimal("5800"),Instant.parse("2026-09-16T01:00:00Z"),"기존 이체",null,"보존 메모",false,null,null,"보존 제목"));var base=decision(a,"TRANSFER",Map.of("otherAccountId",other.id(),"otherAccountVersion",other.version(),"partnerId",b,"partnerVersion",f.money.notification(b).processingVersion(),"partnerFingerprint",review.context(b).get("fingerprint")));var command=new MoneyOwnerReviewService.Decision(base.requestId(),base.fingerprint(),"LINK_DUPLICATE",base.accountId(),base.otherAccountId(),existing.id(),base.accountVersion(),base.otherAccountVersion(),existing.version(),base.financial());assertThat(applied(review.decide(a,command))).isEqualTo(existing.id());assertThat(f.money.transaction(existing.id()).sources()).hasSize(2);assertThat(f.money.transaction(existing.id()).title()).isEqualTo("보존 제목");assertThat(f.db.queryForObject("select count(*) from money_transactions",Long.class)).isEqualTo(1);assertThat(f.money.notification(b).state()).isEqualTo(ProcessingState.PROCESSED);}
 
- @Test void provablyExternalMovementsInDifferentOwnedAccountsDoNotCreateFalseTransferReview(){f.money.createAccount(new AccountInput("IBK","합성 급여 계좌",AccountRole.INCOME_HUB,"975-******-01-015",null));UUID out=raw(true,"합성카페"),in=raw(false,"합성 급여","975-******-01-015");schedule(out);schedule(in);assertThat(processor().runOwner(f.owner)).isEqualTo(2);assertThat(f.db.queryForObject("select count(*) from money_transactions where meaning_state='CONFIRMED'",Long.class)).isEqualTo(2);var meaning=new MoneyMeaningService(f.db,()->f.owner,f.json);var queue=new MoneyReviewService(f.db,()->f.owner,f.web,f.product,meaning,f.json);assertThat(queue.queue(null,null,null,"PENDING",null,null,50,0).get("total")).isEqualTo(0L);}
+ @Test void provablyExternalMovementsInDifferentOwnedAccountsDoNotCreateFalseTransferReview(){
+  UUID incomeAccount=f.money.createAccount(new AccountInput("IBK","합성 급여 계좌",AccountRole.INCOME_HUB,"975-******-01-015",null)).id();
+  UUID out=raw(true,"합성카페"),in=raw(false,"합성 급여","975-******-01-015");
+  schedule(out);schedule(in);assertThat(processor().runOwner(f.owner)).isEqualTo(2);
+  assertUnresolvedSource(out,true,f.account);assertUnresolvedSource(in,false,incomeAccount);
+  assertThat(f.db.queryForObject("select count(*) from money_transactions",Long.class)).isEqualTo(2L);
+  var meaning=new MoneyMeaningService(f.db,()->f.owner,f.json);
+  var queue=new MoneyReviewService(f.db,()->f.owner,f.web,f.product,meaning,f.json);
+  assertThat(queue.queue(null,null,null,"PENDING",null,null,50,0).get("total")).isEqualTo(0L);
+ }
 
 }

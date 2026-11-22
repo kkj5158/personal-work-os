@@ -36,7 +36,7 @@ final class MoneyReviewAdmission {
    String blocked=null;
    if(!"PARSED".equals(a.status())||!MoneyOrdinaryAdmission.domestic(c)||!Objects.equals(c.provider().toLowerCase(Locale.ROOT)+"-push",a.parserKey())||!MoneyOrdinaryAdmission.supportedParserVersion(c.provider(),a.parserVersion())||!Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(c.provider()),row[1])||c.direction()==null||c.amount()==null||c.amount().signum()<=0||c.occurredAt()==null||c.postedAt()==null||c.timeSource()==null)blocked="알림의 금융 형식·금액·방향·시각이 확인되지 않았습니다.";
    else if(!"KRW".equals(currency))blocked=reason("UNSUPPORTED_CURRENCY_OR_SOURCE");
-   else if(row[2]!=null&&row[3]!=null&&!row[2].equals(row[3])||row[3]!=null&&c.evidence()!=null&&c.evidence().get("currency")!=null&&!row[3].equals(c.evidence().get("currency")))blocked="원문과 분석 통화가 서로 다릅니다. 금융 근거를 확인하세요.";
+   else if(!"KRW".equals(MoneyOrdinaryAdmission.currency(c))||row[3]!=null&&!currency.equals(row[3]))blocked="원문과 분석 통화가 서로 다릅니다. 금융 근거를 확인하세요.";
    result.put(a.rawEventId(),new Assessment(null,blocked,currency,own==null?null:own.id(),c.direction(),a.id()));if(blocked==null)verified.add(a);
   }
   if(verified.isEmpty())return result;
@@ -49,9 +49,31 @@ final class MoneyReviewAdmission {
   var existing=facts.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();
   if(graph.size()>500||existing.size()>500){for(var a:verified){var old=result.get(a.rawEventId());result.put(a.rawEventId(),new Assessment(null,"관련 금융 근거가 많아 처리 범위를 좁혀 다시 확인해야 합니다.",old.currency(),old.accountId(),old.direction(),old.parseAttemptId()));}return result;}
   var proposals=new VerifiedMoneyTransferMatcher(java.time.Clock.systemUTC(),java.time.Duration.ZERO,VerifiedMoneyTransferMatcher.TRANSFER_WINDOW).propose(new MoneyTransferMatcher.Context(accounts,graph,existing));
+  var linked=new HashSet<>(db.queryForList("select raw_event_id from money_transaction_sources where user_id=? and raw_event_id=any(?)",UUID.class,owner,verifiedIds));
+  var statementOverlaps=statementOverlaps(owner,verified,result);
   for(var a:verified){var old=result.get(a.rawEventId());var p=proposals.stream().filter(x->x.sources().stream().anyMatch(s->s.rawEventId().equals(a.rawEventId()))).findFirst().orElse(null);
    var input=p==null?null:p.transaction();String block=opposing.contains(a.rawEventId())?"같은 금액의 반대 방향 알림이 있어 이체 여부를 먼저 확인해야 합니다.":p==null?"반대편 알림·금융 근거 확인이 진행 중입니다. 잠시 후 다시 확인하세요.":input==null?reason(Objects.toString(p.evidence().get("reason"))):!Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(input.type())?"내 계좌 간 이체는 전용 금융 확인으로 처리하세요.":null;
-   result.put(a.rawEventId(),new Assessment(block==null?input:null,block,old.currency(),old.accountId(),old.direction(),old.parseAttemptId(),p!=null&&Boolean.TRUE.equals(p.evidence().get("meaningUnresolved"))));
+   if(linked.contains(a.rawEventId()))block="이미 거래장에 연결된 알림입니다. 거래 근거를 확인하세요.";
+   else if(statementOverlaps.contains(a.rawEventId()))block="은행 명세서에 같은 현금 기록이 있습니다. 거래장 대사에서 원문 연결을 확인하세요.";
+   result.put(a.rawEventId(),new Assessment(block==null?input:null,block,old.currency(),old.accountId(),old.direction(),old.parseAttemptId(),block==null));
   }return result;
+ }
+ /** A statement can carry a bank clock or just a date. A delayed push may identify
+  * the same movement by its bank balance. Leave each possible match to reconciliation. */
+ private Set<UUID> statementOverlaps(UUID owner,List<ParseAttempt> attempts,Map<UUID,Assessment> assessments){
+  if(!MoneyStatementProtection.installed(db))return Set.of();
+  UUID[] ids=attempts.stream().map(ParseAttempt::id).toArray(UUID[]::new);
+  UUID[] accounts=attempts.stream().map(a->assessments.get(a.rawEventId()).accountId()).toArray(UUID[]::new);
+  return new HashSet<>(db.queryForList("""
+   select distinct p.raw_event_id
+   from unnest(?::uuid[],?::uuid[]) target(attempt_id,account_id)
+   join money_parse_attempts p on p.id=target.attempt_id and p.user_id=?
+   join money_statement_effects e on e.user_id=p.user_id and e.account_id=target.account_id
+   join money_statement_rows r on r.user_id=e.user_id and r.id=e.row_id and r.direction=p.direction and r.amount=p.amount
+   where abs(extract(epoch from r.occurred_at-(p.candidate->>'occurredAt')::timestamptz))<=90
+    or r.time_precision='DAY' and (r.occurred_at at time zone 'Asia/Seoul')::date=((p.candidate->>'occurredAt')::timestamptz at time zone 'Asia/Seoul')::date
+    or r.balance_after=(p.candidate->>'postBalance')::numeric
+     and (p.candidate->>'postedAt')::timestamptz between r.occurred_at-interval '90 seconds' and r.occurred_at+interval '1 day'
+   """,UUID.class,ids,accounts,owner));
  }
 }

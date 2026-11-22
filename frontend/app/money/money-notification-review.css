@@ -1,35 +1,127 @@
-.money-notice-toolbar{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:12px;margin:12px 0}
-.money-notice-toolbar>section{display:grid;gap:10px;align-content:start;border:1px solid #dce5ef;border-radius:10px;background:#fff;padding:13px 15px}
-.money-notice-toolbar>section>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.money-notice-toolbar strong{font-size:14px}.money-notice-toolbar span{color:#65768a;font-size:12px}
-.money-notice-ledger{min-width:1180px}.money-notice-ledger td{padding:9px 10px;font-size:13px;vertical-align:top}
-.money-notice-ledger th{white-space:nowrap}.money-notice-ledger td:nth-child(2){width:135px;font-size:12px}.money-notice-ledger td:nth-child(3){max-width:220px;width:220px}.money-notice-ledger td:nth-child(7){max-width:200px}
-.money-notice-merchant{display:block;font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.money-notice-notification{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.money-notice-amount{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
-.money-notice-row-actions{display:flex;gap:5px;flex-wrap:nowrap}.money-notice-row-actions button{white-space:nowrap;font-size:12px!important;padding:6px 9px!important;min-height:32px}
-.money-notice-ledger small,.money-notice-preview small{display:block;color:#65768a;font-size:11px;margin-top:4px}
-.money-notice-inline-error{font-size:12px;color:#a6362d;margin:6px 0 0;max-width:265px;line-height:1.5}.money-notice-undo{margin-top:6px}
-.money-notice-results{margin:12px 0;padding:12px 14px;font-size:13px;max-height:250px;overflow:auto}.money-notice-result-items{max-height:200px;overflow-y:auto}.money-notice-results p{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;margin:8px 0}
-.money-notice-recovery{padding:12px 14px;border:1px solid #e8c98d;background:#fff8e8;border-radius:10px;margin:12px 0;font-size:13px}
-.money-notice-preview{border:1px solid #b8ccec;border-radius:10px;background:#fff;margin:12px 0;overflow:hidden}
-.money-notice-preview header,.money-notice-preview footer{padding:12px 15px;display:flex;gap:10px;align-items:center;justify-content:space-between;background:#f7faff}
-.money-notice-preview h2{font-size:16px;margin:0}.money-notice-preview header p{font-size:13px;color:#52677f;margin:5px 0 0}
-.money-notice-preview footer{justify-content:flex-end;border-top:1px solid #dce5ef}.money-notice-preview table{min-width:800px;font-size:12px}.money-notice-preview .money-table-wrap{max-height:260px;overflow:auto}
-.money-notice-preview th{position:sticky;top:0;z-index:1}.money-notice-preview td{padding:8px 10px}.money-notice-impact{padding:0 15px;font-size:12px;line-height:1.6;color:#52677f}
-.money-notice-preview button{font:inherit;padding:7px 11px;border:1px solid #dce5ef;border-radius:7px;background:#fff;cursor:pointer}.money-notice-preview button.money-primary{background:#3265d5;border-color:#3265d5;color:#fff}.money-notice-preview button:disabled{opacity:.5;cursor:default}
-@media(max-width:900px){.money-notice-toolbar{grid-template-columns:1fr}.money-notice-toolbar>section{padding:11px 12px}}
-@media(max-width:700px){.money-notice-ledger{min-width:1080px}.money-notice-ledger td:last-child,.money-notice-ledger th:last-child{position:sticky;right:0;background:#fff;z-index:1;box-shadow:-3px 0 5px #182e4912}.money-notice-ledger th:last-child{background:#f7faff}.money-notice-row-actions{display:grid;gap:4px}.money-notice-row-actions button{min-height:34px}.money-notice-preview header,.money-notice-preview footer{padding:10px 12px}.money-notice-preview h2{font-size:15px}}
-
-.money-notice-owner-actions section{display:flex;flex-direction:column;gap:8px;min-width:220px;max-width:340px;padding:10px;border:1px solid #dbe3ed;border-radius:8px;background:#f8fafc}.money-notice-owner-actions label{display:flex;flex-direction:column;gap:4px}.money-notice-owner-actions select{max-width:100%}
-
-.money-notice-review .money-notice-results{max-height:none;overflow:visible}
-.money-review-results{min-width:900px}
-.money-review-results small{display:block}
-.money-review-editor-row>td{position:static!important;padding:0!important;background:#f7faff!important;white-space:normal!important}
-.money-notice-review{container-type:inline-size}
-.money-review-inline{width:min(1100px,calc(100cqw - 2px));padding:20px;box-sizing:border-box;border-block:2px solid #b8ccec;color:#24364b;font-size:13px}
-.money-review-inline header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.money-review-inline h3{font-size:13px;margin:0 0 8px}.money-review-inline p{line-height:1.6;overflow-wrap:anywhere}
-.money-review-evidence{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}.money-review-evidence>div,.money-review-impact{padding:14px;border:1px solid #d5e0ec;border-radius:8px;background:white}.money-review-impact{margin-top:14px;border-color:#8babdb}
-.money-review-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-block:12px}.money-review-inline label{display:flex;flex-direction:column;gap:5px;min-width:0;margin-block:5px}.money-review-inline input,.money-review-inline select,.money-review-inline textarea{box-sizing:border-box;width:100%;min-width:0;padding:8px;border:1px solid #c5d3e3;border-radius:6px;background:#fff;font:inherit}.money-review-inline input[type=checkbox]{width:auto;align-self:flex-start}.money-review-inline fieldset{border:0;padding:0;margin:0;min-width:0}.money-review-inline button{margin:4px 8px 4px 0;padding:8px 12px;min-height:36px;border:1px solid #c5d3e3;border-radius:6px;background:white;font:inherit}.money-review-inline button.money-primary{background:#3265d5;color:white}.money-review-inline button:disabled{opacity:.5}.money-review-inline [role=alert]{color:#a6362d}
-@media(max-width:1000px){.money-review-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.money-review-inline{padding:12px}.money-review-fields,.money-review-evidence{grid-template-columns:1fr}.money-review-inline button{width:100%;margin:4px 0}}
+.money-notice-review {
+  --notice-line: #dfe6ef;
+  --notice-muted: #586c84;
+  --notice-accent: #285fc5;
+  container-type: inline-size;
+  color: #233247;
+  min-width: 0;
+}
+.money-notice-review :is(button, select, input):focus-visible, .money-notice-review a:focus-visible {
+  outline: 3px solid #7ca9f5;
+  outline-offset: 2px;
+}
+.money-notice-review button, .money-notice-review select, .money-notice-review input[type=search] {
+  border: 1px solid var(--notice-line);
+  border-radius: 8px;
+  background: #fff;
+  color: #455971;
+  min-height: 36px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+}
+.money-notice-review button {cursor:pointer; font-weight:650}
+.money-notice-review button:hover:enabled {background:#eff4fb}
+.money-notice-review button:disabled {opacity:.55; cursor:default}
+.money-notice-review button.money-primary {background:var(--notice-accent); border-color:var(--notice-accent); color:white}
+.money-notice-review button.money-primary:hover:enabled {background:#194da9}
+.money-notice-review a {color:var(--notice-accent); text-decoration:underline; text-underline-offset:2px}
+.money-notice-review input[type=checkbox] {width:16px; height:16px; accent-color:var(--notice-accent); vertical-align:middle}
+.money-notice-stats {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px}
+.money-notice-stats > div {position:relative; display:grid; gap:5px; padding:16px 18px; border:1px solid var(--notice-line); background:white; border-radius:12px}
+.money-notice-stats span {color:var(--notice-muted); font-size:12px; font-weight:650}
+.money-notice-stats strong {font-size:26px; line-height:1.3; font-variant-numeric:tabular-nums}
+.money-notice-stats svg {position:absolute; top:16px; right:16px; box-sizing:content-box; padding:6px; border-radius:8px; color:#6582a7; background:#f2f5fa}
+.money-notice-guide {display:flex; align-items:flex-start; gap:9px; margin:14px 0 20px; padding:12px 16px; border:1px solid #d9e5f7; border-radius:10px; background:#f0f5fd; color:#405e89; font-size:13px; line-height:1.6}
+.money-notice-guide svg {flex:none; margin-top:2px}
+.money-notice-inbox {border:1px solid var(--notice-line); border-radius:13px; background:white; box-shadow:0 6px 22px #24375309; min-width:0}
+.money-notice-inbox > h2 {margin:18px 18px 12px; font-size:17px}
+.money-notice-inbox > .money-navigation-tabs {margin:0; border-bottom:1px solid var(--notice-line); padding:0 18px; gap:18px}
+.money-notice-inbox > .money-navigation-tabs button {border:0; border-bottom:2px solid transparent; border-radius:0; background:none; font-size:13px}
+.money-notice-inbox > .money-navigation-tabs button[aria-selected=true] {border-bottom-color:var(--notice-accent); color:var(--notice-accent)}
+.money-notice-filters, .money-notice-toolbar, .money-notice-toolbar > div, .money-notice-row-actions, .money-notice-preview header, .money-notice-preview footer, .money-notice-receipt, .money-notice-recovery {display:flex; align-items:center; flex-wrap:wrap; gap:8px}
+.money-notice-filters {padding:16px 18px}
+.money-notice-filters label {position:relative; flex:1 1 190px}
+.money-notice-filters label svg {position:absolute; top:50%; left:11px; transform:translateY(-50%); color:var(--notice-muted)}
+.money-web .money-notice-review .money-notice-filters label input[type=search] {box-sizing:border-box; width:100%; padding-left:34px}
+.money-notice-filters select {min-width:112px; max-width:190px}
+.money-notice-review button.money-notice-refresh {display:grid; place-items:center}
+.money-notice-toolbar {justify-content:space-between; margin:0 18px 14px; padding:10px 12px; background:#f7f9fc; border:1px solid var(--notice-line); border-radius:9px; min-height:48px}
+.money-notice-toolbar strong {font-size:13px}
+.money-notice-toolbar small,.money-notice-ledger small,.money-notice-ledger time,.money-notice-preview small {color:var(--notice-muted); font-size:11px}
+.money-notice-toolbar button {min-height:30px}
+.money-notice-inbox .money-notice-ledger {white-space:normal; border-collapse:collapse; width:100%; table-layout:fixed; font-size:12px; color:#394b64}
+.money-notice-ledger th {background:#f7f9fc; border-block:1px solid var(--notice-line); text-align:start; padding:10px 8px; color:var(--notice-muted); font-weight:650}
+.money-notice-ledger th:first-child {width:38px}
+.money-notice-ledger th:nth-child(3) {width:11%; text-align:right}
+.money-notice-ledger th:nth-child(4) {width:14%}
+.money-notice-ledger th:nth-child(5) {width:16%}
+.money-notice-ledger th:last-child {width:194px; text-align:right; padding-right:18px}
+.money-notice-record td {padding:14px 8px; border-bottom:1px solid #e9edf3; vertical-align:middle; overflow-wrap:anywhere}
+.money-notice-review tbody tr {cursor:default}
+.money-notice-record:hover {background:#fafcff}
+.money-notice-record .notice-check {padding-left:16px}
+.money-notice-record .notice-title strong,.money-notice-record .notice-title small,.money-notice-record time {display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.65}
+.money-notice-record .notice-title strong {color:#24364b; font-size:13px}
+.money-notice-record .notice-amount {text-align:right; font-weight:740; font-variant-numeric:tabular-nums}
+.money-notice-record .notice-account small,.money-notice-record .notice-reason small {display:block; margin-top:4px}
+.money-notice-record .notice-reason small {color:#8b6422}
+.money-notice-row-actions {justify-content:flex-end; gap:4px}
+.money-notice-row-actions button {display:inline-flex; align-items:center; justify-content:center; gap:3px; white-space:nowrap; font-size:12px; min-height:32px; padding:5px 8px}
+.money-notice-row-actions .notice-detail-button {background:transparent; border-color:transparent; color:#49627f}
+.money-notice-recovery,.money-notice-results,.money-notice-preview,.money-notice-message,.money-notice-inbox .money-read-status:not(:empty) {margin:10px 18px}
+.money-notice-recovery,.money-notice-receipt {padding:10px 13px; font-size:13px; background:#f1f6fe; border:1px solid #dae5f8; border-radius:9px}
+.money-notice-results details summary {cursor:pointer; padding:8px 0; font-size:13px}
+.money-notice-results .money-table-wrap {overflow:auto; max-height:340px}
+.money-review-results {min-width:720px}
+.money-review-results small {display:block}
+.money-notice-preview {border:1px solid #cedcf3; background:#f5f8fe; border-radius:10px; font-size:13px}
+.money-notice-preview header,.money-notice-preview footer {justify-content:space-between; padding:12px 14px}
+.money-notice-preview h3,.notice-detail h3 {font-size:14px; margin:0}
+.money-notice-preview header p {margin:5px 0 0}
+.money-notice-preview ul {margin:0; padding:0 14px; max-height:245px; overflow:auto; list-style:none}
+.money-notice-preview li {display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid #dee7f4}
+.money-notice-preview small {display:block}
+.money-notice-inline-error {line-height:1.5; color:#9e312d; background:#fff2f2; border-radius:5px; font-size:12px; padding:6px; margin:6px 0 0}
+.notice-detail td {background:#f8faff; padding:15px 22px; border-bottom:1px solid var(--notice-line)}
+.notice-detail dl {display:grid; grid-template-columns:80px minmax(0,1fr); margin:10px 0; gap:8px; font-size:12px}
+.notice-detail dt {color:var(--notice-muted)}
+.notice-detail dd {margin:0; white-space:pre-wrap; overflow-wrap:anywhere}
+.money-notice-empty {display:grid; justify-items:center; gap:8px; text-align:center; padding:32px 12px; color:var(--notice-muted); font-size:13px}
+.money-notice-empty b {font-size:15px}
+.money-notice-inbox .money-pagination {margin:0; padding:12px 18px; border-top:1px solid var(--notice-line)}
+@container (max-width:880px) {
+  .money-notice-ledger,.money-notice-ledger tbody {display:block}
+  .money-notice-ledger thead {position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%)}
+  .money-notice-record {display:grid; grid-template-columns:20px minmax(0,1fr) auto; gap:6px 8px; padding:14px 16px; border-top:1px solid var(--notice-line)}
+  .money-notice-ledger .money-notice-record td {padding:0; border:0}
+  .money-notice-record .notice-check {grid-column:1; grid-row:1}
+  .money-notice-record .notice-title {grid-column:2; grid-row:1}
+  .money-notice-record .notice-amount {grid-column:3; grid-row:1; max-width:115px}
+  .money-notice-record .notice-account,.money-notice-record .notice-reason,.money-notice-record .notice-actions {grid-column:2/-1}
+  .money-notice-record .notice-account small,.money-notice-record .notice-reason small {display:inline; margin-left:7px}
+  .money-notice-record .notice-reason::before {content:'검토 사유 · '; color:var(--notice-muted)}
+  .money-notice-row-actions {justify-content:flex-start}
+  .money-notice-row-actions button {min-height:40px; padding-inline:12px}
+  .notice-detail,.notice-detail td {display:block}
+}
+@container (max-width:540px) {
+  .money-notice-stats {gap:6px}
+  .money-notice-stats > div {padding:10px}
+  .money-notice-stats strong {font-size:21px}
+  .money-notice-stats svg {display:none}
+  .money-notice-guide {font-size:12px; padding:10px; margin-bottom:12px}
+  .money-notice-inbox > h2 {margin:14px 12px 8px}
+  .money-notice-inbox > .money-navigation-tabs {padding-inline:10px; gap:8px}
+  .money-notice-filters {display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto; padding:12px; gap:6px}
+  .money-notice-filters label {grid-column:1/-1}
+  .money-notice-filters select {min-width:0; max-width:100%; width:100%}
+  .money-notice-review :is(button,select,input[type=search]) {min-height:42px}
+  .money-notice-toolbar,.money-notice-preview,.money-notice-results,.money-notice-recovery {margin-inline:10px}
+  .money-notice-toolbar {padding:8px; gap:4px}
+  .money-notice-record {padding-inline:10px}
+  .money-notice-row-actions button {flex:1}
+  .money-notice-row-actions .notice-detail-button {flex:0 1 auto}
+  .money-notice-preview li {display:grid; gap:4px}
+}
+.money-notice-nav-count {margin-inline-start:auto; min-width:20px; padding:1px 5px; border:1px solid #cbdaf2; border-radius:5px; background:#edf3ff; color:#285fc5; text-align:center; font-size:11px; font-variant-numeric:tabular-nums}

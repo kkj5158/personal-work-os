@@ -30,6 +30,11 @@ Review Required RAW queue rows. Unknown accounts remain in ALL only. RAW has no
 confirmed financial type or incoming/outgoing total, and is never posted by this
 view. Existing Review Required owns financial admission.
 
+Gate 0 review links open `/money/ledger?transactionId=<uuid>`. The detail fetch
+uses the owner-scoped canonical row endpoint independently of the visible page
+and period. Opening the link performs a read. Financial meaning remains editable
+through the existing ledger commands.
+
 ## Commands and editing
 
 `GET /account-ledger/rows/{id}` supplies current canonical facts, source links,

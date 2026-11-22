@@ -232,7 +232,7 @@ public class MoneyProductService {
         return reconciliation().stream().filter(r->!r.archived()&&"MISMATCH".equals(r.status())).map(r->Map.<String,Object>of("accountId",r.accountId(),
             "expectedBalance",r.ledgerBalance(),"observedBalance",r.observedBalance(),"difference",r.difference(),"observedAt",r.observedAt())).toList();
     }
-    private long reviewCount(){return db.queryForObject(MoneyReviewService.DECISION_COUNT,Long.class,owner());}
+    private long reviewCount(){return db.queryForObject(MoneyGateZeroReview.PENDING_COUNT,Long.class,owner());}
     @Transactional(readOnly=true) public Map<String,Object> review(int limit,int offset){page(limit,offset);var raws=db.query("select * from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED') order by received_at,id limit ? offset ?",money::rawRow,owner(),limit,offset);
         var txs=db.query("select * from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null order by occurred_at desc,id limit ? offset ?",money::transactionListRow,owner(),limit,offset);
         var issues=balanceIssues();long count=db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());
@@ -256,7 +256,7 @@ public class MoneyProductService {
     public void restoreNotification(UUID id,Long expected){lock();var raw=money.notification(id);version(raw.processingVersion(),expected);
         require(raw.state()==ProcessingState.PROCESSED&&Set.of("IGNORED_NON_FINANCIAL","USER_EXCLUDED","USER_IGNORED_NON_FINANCIAL").contains(raw.processingReason())
             &&db.queryForObject("select count(*) from money_transaction_sources where user_id=? and raw_event_id=?",Integer.class,owner(),id)==0,"Only ignored notifications without ledger links can be restored");
-        money.finishProcessing(id,ProcessingState.REVIEW_REQUIRED,"RESTORED_BY_OWNER");}
+        db.update("update money_raw_notifications set state='REVIEW_REQUIRED',processing_reason='RESTORED_BY_OWNER',review_deferred=false,processing_due_at=null,processing_version=processing_version+1 where user_id=? and id=?",owner(),id);}
     public void reviewExclude(UUID id,Long expected){lock();var raw=money.notification(id);version(raw.processingVersion(),expected);require(raw.state()!=ProcessingState.PROCESSED,"Source already resolved");money.finishProcessing(id,ProcessingState.PROCESSED,"USER_EXCLUDED");}
     public void reprocess(UUID id,Long expected){lock();version(money.notification(id).processingVersion(),expected);money.requestReprocessing(id);}
     public MoneyTransaction link(UUID id,Pair v){lock();var a=money.transaction(id);var b=money.transaction(v.otherId());version(a.version(),v.expectedVersion());version(b.version(),v.otherVersion());require(!a.id().equals(b.id())&&!a.excluded()&&!b.excluded()&&a.amount().compareTo(b.amount())==0&&a.currency().equals(b.currency()),"Select two included sides with equal amount and currency");
