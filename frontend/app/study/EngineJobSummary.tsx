@@ -88,7 +88,7 @@ export function JobDetail({
               이 단계 계속 진행
             </button>
           )}
-        {["FAILED", "BLOCKED", "PARTIAL"].includes(job.state) && job.receipt?.error !== "QUALITY_REVIEW_REQUIRED" && (
+        {!job.campaign && ["FAILED", "BLOCKED", "PARTIAL"].includes(job.state) && job.receipt?.error !== "QUALITY_REVIEW_REQUIRED" && (
           <button disabled={blocked} onClick={() => void invoke("retry")}>
             제한 내 재시도
           </button>
@@ -110,7 +110,7 @@ export function JobDetail({
           </details>
         )}
         <div className="study-actions">
-          {job.kind === "GENERATE" &&
+          {!job.campaign && job.kind === "GENERATE" &&
             ["READY", "PUBLISHED"].includes(job.state) && (
               <button disabled={blocked} onClick={() => void reissue()}>
                 동일 문항으로 새 버전 요청

@@ -28,6 +28,7 @@ export function CampaignPreview({job}:{job:EngineJob}){
   try{setError("");setPdf(URL.createObjectURL(await apiClient.blob(base+".pdf?answers="+answers)));}catch{setError("초안 PDF를 준비할 수 없습니다.");}
  }
  return <section aria-label="소유자 초안 검토"><h4>문항별 출제 현황</h4>
+ {campaign.status==="BUDGET_PAUSED"&&<p>사용량 한도에 도달해 출제를 멈췄습니다. 저장된 문항은 아래에서 검토할 수 있습니다.</p>}
  <p>{campaign.slots.filter(s=>s.stage==="ACCEPTED").length}문항 통과 · 모델 호출 {campaign.calls}/40 · 관측 토큰 {campaign.tokens.toLocaleString()}</p>
  <ul>{campaign.slots.map(s=><li key={s.kind+s.order}>{s.kind==="single_choice"?"객관식":s.kind==="essay"?"서술형":"확장 사례"} {s.order}번 · {s.stage==="ACCEPTED"?"통과":s.stage==="UNRESOLVED"?"보완 필요":s.stage==="PLANNED"?"출처 계획 대기":"검토 중"} · 보완 기회 {Math.min(2,3-s.cycles)}회 · 출처 재선정 {1-s.replans}회{ s.issue?" · "+(issues[s.issue]??"문항 근거 보완"):""}</li>)}</ul>
  <button onClick={()=>void inspect(false)}>학습자 보기</button> <button onClick={()=>void inspect(true)}>소유자 해설 보기</button>
