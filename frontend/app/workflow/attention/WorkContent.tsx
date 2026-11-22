@@ -1,3 +1,4 @@
+import {CapturedText} from './CapturedText';
 import type {ManagedContent} from '@/lib/api/attention';
 
 const labels:Record<string,string>={
@@ -10,11 +11,12 @@ export function WorkContent({content,full=false}:{content:ManagedContent;full?:b
   const {outcome,performed,evidence,remaining}=content;
   const list=(items:string[]|undefined,empty:string)=>items?.length? <ul>{items.map((value,index)=><li key={index}>{value}</li>)}</ul>:empty;
   return <dl className="aq-work-content" data-content-revision={content.contentRevision}>
-    <dt>요청</dt><dd>{content.request.text}</dd>
+    <dt>요청</dt><dd>{content.requestProvenance==='LOCAL_EXTRACTIVE'&&<span>로컬 발췌 · </span>}{content.request.text}</dd>
     <dt>수행</dt><dd>{list(performed?.map(f=>f.text),'수행 내역 미수집')}</dd>
     <dt>결과</dt><dd>{outcome?<><span className="aq-outcome-label">{labels[outcome.fact.origin]} · {labels[outcome.state]}</span> {outcome.fact.text}</>: '보고서 대기'}</dd>
     <dt>근거</dt><dd>{list(evidence?.map(e=>e.label+' · '+(e.verification==='SOURCE_VERIFIED'?'출처 검증 · '+labels[e.verifiedResult==='FAILED'?'FAILED_PROOF':e.verifiedResult??'EXISTS']:'보고됨 · 미검증')+(full&&e.reference?' · '+e.reference:'')),'검증 정보 없음')}</dd>
     <dt>남은 일</dt><dd>{list(remaining?.map(r=>labels[r.state]+' · '+labels[r.kind]+' · '+r.fact.text),content.quality==='REPORTED'?'보고된 항목 없음':'수집된 정보 없음')}</dd>
+    {full&&(content.requestExcerpt||content.responseExcerpt)&&<><dt>원문 발췌</dt><dd><CapturedText request={content.requestExcerpt} response={content.responseExcerpt}/></dd></>}
     {full&&!!content.limitations?.length&&<><dt>제한</dt><dd>{list(content.limitations.map(f=>f.text),'')}</dd></>}
     {full&&content.receivedAt&&<><dt>보고서 수신</dt><dd><time dateTime={content.receivedAt}>{new Date(content.receivedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})}</time> · 개정 {content.contentRevision}</dd></>}
     {full&&content.sessionId&&<><dt>Codex 세션</dt><dd><button type="button" onClick={()=>void navigator.clipboard.writeText(content.sessionId!)}>세션 참조 복사</button></dd></>}
