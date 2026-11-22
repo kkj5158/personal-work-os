@@ -1,6 +1,6 @@
 "use client";
 import { systemDisplay } from "@/lib/systemDisplay";
-import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BriefcaseBusiness, CalendarDays, HeartPulse, Leaf, ListTodo, NotebookPen, Feather, SquareCheckBig, BookOpen, Pin, Plus, ExternalLink, X } from "lucide-react";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from "@dnd-kit/core";
@@ -8,8 +8,9 @@ import { SortableContext, useSortable, horizontalListSortingStrategy, sortableKe
 import { CSS } from "@dnd-kit/utilities";
 import { closeTab, closeOtherTabs, closeTabsToRight, duplicateTab, selectTab, toggleTabPin, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab, type GlobalTab, type TabState } from "@/lib/globalTabs";
 import { GlobalTabContextMenu, type TabMenuAction, type TabMenuAnchor } from "./GlobalTabContextMenu";
-import { SpaceNavigation } from "./SpaceNavigation";
-import { emptySpaceHistory, rememberSpace, restoreSpaceHistory, routeNavigation, SPACE_STORAGE_KEY } from "@/lib/spaceNavigation";
+import { SpaceNavigation, spaceIcons } from "./SpaceNavigation";
+import { useSpaceDefaults } from "./SpaceDefaults";
+import { emptySpaceHistory, rememberSpace, resolveSpaceEntry, restoreSpaceHistory, routeNavigation, SPACES, SPACE_STORAGE_KEY, type SpaceHistory } from "@/lib/spaceNavigation";
 
 type LeaveGuard = (proceed: () => void) => void | Promise<void>;
 type TabsContext = {
@@ -34,6 +35,64 @@ function RouteObserver({ onRoute }: { onRoute: (route: string) => void }) {
   return null;
 }
 const icons = { "NAVER ARCHIVE": BookOpen, BLOG: BookOpen, STUDY: BookOpen, "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather, "MONEY SYS": BriefcaseBusiness, "CHECKLIST SYS": SquareCheckBig };
+
+function NewSpaceTabMenu({ history, open, setOpen, onOpen }: {
+  history: SpaceHistory; open: boolean; setOpen: (open: boolean) => void; onOpen: (href: string) => void;
+}) {
+  const preferences = useSpaceDefaults();
+  const host = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  const last = useRef(false), id = useId();
+  const items = () => Array.from(host.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+  useEffect(() => {
+    if (!open) return;
+    const align = () => {
+      if (popup.current && trigger.current) {
+        popup.current.dataset.align = trigger.current.getBoundingClientRect().left + popup.current.offsetWidth + 8 > document.documentElement.clientWidth ? "right" : "left";
+      }
+    };
+    align();
+    const options = items();
+    (last.current ? options.at(-1) : options[0])?.focus();
+    const outside = (event: PointerEvent) => { if (!host.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener("pointerdown", outside);
+    window.addEventListener("resize", align);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("resize", align);
+    };
+  }, [open, setOpen]);
+  const close = () => { trigger.current?.focus(); setOpen(false); };
+
+  return <div ref={host} className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+    <button ref={trigger} type="button" aria-label="새 탭으로 열기" title="새 탭으로 열기" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
+      onClick={() => { last.current = false; setOpen(!open); }} onKeyDown={event => {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault(); last.current = event.key === "ArrowUp";
+          if (open) (last.current ? items().at(-1) : items()[0])?.focus();
+          else setOpen(true);
+        }
+      }}><Plus size={17}/></button>
+    {open && <div ref={popup} id={id} className="orbit-new-tab-menu" role="menu" aria-label="새 탭으로 열기" onKeyDown={event => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
+      else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const options = items(), index = options.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+        options[next]?.focus();
+      }
+    }}>
+      {SPACES.map(space => {
+        const Icon = spaceIcons[space.id];
+        return <button key={space.id} type="button" role="menuitem" tabIndex={-1} aria-disabled={preferences.entryPending || undefined} onClick={() => {
+          if (preferences.entryPending) return;
+          close(); onOpen(resolveSpaceEntry(history, space.id, preferences.defaults));
+        }}><Icon size={16} aria-hidden="true"/>{space.name} 새 탭으로 열기</button>;
+      })}
+    </div>}
+  </div>;
+}
+
 function Tab({ tab, active, select, close, prefetch, openMenu }: { tab: GlobalTab; active: boolean; select: () => void; close: () => void; prefetch: () => void; openMenu: (anchor: TabMenuAnchor) => void }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({ id: tab.tabId });
   const Icon = icons[tab.system];
@@ -176,10 +235,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
           </SortableContext>
         </DndContext>
         <button type="button" className="orbit-tab-close" aria-label="새 창에서 열기" title="Open in new window · 현재 페이지를 독립 창으로 열기" onClick={() => openWindow()}><ExternalLink size={17}/></button>
-        <div className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}>
-          <button aria-label="새 탭으로 열기" title="새 탭으로 열기 · 시스템 메뉴에서 Ctrl/Cmd 클릭도 가능" aria-expanded={menu} onClick={() => setMenu(!menu)}><Plus size={17}/></button>
-          {menu && <div className="orbit-new-tab-menu">{[["STUDY", "/study"], ["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"], ["MONEY SYS", "/money"], ["CHECKLIST SYS", "/checklist"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{systemDisplay(label)} 새 탭으로 열기</button>)}</div>}
-        </div>
+        <NewSpaceTabMenu history={history} open={menu && tabsVisible} setOpen={setMenu} onOpen={href => navigate(href, { newTab: true })}/>
         <button type="button" className={`orbit-blog-entry ${pathname === "/blog" ? "active" : ""}`} onClick={() => navigate("/blog", { newTab: true })} aria-label="Blog · LOG 열기"><BookOpen size={15}/> Blog</button>
       </div>}
       {visible && tabMenu && state.tabs.some(tab => tab.tabId === tabMenu.tabId) && <GlobalTabContextMenu anchor={tabMenu} pinned={state.tabs.find(tab => tab.tabId === tabMenu.tabId)!.pinned} onAction={menuAction} onClose={dismissTabMenu}/>}
