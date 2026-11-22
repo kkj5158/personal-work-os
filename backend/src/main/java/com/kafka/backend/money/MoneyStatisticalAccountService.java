@@ -39,6 +39,8 @@ public class MoneyStatisticalAccountService {
             money_tracked_at(a.user_id,a.id,'SAVINGS',cutoff.at_time) AS savings_tracked,
             money_tracked_at(a.user_id,a.id,'INSTALLMENT',cutoff.at_time) AS installment_tracked,
             CASE WHEN fund.fund_group IS NULL THEN 'UNASSIGNED'
+            WHEN fund.fund_group='SAVINGS' AND
+              (fund.subtype IS NULL OR fund.subtype NOT IN ('SAVINGS_ACCOUNT','INSTALLMENT')) THEN 'UNASSIGNED'
             WHEN fund.fund_group='SAVINGS' THEN CASE
               WHEN money_tracked_at(a.user_id,a.id,CASE fund.subtype WHEN 'INSTALLMENT' THEN 'INSTALLMENT' ELSE 'SAVINGS' END,cutoff.at_time)
                 THEN CASE fund.subtype WHEN 'INSTALLMENT' THEN 'INSTALLMENT' ELSE 'SAVINGS' END
@@ -160,7 +162,13 @@ public class MoneyStatisticalAccountService {
                 String fund = r.getString(5);
                 var possible = new ArrayList<String>();
                 if ("SAVINGS".equals(fund) && purpose.equals("UNASSIGNED")) {
-                    possible.add("INSTALLMENT".equals(r.getString(6)) ? "INSTALLMENT" : "SAVINGS");
+                    String subtype = r.getString(6);
+                    if ("INSTALLMENT".equals(subtype)) possible.add("INSTALLMENT");
+                    else if ("SAVINGS_ACCOUNT".equals(subtype)) possible.add("SAVINGS");
+                    else {
+                        if (!Boolean.FALSE.equals(r.getObject(7,Boolean.class))) possible.add("SAVINGS");
+                        if (!Boolean.FALSE.equals(r.getObject(8,Boolean.class))) possible.add("INSTALLMENT");
+                    }
                 } else if (fund == null) {
                     // A missing fund history is relevant where an effective tracking selection includes the account.
                     if (r.getBoolean(7)) possible.add("SAVINGS");
