@@ -8,7 +8,7 @@ import AttentionCard from './AttentionCard';
 import CompletedCleanup from './CompletedCleanup';
 import ManagedConsent from './ManagedConsent';
 import AttentionBoard from './AttentionBoard';
-import {GROUPS,itemGroup,groundedSummary,originLabel,chronological} from './cardModel';
+import {GROUPS,itemGroup,groundedSummary,originLabel,chronological,codexThreadUrl} from './cardModel';
 import './attention.css';
 const emptyDraft={action:'',projectId:'',projectLabel:'',workTaskId:'',url:''};
 const emptyLanes:never[]=[];
@@ -60,10 +60,8 @@ export default function AttentionPage(){
  const toggle=useCallback((item:AttentionItem)=>void transition(item,item.status==='COMPLETED'?item.previousOpenGroup??'ACTIVE':'COMPLETED'),[transition]);
  const move=useCallback((item:AttentionItem,group:string)=>void transition(item,group as AttentionGroup),[transition]);
  const source=useCallback((item:AttentionItem)=>{
-   const ref=item.source.reference?.replace(/^codex:\/\/threads\//,'');
-   if(item.source.kind==='CODEX_DESKTOP' && ref && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(ref)){
-     setRecovery(item);setRecoveryUrl('');window.location.assign('codex://threads/'+ref);return;
-   }
+   const threadUrl=codexThreadUrl(item);
+   if(threadUrl){setRecovery(item);setRecoveryUrl('');window.location.assign(threadUrl);return;}
    try{if(item.source.url&&new URL(item.source.url).protocol==='https:'){window.open(item.source.url,'_blank','noopener,noreferrer');return;}}catch{}setRecovery(item);setRecoveryUrl('');},[]);
  const select=useCallback((item:AttentionItem)=>{setEdit(item);setEditAction(item.action);},[]);
  useEffect(()=>{hold('detail',!!edit);return()=>hold('detail',false);},[edit?.id,hold]);
