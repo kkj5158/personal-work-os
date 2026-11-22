@@ -116,7 +116,11 @@ public class StudyEngine {
     n.set("receipt", object(j.receipt).without("privateReviewAttempts"));
     if (j.kind.equals("INDEX") && j.state.equals("READY"))
       n.put("usableExcerptCount", excerpts.countByOwnerIdAndJobIdAndQuality(j.ownerId, j.id, "usable"));
-    if (StudyCampaign.enabled(input)) n.set("campaign", StudyCampaign.summary(StudyCampaign.state(j)));
+    if (StudyCampaign.enabled(input)) {
+      var summary=StudyCampaign.summary(StudyCampaign.state(j));
+      if(StudyEducationPolicy.active(input)){summary.put("authoringPolicy",StudyEducationPolicy.VERSION);summary.remove("tokenLimit");}
+      n.set("campaign",summary);
+    }
     else if (j.kind.equals("GENERATE"))
       n.set("plan", ((ObjectNode) input.deepCopy()).without("passages").without("recentQuestionPrompts"));
     return n;
@@ -363,6 +367,35 @@ public class StudyEngine {
     });
   }
 
+  ObjectNode continueEducation(UUID id){
+    UUID owner=study.owner();
+    require(pilot(owner));
+    return tx(()->{
+      workspace(owner);
+      var parent=owned(owner,id);
+      require("pilot/v320/0".equals(parent.jobKey) && "GENERATE".equals(parent.kind) && "BLOCKED".equals(parent.state));
+      var plan=object(parent.input);
+      campaignAccess(parent,plan);
+      String key="pilot/education/"+plan.path("date").asString()+"/0";
+      var existing=jobs.findByOwnerIdAndKindAndJobKey(owner,"GENERATE",key);
+      if(existing.isPresent()){
+        require(id.toString().equals(object(existing.get().input).path("parentJobId").asString("")));
+        return publicJob(existing.get());
+      }
+      var chapter=new ArrayList<StudySourceExcerpt>();
+      for(var span:plan.path("passages")){
+        var e=excerpts.findByOwnerIdAndId(owner,UUID.fromString(span.path("id").asString())).orElseThrow(StudyException::missing);
+        require(excerpt(e).equals(span));chapter.add(e);
+      }
+      StudyEducationPolicy.bind(plan,chapter,owner,StudyEducationPolicy.golden());
+      plan.put("parentJobId",id.toString());
+      plan.remove("inputDigest");plan.put("inputDigest",hash(plan.toString()));
+      var state=StudyEducationPolicy.resume(parent,plan);
+      var job=enqueue(owner,"GENERATE",key,plan);job.result=state.toString();
+      return publicJob(job);
+    });
+  }
+
   public List<ObjectNode> plan(JsonNode request) {
     fields(request, "date", "days", "operationId", "materialIds", "sourceRanges", "authoringPolicy", "goldenJson");
     String op = text(request, "operationId", 36);
@@ -395,8 +428,24 @@ public class StudyEngine {
       }
     }
     if (request.has("authoringPolicy")) {
-      require(pilot(owner) && StudyCampaign.VERSION.equals(request.path("authoringPolicy").asString()));
+      boolean v2=StudyEducationPolicy.active(request);
+      require(pilot(owner) && (v2 || StudyCampaign.VERSION.equals(request.path("authoringPolicy").asString())));
       require(days == 1 && selection != null && selection.size() == 1 && ranges.size() == 1);
+      if(v2){
+        var range=ranges.get(selection.iterator().next());require(range!=null && range.firstPage()==26 && range.lastPage()==53);
+        String raw=request.has("goldenJson")?request.path("goldenJson").asString(""):StudyEducationPolicy.golden();
+        StudyEducationPolicy.verify(raw,true);
+        return tx(()->{
+          workspace(owner);
+          var parent=jobs.findByOwnerIdAndKindAndJobKey(owner,"GENERATE","pilot/v320/0");
+          if(parent.isPresent() && date.toString().equals(object(parent.get().input).path("date").asString())){
+            require(selection.contains(object(parent.get().input).path("selectedMaterialIds").path(0).asString()));
+            return List.of(continueEducation(parent.get().id));
+          }
+          return plan(owner,date,days,"pilot/education/"+date,selection,ranges,JSON.getNodeFactory().stringNode(raw));
+        });
+      }
+      if(request.has("goldenJson")) StudyEducationPolicy.verify(request.path("goldenJson").asString(""),false);
       return tx(() -> plan(owner,date,days,"pilot/v320",selection,ranges,request.path("goldenJson")));
     }
     require(!request.has("goldenJson"));
@@ -419,7 +468,8 @@ public class StudyEngine {
   List<ObjectNode> plan(UUID owner, LocalDate date, int days, String key, Set<String> materialIds,
       Map<String,StudySourceSelection.PageRange> ranges, JsonNode controls) {
     boolean campaign = controls != null;
-    if (campaign) require(pilot(owner) && key.equals("pilot/v320") && days == 1);
+    boolean v2=campaign && key.equals("pilot/education/"+date);
+    if (campaign) require(pilot(owner) && (key.equals("pilot/v320") || v2) && days == 1);
     var chapter = new ArrayList<StudySourceExcerpt>();
     workspace(owner);
     ObjectNode rangeSnapshot = JSON.createObjectNode();
@@ -583,9 +633,10 @@ public class StudyEngine {
         for (String marker : List.of("decisionAudit","reasoningContract","answerGrounding")) p.remove(marker);
       }
       if (campaign) {
-        require(priorPilotCalls>=0 && priorPilotCalls<=StudyCampaign.CALLS && priorPilotTokens>=0);
+        require(priorPilotCalls>=0 && priorPilotTokens>=0);
         p.put("priorCalls",priorPilotCalls).put("priorTokens",priorPilotTokens);
-        StudyCampaign.freeze(p, owner, chapter, controls);
+        StudyCampaign.freeze(p,owner,chapter,v2?JSON.getNodeFactory().missingNode():controls);
+        if(v2){p.put("priorCalls",0).put("priorTokens",0);StudyEducationPolicy.bind(p,chapter,owner,controls.asString());}
       }
       p.put("inputDigest", hash(p.toString()));
       result.add(publicJob(enqueue(owner, "GENERATE", key + "/" + i, p)));
@@ -716,6 +767,9 @@ public class StudyEngine {
   public JsonNode claimWorker(StudyEngineWorker worker, UUID jobId) { return claimWorker(worker,jobId,false); }
 
   JsonNode claimWorker(StudyEngineWorker worker,UUID jobId,boolean campaignCapable) {
+    return claimWorker(worker,jobId,campaignCapable?StudyCampaign.VERSION:"");
+  }
+  JsonNode claimWorker(StudyEngineWorker worker,UUID jobId,String capability) {
     tx(
         () -> {
           var w = workers.findById(worker.id).orElseThrow();
@@ -724,8 +778,8 @@ public class StudyEngine {
         });
     var kinds = Set.of("GENERATE", "COACH");
     if (jobId != null) {
-      var campaign=tx(()->StudyCampaign.enabled(object(owned(worker.ownerId,jobId).input)));
-      return workerClaim(campaign && (!campaignCapable || !pilot(worker.ownerId)) ? null : claim(worker.ownerId,jobId,worker.id,kinds));
+      var plan=tx(()->object(owned(worker.ownerId,jobId).input));
+      return workerClaim(!workerEligible(worker,plan,capability) ? null : claim(worker.ownerId,jobId,worker.id,kinds));
     }
     var candidates =
         tx(
@@ -736,15 +790,19 @@ public class StudyEngine {
                     Set.of("QUEUED", "PARTIAL", "RUNNING"),
                     PageRequest.of(0, 100)));
     for (var j : candidates) {
-      if (StudyCampaign.enabled(object(j.input)) && (!campaignCapable || !pilot(worker.ownerId))) continue;
+      if (!workerEligible(worker,object(j.input),capability)) continue;
       var claimed = claim(worker.ownerId, j.id, worker.id, kinds);
       if (claimed != null) return workerClaim(claimed);
     }
     return workerClaim(null);
   }
 
+  private boolean workerEligible(StudyEngineWorker worker,JsonNode plan,String capability){
+    return !StudyCampaign.enabled(plan) || pilot(worker.ownerId) && (StudyEducationPolicy.VERSION.equals(capability)
+        || !StudyEducationPolicy.active(plan) && StudyCampaign.VERSION.equals(capability));
+  }
   private JsonNode workerClaim(StudyEngineJob claimed) {
-    if (claimed != null && StudyCampaign.enabled(object(claimed.input))) return JSON.createObjectNode().put("id",claimed.id.toString()).put("kind",claimed.kind).put("leaseToken",claimed.leaseToken.toString()).put("authoringPolicy",StudyCampaign.VERSION);
+    if (claimed != null && StudyCampaign.enabled(object(claimed.input))) return JSON.createObjectNode().put("id",claimed.id.toString()).put("kind",claimed.kind).put("leaseToken",claimed.leaseToken.toString()).put("authoringPolicy",object(claimed.input).path("authoringPolicy").asString());
     if (claimed == null) return JSON.createObjectNode().put("state", "IDLE");
     ObjectNode response = JSON.createObjectNode()
         .put("id", claimed.id.toString())
@@ -872,6 +930,14 @@ public class StudyEngine {
   }
 
   void finishAssembly(StudyEngineJob j,ObjectNode p,ObjectNode s) {
+    if(StudyEducationPolicy.active(p)) {
+      require(s.path("slots").size()==8 && s.path("calibrated").asBoolean()
+          && s.path("assembly").path("followUps").size()==10);
+      for(var slot:s.path("slots")){
+        require(slot.path("receiptDigest").asString("").length()==64 && slot.path("acceptedRevision").equals(slot.path("cycles"))
+            && slot.path("objectiveTier").asString().equals(StudyEducationPolicy.tier(slot.path("kind").asString(),slot.path("order").asInt())));
+      }
+    }
     var output=JSON.createObjectNode().put("topic",p.path("plannedTopic").asString());
     output.set("followUps",s.path("assembly").path("followUps"));var keys=output.putArray("keys");
     var verdicts=output.putObject("independentReview").put("version","study-v31-review-2").put("model",StudyCampaign.REVIEW).putArray("verdicts");
@@ -889,6 +955,7 @@ public class StudyEngine {
         .put("evidence",slot.path("review").path("evidence").asString()).put("answerCue","검토 완료").put("revisedJudgment","검토 완료");
     }
     require(operations.size()>=3 && s.path("calibrated").asBoolean(false));
+    if(StudyEducationPolicy.active(p)) require(StudyEducationPolicy.variedOperations(s.path("slots")));
     String frozen=j.input;try {j.input=assembly.toString();acceptQuestions(j,output);}finally{j.input=frozen;}
     j.state="READY";s.put("status","READY_FOR_OWNER_REVIEW");
   }
@@ -904,14 +971,15 @@ public class StudyEngine {
         x.set("question",StudyCampaign.learnerQuestion(c.path("question")));x.set("reading",StudyCampaign.spans(p,boundManifest.path("spanIds")));
         if(keys){x.set("key",c.path("key"));x.set("finding",r.path("finding"));x.set("review",r.path("review"));}
       }
-      if(keys && s.has("continuation")){
+      if(keys && (s.has("continuation") || StudyEducationPolicy.active(s))){
         out.set("campaignId",s.path("campaignId"));
         var calibration=out.putArray("calibration");int index=0;
         for(var control:p.path("controls")){
           var item=calibration.addObject().put("reference",control.path("referenceId").asString("historical-control"))
               .put("expected",control.path("expected").asString());
+          if(StudyEducationPolicy.active(s)){item.set("referenceContext",control.path("referenceContext"));item.set("question",control.path("question"));item.set("referenceKey",control.path("key"));}
           var verdict=s.path("controlReview").path("items").path(index++);
-          for(String field:List.of("issue","field","evidence","repair","grounded","hintsSafe","reasoning"))if(verdict.has(field))item.set(field,verdict.path(field));
+          for(String field:List.of("issue","field","evidence","repair","grounded","hintsSafe","reasoning","uncertainty"))if(verdict.has(field))item.set(field,verdict.path(field));
         }
         var ledger=out.putArray("ledger");
         for(var call:s.path("calls")){

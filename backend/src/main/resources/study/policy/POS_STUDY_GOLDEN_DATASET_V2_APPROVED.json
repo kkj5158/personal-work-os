@@ -1,0 +1,201 @@
+{
+  "schemaVersion": "quality-golden-v2",
+  "origin": "User-approved-style prompts from iterative ChatGPT STUDY V1/V2/V2.2 design. These are AUTHORING reference data, not completed user learning attempts and not existing PROD records.",
+  "source": {
+    "title": "컨텍스트 엔지니어링으로 완성하는 AI 에이전트",
+    "sha256": "e9331c80662ecbaf26d44d8cd671e8556b2cb1fbcef341cf1112cbd52f113c67",
+    "pilotPrintedPages": "25-52",
+    "pilotPhysicalPdfPages": "26-53 inclusive, 1-based",
+    "note": "Scenario details are invented exercises. Source facts/principles are from Chapter 1; verify original page screenshots for OCR corruption."
+  },
+  "target": {
+    "knowledgeDifficulty": 3,
+    "reasoningDemand": 4,
+    "hintsPerQuestion": 3,
+    "requiredMinutes": 15,
+    "extensionMinutes": 30,
+    "defaultRequired": {
+      "single_choice": 5,
+      "essay": 1
+    },
+    "defaultExtension": {
+      "case_analysis": 2
+    },
+    "optionalDailyFollowUps": 10
+  },
+  "cases": [
+    {
+      "id": "gold_mcq_existing_module_reuse_v22",
+      "label": "approved_style",
+      "type": "single_choice",
+      "concepts": [
+        "project-specific context",
+        "interface reuse",
+        "selective context",
+        "limitations of more verbosity"
+      ],
+      "sourcePrintedPages": [
+        30,
+        31,
+        36,
+        37
+      ],
+      "reasoningMoves": [
+        "Identify what context was already provided",
+        "Identify the missing callable interface/usage knowledge",
+        "Compare direct remedy with indirect or overbroad alternatives"
+      ],
+      "prompt": "An AI coding agent was asked to implement a user lookup API. It already received the repository folder tree, snake_case naming rule, API endpoint specification, and example response. Yet it reimplemented its own database query and date conversion rather than reusing existing functionality. The real project contains database.connection and utils.py with usable functions. Which change most directly addresses the cause while limiting irrelevant context?",
+      "options": [
+        {
+          "id": "A",
+          "text": "Add an explicit 'do not reimplement' instruction and strengthen duplicate-code detection after generation."
+        },
+        {
+          "id": "B",
+          "text": "Provide the real interfaces and usage examples of the relevant existing modules and explicitly require their reuse."
+        },
+        {
+          "id": "C",
+          "text": "Provide the entire repository code as context so the agent can see every available implementation."
+        },
+        {
+          "id": "D",
+          "text": "Require a longer implementation plan and self-review before code generation."
+        }
+      ],
+      "answer": "B",
+      "rationale": "A and D can help but do not teach the agent the callable existing API. C may contain relevant facts but adds excessive noise. B supplies targeted project-specific context and gives the model a concrete reuse path.",
+      "distractorReasons": {
+        "A": "Post-generation detection, not relevant missing interface knowledge.",
+        "C": "May include answer but needlessly floods context and can distract.",
+        "D": "More reasoning steps do not replace absent facts."
+      },
+      "hints": [
+        "Separate the observations in the scenario from assumptions about what the agent knows. Which facts were explicitly supplied before implementation?",
+        "Compare each proposed intervention by what information it changes at implementation time, and the trade-offs it introduces.",
+        "For each option, check whether it supports a correct implementation and whether it adds avoidable context or merely shifts the work to a later check. Then choose the most justified approach."
+      ],
+      "rubric": {
+        "grounding": 5,
+        "reasoning": 4,
+        "distractors": 4,
+        "clarity": 4,
+        "novelty": 4
+      },
+      "scenarioProvenance": "Synthetic developer scenario applying Ch.1 context-bundle principles; mention actual utils.py as scenario information, not a verbatim chapter fact."
+    },
+    {
+      "id": "gold_essay_project_report_v22",
+      "label": "approved_style",
+      "type": "essay",
+      "concepts": [
+        "stale vs current project context",
+        "planning vs observed state",
+        "source conflicts",
+        "prompt versus context"
+      ],
+      "sourcePrintedPages": [
+        30,
+        37,
+        41,
+        45,
+        50,
+        51
+      ],
+      "reasoningMoves": [
+        "Diagnose why actual project facts are unavailable",
+        "Assign different roles to plan/status/meeting evidence",
+        "Handle conflicts by date and authority without blind overwrites",
+        "Distinguish instruction format from access to domain data"
+      ],
+      "prompt": "A team asks an AI to summarize project progress, remaining risks and next week's priorities. The model currently receives only a plan written three months ago. Material A is that plan (goals and intended scope). Material B is the latest task/status ledger (completed, ongoing and unresolved bugs). Material C is recent meeting decisions (changed deadlines and priorities). In 6-10 sentences, explain (1) why the AI report is inaccurate, (2) how to use A/B/C and reconcile conflicts, (3) why simply writing a longer prompt cannot solve the problem.",
+      "modelAnswer": "A three-month-old plan establishes intent, not the present state. Material A identifies original goals and intended scope. Material B can supply observed completed or ongoing work and unresolved issues; an unresolved bug does not by itself prove the entire workstream is blocked. Material C records decisions about deadlines and priorities. For each disputed field, compare the document's date, purpose and responsible source, and explicitly mark what remains unknown. Request the missing evidence before asserting a current state or obstacle. Create a focused bundle of goals, verified status, decisions and uncertainties, then format the report. A longer instruction alone cannot supply missing current facts.",
+      "hints": [
+        "What can the AI know from an old plan, and what kinds of facts about today cannot be inferred from that plan?",
+        "Separate the three materials by their roles: intended goals, observed progress, and decisions about future work. What if they conflict?",
+        "Draft a checking sequence: first label what is known from each document; next identify conflicts or unanswered factual questions; finally decide what extra verification is needed before writing a current-status conclusion. Keep the conclusion in your own words."
+      ],
+      "rubricCriteria": [
+        "Explains context deficit rather than treating poor wording as the sole cause",
+        "Correctly distinguishes A/B/C",
+        "Explains timestamp/authority-sensitive conflicts without blind overwrite",
+        "Contrasts better instructions with real project knowledge"
+      ],
+      "estimatedMinutes": 8,
+      "scenarioProvenance": "Synthetic project scenario applying Ch.1 context-design and same-question/different-context demonstration."
+    },
+    {
+      "id": "negative_cover_trivia",
+      "label": "rejected_low_quality",
+      "type": "single_choice",
+      "prompt": "What book orientation is directly supported by the cover subtitle 'practical AI service guide'?",
+      "options": [
+        "AI service implementation guide",
+        "Semiconductor process guide",
+        "Publishing contract guide",
+        "Computer component repair guide"
+      ],
+      "reason": "Cover-only bibliographic recognition; no technical learning; implausible distractors; could be solved without studying chapter 1.",
+      "expectedGate": "REJECT / LOW_EDUCATIONAL_VALUE"
+    },
+    {
+      "id": "negative_isbn",
+      "label": "rejected_low_quality",
+      "type": "single_choice",
+      "prompt": "How should ISBN 979-11-7579-005-6 be treated in a study note?",
+      "reason": "Publisher/ISBN fact; irrelevant to AI/Agent learning objective; must not auto-fallback to front-matter quiz.",
+      "expectedGate": "REJECT / FRONT_MATTER_ONLY"
+    },
+    {
+      "id": "negative_too_easy_prior_chat",
+      "label": "rejected_too_easy",
+      "type": "single_choice",
+      "prompt": "A chatbot forgets the previous message because it was not passed to the model. Which fix is best: (A) be friendlier (B) pass previous messages (C) add generic shipping knowledge (D) self-review?",
+      "reason": "Question reveals missing information and answer almost verbatim; one-step recall with trivial alternatives, not 2-3 step reasoning.",
+      "expectedGate": "REJECT_OR_REVISE / TRIVIAL_REASONING"
+    },
+    {
+      "id": "negative_repeated_substance",
+      "label": "rejected_redundancy",
+      "type": "weekly_set",
+      "prompt": "Five questions each rephrase 'Can we infer technical details solely from cover/title?' and two case analyses ask the same limitation.",
+      "reason": "Superficially different stems test the same knowledge and reasoning operation; not acceptable concept coverage.",
+      "expectedGate": "REJECT / SEMANTIC_DUPLICATION"
+    },
+    {
+      "id": "negative_bad_render",
+      "label": "rejected_display",
+      "type": "rendering",
+      "prompt": "Answer appears 'A\\n정답: \\\"A\\\"'; source shows 'excerptId=; PDF pageIndex=1' and literal '**구절 식별자**'.",
+      "reason": "Leaky internal annotations, duplicated answer line and missing/garbled citation binding.",
+      "expectedGate": "REJECT / PRESENTATION_INTEGRITY"
+    }
+  ],
+  "approvalRecord": {
+    "status": "OWNER_APPROVED_CONTENT_NOT_SEMANTIC_QA_PASS",
+    "approvedOn": "2026-11-22",
+    "parentSchemaVersion": "quality-golden-v1",
+    "parentSha256": "5ac20b66f6c720b52de951456de1b429ffd44f1639cf7c1bd17f88184d091292",
+    "authority": "owner approved G01 and G02 recommended edits in ChatGPT conversation",
+    "approvedCaseChanges": [
+      {
+        "id": "gold_mcq_existing_module_reuse_v22",
+        "fields": [
+          "hints[0]",
+          "hints[1]",
+          "hints[2]"
+        ]
+      },
+      {
+        "id": "gold_essay_project_report_v22",
+        "fields": [
+          "modelAnswer",
+          "hints[2]"
+        ]
+      }
+    ],
+    "semanticReviewStatus": "NOT_YET_VERIFIED",
+    "historicalReview": "V3.2 closeout positives 0/2, negatives 3/3 under old Golden and older evaluator inputs; not a V2 result"
+  }
+}

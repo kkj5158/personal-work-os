@@ -23,3 +23,18 @@ test('lost completion acknowledgement reuses the exact output; terminal decision
 test('orphaned reservation never invokes another model',async()=>{
  const impossible=()=>assert.fail('unexpected call');assert.deepEqual(await driveCampaign(async()=>({action:'RECONCILE'}),impossible,impossible),{state:'RECONCILE'});
 });
+
+test('approved policy binds response mode, hints and alternatives without changing historical instructions',async()=>{
+ const run=async authoringPolicy=>{
+   let observed;
+   await invokeStep({action:'CALL',callId:'reserved',inputDigest:'bound',stage:'review',authoringPolicy,payload:[{}]},
+     {run:async(schema,prompt)=>{observed={schema,prompt};return {items:[]};}});
+   return observed;
+ };
+ const current=await run('study-education-v1-golden-v2'),old=await run('study-engine-policy-v320');
+ for(const phrase of ['basic_application','cause_analysis','advanced_integration','best option ID','H1 orients','H2 compares','H3 gives','conditional answers','unresolved issue does not prove blocked work'])
+   assert.ok(current.prompt.includes(phrase),phrase);
+ assert.ok(current.schema.properties.items.items.required.includes('uncertainty'));
+ assert.ok(!old.schema.properties.items.items.required.includes('uncertainty'));
+ assert.ok(!old.prompt.includes('basic_application'));
+});

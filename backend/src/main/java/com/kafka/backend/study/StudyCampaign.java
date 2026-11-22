@@ -13,8 +13,8 @@ final class StudyCampaign {
   static final int CALLS=40, TOKENS=400000;
   static final int MAX_CITATIONS=4, MAX_RUBRICS=30;
   static int minRubrics(String kind){return "case_analysis".equals(kind)?3:2;}
-  static String reviewPolicy(JsonNode s){return s.has("continuation")?StudyCampaignContinuation.POLICY:REVIEW;}
-  static boolean enabled(JsonNode p){return VERSION.equals(p.path("authoringPolicy").asString(""));}
+  static String reviewPolicy(JsonNode s){return StudyEducationPolicy.active(s) ? StudyEducationPolicy.VERSION : s.has("continuation")?StudyCampaignContinuation.POLICY:REVIEW;}
+  static boolean enabled(JsonNode p){return VERSION.equals(p.path("authoringPolicy").asString("")) || StudyEducationPolicy.active(p);}
   static ObjectNode state(StudyEngineJob j){return j.result==null?JSON.createObjectNode():object(j.result);}
   static void freeze(ObjectNode p, UUID owner,List<StudySourceExcerpt> spans,JsonNode controls){
     require(!spans.isEmpty() && spans.size()<=180 && spans.stream().allMatch(e->owner.equals(e.ownerId)));
@@ -25,8 +25,11 @@ final class StudyCampaign {
     var list=p.putArray("passages");
     for(var e:spans)list.add(excerpt(e));
     p.put("authoringPolicy",VERSION);
+    bindControls(p,spans,controls,false);
+  }
+  static void bindControls(ObjectNode p,List<StudySourceExcerpt> spans,JsonNode controls,boolean approvedV2){
     if(controls.isString()){
-      String raw=controls.asString();require(raw.length()<150000 && hash(raw).equals("5ac20b66f6c720b52de951456de1b429ffd44f1639cf7c1bd17f88184d091292"));
+      String raw=controls.asString();StudyEducationPolicy.verify(raw,approvedV2);
       var groups=p.putArray("controls");
       for(var g:JSON.readTree(raw).path("cases")){
         if(!Set.of("essay","single_choice").contains(g.path("type").asString()))continue;
@@ -42,10 +45,14 @@ final class StudyCampaign {
         for(String field:List.of("concepts","reasoningMoves","scenarioProvenance","estimatedMinutes","rubric"))
           if(g.has(field))style.set(field,g.path(field));
         c.put("referenceId",g.path("id").asString());
+        if(approvedV2 && g.path("label").asString().equals("approved_style")) {
+          style.put("objectiveTier",g.path("type").asString().equals("single_choice") ? "advanced_integration" : "open_reasoning");
+          style.put("sourceContract","Reference pages provide principles. Scenario facts are supplied in the prompt. No candidate citation fields are required of a reference example.");
+        }
         var ids=c.putArray("spanIds");
         for(var printed:g.path("sourcePrintedPages")){
           var matched=spans.stream().filter(v->v.sourceHash.equals("e9331c80662ecbaf26d44d8cd671e8556b2cb1fbcef341cf1112cbd52f113c67") && v.pageIndex==printed.asInt()+1).toList();
-          require(!matched.isEmpty());matched.forEach(v->ids.add(v.id.toString()));
+          require(!matched.isEmpty() && (!approvedV2 || matched.stream().allMatch(v->"usable".equals(v.quality) && !v.body.isBlank())));matched.forEach(v->ids.add(v.id.toString()));
         }
       }
     }else require(controls.isMissingNode());
@@ -53,11 +60,12 @@ final class StudyCampaign {
   static ObjectNode summary(ObjectNode s){
     var o=JSON.createObjectNode().put("calls",s.path("priorCalls").asInt()+s.path("calls").size()).put("tokens",s.path("spent").asLong())
       .put("status",s.path("status").asString("DRAFT")).put("calibrated",s.path("calibrated").asBoolean());
-    o.put("tokenLimit",s.has("continuation")?StudyCampaignContinuation.TOKEN_LIMIT:TOKENS);
+    if(StudyEducationPolicy.active(s)) o.put("authoringPolicy",StudyEducationPolicy.VERSION);
+    else o.put("tokenLimit",s.has("continuation")?StudyCampaignContinuation.TOKEN_LIMIT:TOKENS);
     var a=o.putArray("slots");
     for(var r:s.path("slots"))a.addObject().put("kind",r.path("kind").asString()).put("order",r.path("order").asInt())
       .put("stage",r.path("stage").asString()).put("cycles",r.path("cycles").asInt()).put("replans",r.path("replans").asInt())
-      .put("issue",r.path("issue").asString(""));
+      .put("issue",r.path("issue").asString("")).put("objectiveTier",r.path("objectiveTier").asString(""));
     return o;
   }
   static JsonNode spans(JsonNode plan,JsonNode ids){
@@ -67,9 +75,11 @@ final class StudyCampaign {
     return out;
   }
   static void init(ObjectNode s,JsonNode p){
+    if(StudyEducationPolicy.active(p))s.put("authoringPolicy",StudyEducationPolicy.VERSION);
     s.put("status","DRAFT").put("priorCalls",p.path("priorCalls").asInt()).put("spent",p.path("priorTokens").asInt());s.putArray("calls");var slots=s.putArray("slots");
     for(String part:List.of("required","extension"))for(var row:p.path("blueprint").path("slots").path(part)){
       var r=slots.addObject().put("part",part).put("kind",row.path("kind").asString()).put("order",row.path("order").asInt()).put("stage","PLANNED").put("cycles",0).put("replans",0);
+      if(StudyEducationPolicy.active(p)) r.set("objectiveTier",row.path("objectiveTier"));
       r.put("heldOut",(part.equals("extension")&&row.path("order").asInt()==2)||(r.path("kind").asString().equals("single_choice")&&row.path("order").asInt()==4));
     }
     require(slots.size()==8);
@@ -116,7 +126,7 @@ final class StudyCampaign {
   }
   static ObjectNode next(ObjectNode s,JsonNode p){
     if(!s.has("slots"))init(s,p);
-    if(s.has("continuation")){
+    if(s.has("continuation") && !StudyEducationPolicy.active(s)){
       // Reconcile an earlier routing decision only while this linked job is still running.
       for(var slot:s.path("slots")){
         if("UNRESOLVED".equals(slot.path("stage").asString()) && slot.path("cycles").asInt()<3
@@ -127,6 +137,7 @@ final class StudyCampaign {
         }
       }
     }
+    if(StudyEducationPolicy.active(p) && s.has("controlReview") && !s.path("calibrated").asBoolean()) return null;
     var controls=p.path("controls");
     if(controls.size()>0 && !s.has("controlReview") && !s.has("calibrationStop")){
       var items=JSON.createArrayNode();boolean reviewing=s.has("controlBlind");int i=0;
@@ -136,7 +147,7 @@ final class StudyCampaign {
         if(reviewing){if(c.has("referenceContext"))row.set("referenceContext",c.path("referenceContext"));row.set("key",c.path("key"));row.set("blind",s.path("controlBlind").path("items").path(i));} i++;
       }
       var calibration=task(reviewing?"review":"blind",-2,items);
-      if(s.has("continuation")){
+      if(s.has("continuation") && !StudyEducationPolicy.active(p)){
         long used=0;int count=0;
         for(var e:s.path("calls"))if(e.path("slot").asInt()==-2 && StudyCampaignContinuation.POLICY.equals(e.path("policy").asString())){
           count++;var u=e.path("usage");used+=u.path("input_tokens").asLong()+u.path("output_tokens").asLong();
@@ -164,6 +175,7 @@ final class StudyCampaign {
       if(stage.equals("write")){
         var input=JSON.createObjectNode().put("part",r.path("part").asString()).put("kind",r.path("kind").asString()).put("order",r.path("order").asInt()).put("optionCount",p.path("choiceOptionCount").asInt(4));
         input.putObject("bounds").put("minRubrics",minRubrics(r.path("kind").asString())).put("maxRubrics",MAX_RUBRICS).put("maxCitations",MAX_CITATIONS);
+        if(StudyEducationPolicy.active(p)) input.set("objectiveTier",r.path("objectiveTier"));
         input.set("contract",m);input.set("sources",sources);
         if(r.has("candidate"))input.set("previous",r.path("candidate"));
         if(r.has("finding")||r.has("repairComponent")){var finding=r.path("finding");if(finding.isObject()){
@@ -172,7 +184,7 @@ final class StudyCampaign {
         return task(stage,i,input);
       }
       var item=JSON.createObjectNode().set("learner",visible(r.path("candidate").path("question"),sources));
-      if(stage.equals("review")){item.set("key",r.path("candidate").path("key"));item.set("blind",r.path("blind").path("items").path(0));}
+      if(stage.equals("review")){if(StudyEducationPolicy.active(p)){item.set("objectiveTier",r.path("objectiveTier"));item.set("objective",m.path("objective"));}item.set("key",r.path("candidate").path("key"));item.set("blind",r.path("blind").path("items").path(0));}
       return task(stage,i,JSON.createArrayNode().add(item));
     }
     if(slots.valueStream().allMatch(r->"ACCEPTED".equals(r.path("stage").asString())) && !s.has("assembly")){
@@ -184,8 +196,8 @@ final class StudyCampaign {
   static ObjectNode reserve(StudyEngineJob j,JsonNode p,ObjectNode s){
     if(s.has("pending"))return JSON.createObjectNode().put("action","RECONCILE").put("callId",s.path("pending").asString());
     var t=next(s,p);
-    if(t==null || s.path("calls").size()+s.path("priorCalls").asInt()>=CALLS || s.path("spent").asLong()+reservation(t)>(s.has("continuation")?StudyCampaignContinuation.TOKEN_LIMIT:TOKENS)){
-      s.put("status",t==null?"SLOTS_UNRESOLVED":"BUDGET_PAUSED");j.state="BLOCKED";j.result=s.toString();
+    if(t==null || !StudyEducationPolicy.active(p) && (s.path("calls").size()+s.path("priorCalls").asInt()>=CALLS || s.path("spent").asLong()+reservation(t)>(s.has("continuation")?StudyCampaignContinuation.TOKEN_LIMIT:TOKENS))){
+      s.put("status",t==null?(s.has("controlReview") && !s.path("calibrated").asBoolean() && StudyEducationPolicy.active(s)?"GOLDEN_SEMANTIC_DISPUTE":"SLOTS_UNRESOLVED"):"BUDGET_PAUSED");j.state="BLOCKED";j.result=s.toString();
       return JSON.createObjectNode().put("action","STOP").put("reason",s.path("status").asString());
     }
     int slot=t.path("slot").asInt();String stage=t.path("stage").asString();
@@ -199,6 +211,7 @@ final class StudyCampaign {
       .put("requestedModel","gpt-6.2-astra").put("requestedEffort","high").put("status","RESERVED").put("usageStatus","UNKNOWN");
     entry.set("lease",JSON.getNodeFactory().stringNode(j.leaseToken.toString()));
     s.put("pending",id);j.result=s.toString();
+    if(StudyEducationPolicy.active(p)) t.put("authoringPolicy",StudyEducationPolicy.VERSION);
     return t.put("action","CALL").put("callId",id).put("inputDigest",digest);
   }
   static String checkCandidate(JsonNode p,JsonNode r,JsonNode c){
@@ -215,7 +228,7 @@ final class StudyCampaign {
       var byId=new HashMap<String,JsonNode>();
       source.forEach(v->byId.put(v.path("id").asString(),v));
       validateItemKey(k,q,p,true,byId);
-      var issues=StudyQuality.questionIssues(q,k);return issues.isEmpty()?"":issues.iterator().next();
+      var issues=StudyQuality.questionIssues(q,k,StudyEducationPolicy.active(p));return issues.isEmpty()?"":issues.iterator().next();
     }catch(RuntimeException ex){return "SCHEMA";}
   }
   static void repair(ObjectNode r,String issue,JsonNode finding){
@@ -241,6 +254,7 @@ final class StudyCampaign {
     int i=e.path("slot").asInt();String stage=e.path("stage").asString();
     if(i==-2){
       require(out.path("items").size()==p.path("controls").size());
+      if(StudyEducationPolicy.active(p)) StudyEducationPolicy.validateControlOutput(stage,out);
       s.set(stage.equals("blind")?"controlBlind":"controlReview",out);
       if(stage.equals("review")){
         boolean agreed=true;int positives=0,negatives=0;
@@ -248,6 +262,10 @@ final class StudyCampaign {
           var c=p.path("controls").path(n);String expected=c.path("expected").asString("");
           if(expected.equals("control"))continue;
           var f=out.path("items").path(n);var b=s.path("controlBlind").path("items").path(n);
+          if(StudyEducationPolicy.active(p)){
+            var source=c.path("spanIds").isEmpty()?JSON.createArrayNode():spans(p,c.path("spanIds"));
+            StudyEducationPolicy.requireReviewEvidence(f,c.path("key"),visible(c.path("question"),source));
+          }
           boolean accepted=f.path("issue").asString("").equals("none") && f.path("grounded").asBoolean() && f.path("hintsSafe").asBoolean() && f.path("reasoning").asBoolean() && b.path("solvable").asBoolean();
           if(c.path("question").path("kind").asString().equals("single_choice") && c.path("key").has("answer"))
             accepted &= b.path("answer").equals(c.path("key").path("answer"));
@@ -278,6 +296,13 @@ final class StudyCampaign {
           var corrected=out.path("key").path(component);var k=prior.path("key").deepCopy().asObject();k.set(component,corrected);candidate.set("key",k);
         }
       }
+      if(StudyEducationPolicy.active(p) && prior.isObject()){
+        require(prior.path("question").path("id").equals(candidate.path("question").path("id")));
+        candidate.set("contract",component.equals("task")?out.path("contract"):prior.path("contract"));
+        if(candidate.path("key").equals(prior.path("key")) && candidate.path("question").equals(prior.path("question"))){
+          r.put("stage","UNRESOLVED").put("issue","NO_PROGRESS");return;
+        }
+      }
       if(prior.isObject())r.withArrayProperty("priorCandidates").add(prior);
       r.set("candidateManifest",r.path("manifest").deepCopy());
       r.set("candidate",candidate);boolean sameBlind=r.has("blind") && blindDigest(p,r).equals(r.path("blindDigest").asString(""));if(!sameBlind)r.remove("blind");String issue=checkCandidate(p,r,candidate);
@@ -288,6 +313,7 @@ final class StudyCampaign {
       require(out.path("items").size()==1);var f=out.path("items").path(0);
       String issue=text(f,"issue",60);text(f,"evidence",1500);text(f,"repair",1500);text(f,"field",180);
       var q=r.path("candidate").path("question");var key=r.path("candidate").path("key");var b=r.path("blind").path("items").path(0);
+      if(StudyEducationPolicy.active(p) && "SOURCE_UNSUITABLE".equals(issue) && f.path("field").asString("").toLowerCase(Locale.ROOT).contains("citation") && f.path("grounded").asBoolean()) issue="CITATION_SUPPORT";
       if(s.has("continuation") && citationRepair(r,p,f))issue="CITATION_SUPPORT";
       if(issue.equals("none") && !claimsBound(r,p,f))issue="HIDDEN_PREMISE";
       if(issue.equals("none") && (!f.path("grounded").asBoolean()||!f.path("hintsSafe").asBoolean()||!f.path("reasoning").asBoolean()||!b.path("solvable").asBoolean()||

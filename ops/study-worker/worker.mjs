@@ -1,5 +1,5 @@
 import {completionJournal} from './completion-journal.mjs';
-import {POLICY,driveCampaign,invokeStep} from './campaign.mjs';
+import {POLICY,EDUCATION,driveCampaign,invokeStep} from './campaign.mjs';
 import fs from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {CodexAdapter,OllamaAdapter,PaidAdapter,capabilities} from './adapters.mjs';
@@ -10,12 +10,12 @@ export async function processOne({base,token,adapter,jobId}){
  const api=async(route,data={})=>{const r=await fetch(new URL('/api/study-worker'+route,url),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer study_w2_'+token},body:JSON.stringify(data),signal:AbortSignal.timeout(30000),redirect:'error'});if(!r.ok)throw Error('WORKER_HTTP_'+r.status);const text=await r.text();if(text.length>(route.startsWith('/claim')?4800000:1500000))throw Error('JOB_SIZE_LIMIT');return JSON.parse(text);};
  const journal=completionJournal(url.origin,token);
  await journal.replay(api,jobId);
- const params=new URLSearchParams();if(jobId)params.set('jobId',jobId);if(adapter instanceof CodexAdapter)params.set('policy',POLICY);
+ const params=new URLSearchParams();if(jobId)params.set('jobId',jobId);if(adapter instanceof CodexAdapter)params.set('policy',EDUCATION);
  const job=await api('/claim'+(params.size?'?'+params:''));if(job.state==='IDLE')return {state:'IDLE'};
  if(jobId&&job.id!==jobId)throw Error('UNEXPECTED_TARGET_JOB');
  const timer=setInterval(()=>void api(`/jobs/${job.id}/heartbeat`,{leaseToken:job.leaseToken}).catch(()=>{}),30000);
  try{
-  if(job.authoringPolicy===POLICY){
+  if(job.authoringPolicy===POLICY||job.authoringPolicy===EDUCATION){
    if(!(adapter instanceof CodexAdapter)||!(await capabilities()).chatgptAuthenticated)throw Error('CAMPAIGN_AUTH_REQUIRED');
    const path='/jobs/'+job.id;
    return await driveCampaign(()=>api(path+'/reserve',{leaseToken:job.leaseToken}),packet=>journal.submit(api,job.id,{leaseToken:job.leaseToken,...packet}),async permit=>{
