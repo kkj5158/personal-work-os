@@ -39,7 +39,7 @@ export function MoneyMonthlySummary({from,to,categories,loanAccounts,filter,onFi
   ?loanData?.byLoan.map((row,index)=>({id:row.loanId??"unlinked",label:row.label,amount:Number(row.amount),formatted:repaymentWon(row.amount),color:LOAN_COLORS[index%LOAN_COLORS.length]}))??[]
   :loanData?REPAYMENT_PARTS.flatMap(({id,key,label,color})=>{
     const value=loanData.byPart[key],amount=Number(value);
-    return amount>0?[{id,label,amount,formatted:repaymentWon(value),color}]:[];
+    return value!==undefined&&amount>0?[{id,label,amount,formatted:repaymentWon(value),color}]:[];
   }):[];
  const loanFilter=filter?.kind==="LOAN_PAYMENT"?filter:null;
  function changeLoanMode(next:"loan"|"part"){
@@ -63,7 +63,7 @@ export function MoneyMonthlySummary({from,to,categories,loanAccounts,filter,onFi
   onSelect={row=>onFilter(loanMode==="loan"?{kind:"LOAN_PAYMENT",loanId:row.id==="unlinked"?null:row.id,label:row.label}:{kind:"LOAN_PAYMENT",part:row.id as RepaymentPart,label:row.label})}/>
  <Donut title="적금 납입 구성" total={totals?.amount} unavailable={totals?.analyticsUnavailable} rows={totals?.composition.map(row=>({id:row.accountId,label:row.label,amount:row.amount}))??[]} selected={filter?.kind==="INSTALLMENT"?filter.accountId:undefined} onSelect={row=>onFilter({kind:"INSTALLMENT",accountId:row.id,label:row.label})}/></div>
  <LoadState error={loan.error?"대출상환 조회 실패 · "+loan.error:""} loading={loan.loading} lastSuccessAt={loan.lastSuccessAt} hideLastChecked/>
- {!!loan.data?.unallocatedCount&&<p className="money-muted">총 상환액 중 분할 미확정 {loan.data.unallocatedCount}건 · {repaymentWon(loan.data.loanRepaymentBreakdown.byPart.unallocated)}</p>}
+ {!!loan.data?.unallocatedCount&&<p className="money-muted">분할 미확정 {loan.data.unallocatedCount}건{loanData?.byPart.unallocated!==undefined&&` · ${repaymentWon(loanData.byPart.unallocated)}`}</p>}
  <p className="money-muted">선택 기간에 적금 계좌로 납입한 확정 이체 · 일반 저축통장 제외 · 적금 간 이동 제외{totals&&totals.unknownHistoryCount>0&&` · 계좌 분류·근거 미확인 ${totals.unknownHistoryCount}건`}{totals?.currencies.some(c=>c!=="KRW")&&` · 통화별 확인 필요 (${totals.currencies.join(" · ")})`}</p>
  {filter&&<div className="money-month-filter" role="status">거래표 필터 · {filter.label}<button onClick={()=>onFilter(null)}>필터 해제</button><small>KPI와 도넛 중앙값은 선택 기간 전체 금액입니다.</small></div>}
  </div>;

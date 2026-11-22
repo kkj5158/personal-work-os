@@ -25,6 +25,7 @@ test('four axes use independent reads and link loan and installment charts to th
    if(q.get('from')==='2027-01-01')return {loanRepayment:'0',loanRepaymentBreakdown:{byLoan:[],byPart:{principal:'0',interest:'0',fee:'0',unallocated:'0'}},unallocatedCount:0} as T;
    return {loanRepayment:'133826',loanRepaymentBreakdown:{byLoan:[{loanId:'loan-a',label:'합성 대출 A',amount:'111000'},{loanId:null,label:'미연결 대출상환',amount:'22826'}],byPart:{principal:'100000',interest:'31827',fee:'1000',unallocated:'999'}},unallocatedCount:1} as T;
   }
+  if(path.startsWith('/bookkeeping/unified?')&&q.get('repaymentPart')==='UNALLOCATED')return {total:1,items:[{id:'pending-row',type:'EXPENSE',meaning_state:'UNRESOLVED',amount:999,principal:null,interest:null,fee:null,currency:'KRW',occurred_at:'2026-11-09T00:00:00Z',title:'상환',from_account_id:'source',sourceCount:1}]} as T;
   if(path.startsWith('/bookkeeping/unified?'))return {total:1,items:[{id:'loan-row',type:'LOAN_PAYMENT',meaning_state:'CONFIRMED',amount:21827,principal:0,interest:21827,fee:0,currency:'KRW',occurred_at:'2026-11-09T00:00:00Z',title:'이자 상환',from_account_id:'source',to_account_id:null,loan_id:'loan-a',sourceCount:2}]} as T;
   if(path.startsWith('/bookkeeping/installment-contributions?')){const matching=q.get('search')?rows.filter(r=>r.title.includes(q.get('search')!)):rows,offset=Number(q.get('offset'));return {items:matching.slice(offset,offset+50),total:matching.length,filteredAmount:matching.length*100,totals:{amount:5100,count:51,analyticsUnavailable:false,unknownHistoryCount:0,currencies:['KRW'],composition:[{accountId:'installment',label:'purpose installment',amount:5100,count:51}]}} as T;}
   if(path.includes('category-groups')||path==='/loans')return [] as T;
@@ -62,6 +63,7 @@ test('four axes use independent reads and link loan and installment charts to th
   await act(()=>parts[3].click());await tick();
   assert.ok(paths.some(p=>p.includes('repaymentPart=UNALLOCATED')&&p.includes('accountIds=source')));
   assert.match(document.querySelector('.money-month-summary')!.textContent!,/분할 미확정 1건 · 999원/);
+  assert.equal(document.querySelector('[aria-label="대출상환 거래"] tbody a')?.getAttribute('href'),'/money/ledger?transactionId=pending-row');
   const donut=[...document.querySelectorAll('.money-month-donut')].find(n=>n.querySelector('h3')?.textContent==='적금 납입 구성')!;
   assert.equal(document.querySelector('.money-month-kpis>section:last-child strong')?.textContent,donut.querySelector('.money-month-center strong')?.textContent);
   await act(()=>donut.querySelector<HTMLButtonElement>('.money-month-legend button')!.click());await tick();

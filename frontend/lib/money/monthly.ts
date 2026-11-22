@@ -9,7 +9,7 @@ export type LoanRepaymentSummary = {
   loanRepayment:string;
   loanRepaymentBreakdown:{
     byLoan:{loanId:string|null;label:string;amount:string}[];
-    byPart:{principal:string;interest:string;fee:string;unallocated:string};
+    byPart:{principal:string;interest:string;fee:string;unallocated?:string};
   };
   unallocatedCount:number;
 };
