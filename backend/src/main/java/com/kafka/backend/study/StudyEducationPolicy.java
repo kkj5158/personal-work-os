@@ -122,6 +122,13 @@ final class StudyEducationPolicy {
         require(oldKey.equals(nowKey));
       }
     }
+    var originalBlind=StudyCampaign.controlTask(parentPlan,null);
+    var newBlind=StudyCampaign.controlTask(plan,null);
+    var entry=state.path("calls").path(42);
+    String inputDigest=hash(parentPlan.path("inputDigest").asString()+"/"+StudyCampaign.reviewPolicy(state)+"/0/"+originalBlind);
+    require(originalBlind.toString().equals(newBlind.toString()) && "blind".equals(entry.path("stage").asString(""))
+        && entry.path("slot").asInt()==-2 && inputDigest.equals(entry.path("inputDigest").asString(""))
+        && entry.path("output").equals(state.path("controlBlind")));
     int accepted=0,unresolved=0;
     for(var slot:state.path("slots")){
       if("ACCEPTED".equals(slot.path("stage").asString())){
@@ -136,7 +143,8 @@ final class StudyEducationPolicy {
         .put("parentJobId",parent.id.toString())
         .put("parentResultDigest",hash(parent.result))
         .put("priorCalls",44).put("priorTokens",1085043)
-        .put("blindReused",true).put("learnerControlsIdentical",true);
+        .put("blindCallId",entry.path("callId").asString()).put("blindInputDigest",inputDigest)
+        .put("learnerPayloadSha256",hash(newBlind.path("payload").toString())).put("blindReused",true).put("learnerControlsIdentical",true);
     state.remove("controlReview"); // preserve the independently answered controlBlind
     state.put("calibrated",false).put("status","DRAFT").put("goldenRelease",GROUNDED);
     return state;

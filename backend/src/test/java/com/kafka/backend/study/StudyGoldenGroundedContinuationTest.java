@@ -78,8 +78,13 @@ class StudyGoldenGroundedContinuationTest {
     state.putObject("controlBlind").set("items",blindItems);
     state.putObject("controlReview").set("items",reviewItems);
 
+    beforePlan.put("inputDigest","test-plan-digest");
+    var blindEntry=state.path("calls").path(42).asObject();
+    blindEntry.put("stage","blind").put("slot",-2);
+    blindEntry.set("output",state.path("controlBlind"));
+    blindEntry.put("inputDigest",StudyEngineRules.hash("test-plan-digest/"+StudyCampaign.reviewPolicy(state)+"/0/"+StudyCampaign.controlTask(beforePlan,null)));
     var parent=new StudyEngineJob();
-    parent.kind="GENERATE";parent.state="BLOCKED";
+    parent.id=UUID.randomUUID();parent.kind="GENERATE";parent.state="BLOCKED";
     parent.input=beforePlan.toString();parent.result=state.toString();
     var historicalCalls=state.path("calls").deepCopy();
     var historicalSlots=state.path("slots").deepCopy();

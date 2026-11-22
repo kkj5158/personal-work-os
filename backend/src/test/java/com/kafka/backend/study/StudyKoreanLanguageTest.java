@@ -45,6 +45,16 @@ class StudyKoreanLanguageTest {
     assertThat(StudyKoreanLanguage.hasEnglishLearnerProse(q,k)).isFalse();
   }
 
+  @Test void shortEnglishAndQuotedTechnicalKorean() {
+    for(String text:java.util.List.of("Try again.", "Yes", "Check logs", "Missing evidence"))
+      assertThat(StudyKoreanLanguage.englishDominant(text)).as(text).isTrue();
+    assertThat(StudyKoreanLanguage.englishDominant("API와 DB를 비교한다.")).isFalse();
+    var q=JSON.createObjectNode().put("context","Check both paths before starting.");
+    var k=JSON.createObjectNode();
+    k.putArray("citations").addObject().put("quote","Check both paths before starting.");
+    assertThat(StudyKoreanLanguage.hasEnglishLearnerProse(q,k)).isFalse();
+  }
+
   @Test void followUpOutputIsCheckedIndividually() {
     var output=JSON.createObjectNode();
     var items=output.putArray("followUps");

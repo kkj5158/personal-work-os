@@ -124,6 +124,15 @@ final class StudyCampaign {
   static ObjectNode task(String stage,int slot,JsonNode payload){
     var t=JSON.createObjectNode().put("stage",stage).put("slot",slot);t.set("payload",payload);return t;
   }
+  static ObjectNode controlTask(JsonNode p,JsonNode blind){
+    var items=JSON.createArrayNode();int i=0;
+      for(var c:p.path("controls")){
+        var v=visible(c.path("question"),c.path("spanIds").isEmpty()?JSON.createArrayNode():spans(p,c.path("spanIds")));
+        var row=items.addObject().set("learner",v);
+        if(blind!=null){if(c.has("referenceContext"))row.set("referenceContext",c.path("referenceContext"));row.set("key",c.path("key"));row.set("blind",blind.path("items").path(i));} i++;
+      }
+    return task(blind!=null?"review":"blind",-2,items);
+  }
   static int priority(JsonNode r){
     String kind=r.path("kind").asString();int order=r.path("order").asInt();
     if(kind.equals("essay"))return 0;
@@ -147,13 +156,7 @@ final class StudyCampaign {
     if(StudyEducationPolicy.active(p) && s.has("controlReview") && !s.path("calibrated").asBoolean()) return null;
     var controls=p.path("controls");
     if(controls.size()>0 && !s.has("controlReview") && !s.has("calibrationStop")){
-      var items=JSON.createArrayNode();boolean reviewing=s.has("controlBlind");int i=0;
-      for(var c:controls){
-        var v=visible(c.path("question"),c.path("spanIds").isEmpty()?JSON.createArrayNode():spans(p,c.path("spanIds")));
-        var row=items.addObject().set("learner",v);
-        if(reviewing){if(c.has("referenceContext"))row.set("referenceContext",c.path("referenceContext"));row.set("key",c.path("key"));row.set("blind",s.path("controlBlind").path("items").path(i));} i++;
-      }
-      var calibration=task(reviewing?"review":"blind",-2,items);
+      var calibration=controlTask(p,s.has("controlBlind")?s.path("controlBlind"):null);
       if(s.has("continuation") && !StudyEducationPolicy.active(p)){
         long used=0;int count=0;
         for(var e:s.path("calls"))if(e.path("slot").asInt()==-2 && StudyCampaignContinuation.POLICY.equals(e.path("policy").asString())){
@@ -337,6 +340,7 @@ final class StudyCampaign {
       var q=r.path("candidate").path("question");var key=r.path("candidate").path("key");var b=r.path("blind").path("items").path(0);
       if(StudyEducationPolicy.active(p) && "SOURCE_UNSUITABLE".equals(issue) && f.path("field").asString("").toLowerCase(Locale.ROOT).contains("citation") && f.path("grounded").asBoolean()) issue="CITATION_SUPPORT";
       if(s.has("continuation") && citationRepair(r,p,f))issue="CITATION_SUPPORT";
+      if(issue.equals("none") && StudyEducationPolicy.active(p) && StudyKoreanLanguage.hasEnglishLearnerProse(q,key))issue="LANGUAGE_KO";
       if(issue.equals("none") && !claimsBound(r,p,f))issue="HIDDEN_PREMISE";
       if(issue.equals("none") && (!f.path("grounded").asBoolean()||!f.path("hintsSafe").asBoolean()||!f.path("reasoning").asBoolean()||!b.path("solvable").asBoolean()||
           (q.path("kind").asString().equals("single_choice") && !b.path("answer").equals(key.path("answer")))))issue="DISAGREEMENT";
