@@ -26,6 +26,8 @@ function add(name,route,method,inputSchema,description,{preview=false,tier='READ
 }
 const read=(name,route,properties={},required=[],description='Read canonical owner-scoped MONEY facts.')=>add(name,route,'GET',obj(properties,required),description);
 read('money_get_console_capabilities','capabilities',{},[],'Discover exact supported operations, limits, approval tiers and unsupported actions. Current OAuth scopes are included by the broker.');
+read('money_get_statistical_balances','statistical-balances',{...period,currency:{type:'string',pattern:'^[A-Z]{3}$'},accountIds:str(4000),cutoff:str(40)},
+ ['from','to'],'Read the same as-of savings and installment stock as MONEY Bookkeeping. Use confidence and exact decimal display totals; incomplete groups expose separate verified and estimated subtotals.');
 read('money_get_dashboard','dashboard',period,[],'Read canonical income, consumption, savings and loan period statistics, with financial caveats.');
 read('money_get_attention_summary','attention',period,[],'Read separate Review Required, held, processing, effective uncategorized bookkeeping, unresolved financial meaning and failed outcome counts.');
 read('money_list_review_items','review-items',{...page,state:choice('PENDING','DEFERRED','COMPLETED'),type:choice('CLASSIFICATION','TRANSFER','NOISE'),reason:str(100),search:str(),accountId:uuid},[],'List all canonical Review Required lanes and reason/evidence eligibility, independently of booked ledger rows. Page through total.');
