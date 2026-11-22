@@ -35,6 +35,70 @@
         "parameters": []
       }
     },
+    "/api/orbit/money/v1/statistical-balances": {
+      "get": {
+        "operationId": "money_get_statistical_balances",
+        "description": "Read owner-scoped as-of savings and installment balances. Use displayTotal and displayBalance as exact decimals and inspect confidence and coverage.",
+        "security": [
+          {
+            "posUserBearer": [],
+            "orbitMoneyEntitlement": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            }
+          },
+          {
+            "name": "accountIds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          {
+            "name": "cutoff",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical MONEY statistical balances"
+          }
+        }
+      }
+    },
     "/api/orbit/money/v1/dashboard": {
       "get": {
         "operationId": "money_get_dashboard",

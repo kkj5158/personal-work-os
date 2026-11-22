@@ -18,6 +18,7 @@ import { categoryTotals } from "@/lib/money/categories";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {useSearchParams} from 'next/navigation';
 import { type Account,type Category,type Transaction, moneyApi as api, seoul, won } from "@/lib/money/model";
+import {stockAmount,stockMemberEvidence,stockWon} from "@/lib/money/monthly";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
 import { useMoneyCache, useMoneyViewState, useMoneyRows } from "./MoneyDataProvider";
 import { useMoneyData, LoadState, type BookPage, type BookRow, type BookFields } from "./MoneyWebData";
@@ -110,12 +111,12 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
 }
 function StockLedger(p:Props&{filter:Extract<MonthlyFilter,{kind:"STOCK"}>}){
  const [offset,setOffset]=useState(0),[search,setSearch]=useState("");
- const m=p.filter.member;
+ const m=p.filter.member, amount=stockAmount(m);
  const query=new URLSearchParams({accountId:p.filter.accountId,from:p.period.from,to:p.period.to,search,limit:"50",offset:String(offset)});
  const page=useMoneyData<{items:Transaction[];total:number}>("/transactions?"+query);
  return <section className="money-approved-workbench" aria-label={p.filter.label+" 거래"}>
-  <h3>{m.displayName} · 기준일 잔액</h3><p>{seoul(p.filter.asOf)} (서울) · {moneyAmount(m.balance,"KRW")} · {m.status}</p>
-  {m.observedAt&&<p>최근 근거 {seoul(m.observedAt)}</p>}
+  <h3>{m.displayName} · 기준일 잔액</h3><p>{seoul(p.filter.asOf)} (서울) · {amount==null?"확인 필요":stockWon(amount)}</p>
+  {stockMemberEvidence(m).length>0&&<p>{stockMemberEvidence(m).join(" · ")}</p>}
   <label>기간 거래 검색<input aria-label="기간 거래 검색" value={search} onChange={e=>{setSearch(e.target.value);setOffset(0);}}/></label>
   <LoadState loading={page.loading} error={page.error}/>
   <table className="money-table"><thead><tr><th>발생시각</th><th>거래</th><th>계좌 입출금</th></tr></thead><tbody>
