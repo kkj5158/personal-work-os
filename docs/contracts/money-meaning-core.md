@@ -6,7 +6,7 @@ Transaction is the financial fact. Bookkeeping is an owner-scoped life-meaning p
 
 `GET/PUT /api/money/tracking` stores independent EXPENSE and INCOME selections, each with at most five unique active owned accounts and an optimistic settings version. New accounts are never automatically selected. Empty tracking means an empty Bookkeeping scope, not all accounts. Membership changes do not delete records.
 
-`GET /bookkeeping` applies period, search, account, category and amount filters to the same effective tracked subset for rows, totals, composition and trend. Linked refunds follow the original expense's tracking account and effective category, including an explicit category clear. Refunds subtract from consumption, never ordinary income. Confirmed loan interest/fees retain Phase 2 Bookkeeping semantics; principal is excluded.
+`GET /bookkeeping` applies period, search, account, category and amount filters to the same effective tracked subset for rows, totals, composition and trend. Linked refunds follow the original expense's tracking account and effective category, including an explicit category clear. Refunds subtract from consumption, never ordinary income. Confirmed loan payments contribute their full amount exclusively to repayment statistics.
 
 Sparse user overrides take precedence over persisted approved rule defaults, which take precedence over source fields. Reset removes overrides and reveals inherited defaults. The separate source-reset action explicitly copies source values. Ledger and raw evidence remain unchanged. Override/projection/transaction versions protect saves; meaning changes append audit evidence.
 

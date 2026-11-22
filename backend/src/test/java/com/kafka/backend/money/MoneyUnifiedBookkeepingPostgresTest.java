@@ -49,14 +49,15 @@ class MoneyUnifiedBookkeepingPostgresTest {
 
    var a=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성 A","은행","PERSONAL",new BigDecimal("1000000"),new BigDecimal("1000000"),null,null,null,null,pay.id(),null,null,"ACTIVE",null,0L));
    var b=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성 B","은행","PERSONAL",new BigDecimal("500000"),new BigDecimal("500000"),null,null,null,null,other.id(),null,null,"ACTIVE",null,0L));
-   var split=addRepayment(e,pay.id(),a.id(),100000,9000,1000,AT);
+   var split=addRepayment(e,pay.id(),a.id(),80000,19000,1000,AT);
    var interest=addRepayment(e,other.id(),b.id(),0,21827,0,AT);
    var principal=addRepayment(e,other.id(),b.id(),1000,0,0,Instant.parse("2026-09-25T15:00:00Z"));
    var excluded=addRepayment(e,other.id(),b.id(),0,90,0,AT);
    e.db.update("update money_transactions set excluded=true where id=?",excluded);
    addRepayment(e,other.id(),b.id(),0,500,0,Instant.parse("2026-09-26T15:00:00Z"));
-   e.db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,loan_id) values(?,?,'LOAN_PAYMENT',?,99,?,?)",
-      UUID.randomUUID(),owner,pay.id(),java.sql.Timestamp.from(AT),a.id());
+   var pending=UUID.randomUUID();
+   e.db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,loan_id,title) values(?,?,'LOAN_PAYMENT',?,40000,?,?,'Pending split fixture')",
+      pending,owner,pay.id(),java.sql.Timestamp.from(AT),a.id());
    for(int i=0;i<2;i++){
     var raw=UUID.randomUUID();
     e.db.update("insert into money_raw_notifications(id,user_id,posted_at,raw_payload,dedupe_key,content_hash) values(?,?,?,'{}',?,?)",
@@ -67,21 +68,53 @@ class MoneyUnifiedBookkeepingPostgresTest {
    var before=e.db.queryForList("select * from money_transactions order by id");
    var balance=e.product.balance(pay.id());
    var remaining=e.web.loan(a.id()).remainingPrincipal();
-   assertThat(remaining).isEqualByComparingTo("900000");
+   assertThat(remaining).isEqualByComparingTo("920000");
 
    var scope=e.unified.loanRepayments(from,to,null);
-   assertThat(scope.loanRepayment()).isEqualTo("132926");
+   assertThat(scope.loanRepayment()).isEqualTo("162827");
    assertThat(scope.unallocatedCount()).isEqualTo(1);
-   assertThat(scope.loanRepaymentBreakdown().byPart()).isEqualTo(new RepaymentSplit("101000","30827","1000","99"));
-   assertThat(scope.loanRepaymentBreakdown().byLoan()).containsExactly(new RepaymentGroup(a.id(),"합성 A","110099"),new RepaymentGroup(b.id(),"합성 B","22827"));
-   assertThat(e.unified.loanRepayments(from,to,pay.id().toString()).loanRepayment()).isEqualTo("110099");
+   assertThat(scope.unallocatedAmount()).isEqualTo("40000");
+   assertThat(scope.loanRepaymentBreakdown().byPart()).isEqualTo(new RepaymentSplit("81000","40827","1000","40000"));
+   assertThat(scope.loanRepaymentBreakdown().byLoan()).containsExactly(new RepaymentGroup(a.id(),"합성 A","140000"),new RepaymentGroup(b.id(),"합성 B","22827"));
+   assertThat(e.unified.loanRepayments(from,to,pay.id().toString()).loanRepayment()).isEqualTo("140000");
    assertThat(e.unified.loanRepayments(from,to,"").loanRepayment()).isEqualTo("0");
 
-   assertThat(projectedTotal(e.web.bookkeeping(from,to,"EXPENSE",null,1,0,false))).isEqualByComparingTo("110000");
+   assertThat(projectedTotal(e.web.bookkeeping(from,to,"EXPENSE",null,1,0,false))).isEqualByComparingTo("100000");
    var expense=e.web.bookkeeping(from,to,"EXPENSE",null,1,0,false,pay.id().toString(),"uncategorized",null,null,"ALL",null,null,true);
    assertThat(projectedTotal(expense)).isEqualByComparingTo("100000");
    assertThat(projectedTotal(e.web.bookkeeping(from,to,"INCOME",null,1,0,false))).isEqualByComparingTo("220000");
    assertThat(new MoneyInstallmentReadService(e.db,()->owner).read(from,to,null,null,1,0,null).totals().amount()).isEqualByComparingTo("50000");
+
+   var tracked=e.unified.loanRepayments(from,to,null,true);
+   assertThat(tracked.loanRepayment()).isEqualTo("140000");
+   assertThat(tracked.unallocatedAmount()).isEqualTo("40000");
+   assertThat(tracked.unallocatedCount()).isEqualTo(1);
+   assertThat(tracked.loanRepaymentBreakdown().byPart()).isEqualTo(new RepaymentSplit("80000","19000","1000","40000"));
+   assertThat(tracked.loanRepaymentBreakdown().byLoan()).containsExactly(new RepaymentGroup(a.id(),"합성 A","140000"));
+   for(var part:List.of(RepaymentPart.PRINCIPAL,RepaymentPart.INTEREST,RepaymentPart.FEE)){
+    var detail=e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,null,part,true);
+    assertThat(detail.get("total")).isEqualTo(1L);
+    assertThat(firstRow(detail)).containsEntry("id",split);
+   }
+   var pendingDetail=e.unified.ledger(from,to,false,"Pending split",null,50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.UNALLOCATED,true);
+   assertThat(pendingDetail.get("total")).isEqualTo(1L);
+   assertThat(firstRow(pendingDetail)).containsEntry("id",pending).containsEntry("principal",null);
+   var loanGroup=e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,a.id().toString(),null,true);
+   assertThat(items(loanGroup)).extracting(row->row.get("id")).containsExactlyInAnyOrder(split,pending);
+   for(var denied:List.of("", "none",other.id().toString())){
+    assertThat(e.unified.loanRepayments(from,to,denied,true).loanRepayment()).isEqualTo("0");
+    assertThat(e.unified.ledger(from,to,false,null,denied,50,0,null,"LOAN_PAYMENT",null,null,a.id().toString(),null,true).get("total")).isEqualTo(0L);
+   }
+   var overview=e.web.overview(from,to);
+   assertThat((BigDecimal)((Map<?,?>)overview.get("kpis")).get("consumption")).isEqualByComparingTo("100000");
+   assertThat(items(overview,"composition")).extracting(row->row.get("type")).doesNotContain("LOAN_PAYMENT");
+   for(String key:List.of("composition","trend")){
+    var sum=items(overview,key).stream().map(row->(BigDecimal)row.get("consumption")).reduce(BigDecimal.ZERO,BigDecimal::add);
+    assertThat(sum).as(key).isEqualByComparingTo("100000");
+   }
+   assertThat(items(overview,"relationships")).filteredOn(row->"CONSUMPTION".equals(row.get("relation"))).singleElement()
+       .satisfies(row->{assertThat(row.get("count")).isEqualTo(1L);assertThat((BigDecimal)row.get("net")).isEqualByComparingTo("100000");});
+   assertThat(items(e.web.flowDetail(from,to,"CONSUMPTION",50,0))).extracting(row->row.get("id")).containsExactly(legacy.id());
 
    var fee=e.unified.ledger(from,to,false,null,pay.id().toString(),50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.FEE);
    assertThat(fee.get("total")).isEqualTo(1L);
@@ -102,6 +135,73 @@ class MoneyUnifiedBookkeepingPostgresTest {
   });
  }
 
+ private List<Map<String,Object>> items(Map<String,Object> response){return items(response,"items");}
+ @SuppressWarnings("unchecked")
+ private List<Map<String,Object>> items(Map<String,Object> response,String key){return (List<Map<String,Object>>)response.get(key);}
+
+ private Map<String,Object> monthly(Env e,String kind,String accounts){
+  return e.web.bookkeeping("2026-09-01","2026-09-30",kind,null,50,0,false,accounts,null,null,null,"ALL",null,null,true,true);
+ }
+
+ @Test void selectedAccountsOverrideGlobalReportingFlagOnlyInMonthlyBookkeeping(){check(e->{
+  var owner=MoneyPostgresIntegrationTest.OWNER;
+  var tracking=new MoneyMeaningService(e.db,()->owner,JsonMapper.builder().build());
+  var a=account(e,AccountRole.SPENDING);var b=account(e,AccountRole.SPENDING);
+  var expense=tx(e,a.id(),true,35000,false);
+  e.product.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,a.id(),new BigDecimal("5000"),AT.plusSeconds(10),null,null,null,false,expense.id(),null));
+  tx(e,b.id(),true,7000,false);tx(e,a.id(),false,11000,false);tx(e,b.id(),false,23000,false);
+  var loan=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","은행","PERSONAL",new BigDecimal("1000000"),new BigDecimal("1000000"),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));
+  addRepayment(e,a.id(),loan.id(),80000,19000,1000,AT);
+  addRepayment(e,b.id(),loan.id(),1000,0,0,AT);
+  e.db.update("update money_accounts set include_in_statistics=false where id=?",a.id());
+  var selected=tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(b.id()),0L));
+  var spending=monthly(e,"EXPENSE",null);
+  assertThat(spending.get("total")).isEqualTo(2L);
+  assertThat(projectedTotal(spending)).isEqualByComparingTo("30000");
+  assertThat(items(spending,"composition").stream().map(row->(BigDecimal)row.get("amount")).reduce(BigDecimal.ZERO,BigDecimal::add)).isEqualByComparingTo("30000");
+  assertThat(projectedTotal(monthly(e,"INCOME",null))).isEqualByComparingTo("23000");
+  assertThat(projectedTotal(monthly(e,"EXPENSE",b.id().toString()))).isZero();
+  assertThat(projectedTotal(monthly(e,"INCOME",a.id().toString()))).isZero();
+  String from="2026-09-01",to="2026-09-30";
+  assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("100000");
+  assertThat((BigDecimal)((Map<?,?>)e.web.overview(from,to).get("kpis")).get("consumption")).isEqualByComparingTo("7000");
+  var changed=tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(b.id()),List.of(a.id()),((Number)selected.get("version")).longValue()));
+  assertThat(projectedTotal(monthly(e,"EXPENSE",null))).isEqualByComparingTo("7000");
+  assertThat(projectedTotal(monthly(e,"INCOME",null))).isEqualByComparingTo("11000");
+  assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("1000");
+  assertThat(firstRow(e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.PRINCIPAL,true))).containsEntry("from_account_id",b.id());
+  tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(),List.of(),((Number)changed.get("version")).longValue()));
+  assertThat(monthly(e,"EXPENSE",null).get("total")).isEqualTo(0L);
+  assertThat(monthly(e,"INCOME",null).get("total")).isEqualTo(0L);
+  assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("0");
+  assertThat(e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.PRINCIPAL,true).get("total")).isEqualTo(0L);
+ });}
+
+ @Test
+ @EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/.+")
+ void legacyUnlinkedGroupKeepsAllocatedAndUnallocatedRowsAndExcludesOtherCurrencies(){check(e->{
+  var a=account(e,AccountRole.SPENDING);
+  new MoneyMeaningService(e.db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));
+  // Model historical rows that cannot be inserted through the current loan-link constraint.
+  e.db.execute("create temporary table money_transactions on commit drop as select * from money_transactions with no data");
+  var pending=UUID.randomUUID();var allocated=UUID.randomUUID();var foreign=UUID.randomUUID();
+  for(var id:List.of(pending,allocated,foreign)){
+   boolean split=id.equals(allocated);
+   e.db.update("""
+     insert into pg_temp.money_transactions(id,user_id,type,from_account_id,amount,occurred_at,currency,meaning_state,excluded,principal,interest,fee)
+     values(?,?,'LOAN_PAYMENT',?,?,?,?,'CONFIRMED',false,?,?,?)
+     """,id,MoneyPostgresIntegrationTest.OWNER,a.id(),split?100000:40000,java.sql.Timestamp.from(AT),id.equals(foreign)?"USD":"KRW",
+       split?80000:null,split?19000:null,split?1000:null);
+  }
+  String from="2026-09-26",to=from;
+  var summary=e.unified.loanRepayments(from,to,null,true);
+  assertThat(summary.loanRepayment()).isEqualTo("140000");
+  assertThat(summary.unallocatedAmount()).isEqualTo("40000");
+  assertThat(summary.loanRepaymentBreakdown().byLoan()).containsExactly(new RepaymentGroup(null,"미연결 대출상환","140000"));
+  var detail=e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,"unlinked",null,true);
+  assertThat(items(detail)).extracting(row->row.get("id")).containsExactlyInAnyOrder(pending,allocated);
+ });}
+
  private UUID addRepayment(Env e,UUID account,UUID loanId,int principal,int interest,int fee,Instant at){
   var amount=BigDecimal.valueOf(principal+interest+fee);
   var transaction=e.product.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,account,null,amount,at,null,null,null,false,null,null));
@@ -117,7 +217,7 @@ class MoneyUnifiedBookkeepingPostgresTest {
  @Test void Q02_Q03_Q11_Q12_pendingCashIsSingleBalanceAndExcludedUntilConfirmed(){check(e->{var a=account(e,AccountRole.SPENDING);var t=tx(e,a.id(),true,500,true);new MoneyMeaningService(e.db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));assertThat(e.money.transaction(t.id()).meaningState()).isEqualTo("UNRESOLVED");assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-500");assertThat(e.web.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(0L);assertThat(e.unified.ledger("2026-09-01","2026-09-30",true,null,null,50,0).get("total")).isEqualTo(1L);assertThat(status(e.unified.edit(t.id(),edit(t,"TYPE","EXPENSE")))).isEqualTo("APPLIED");assertThat(e.web.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(1L);assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-500");});}
  @Test void Q05_Q07_Q18_Q26_partialTransferLinkUnlinkUndoPreservesBothCashEffects(){check(e->{var a=account(e,AccountRole.SPENDING);var b=account(e,AccountRole.SAVINGS);var out=tx(e,a.id(),true,100,true);assertThat(status(e.unified.edit(out.id(),edit(out,"TYPE","TRANSFER")))).isEqualTo("APPLIED");assertThat(e.product.balance(b.id()).amount()).isZero();assertThat(e.product.accountDetail(a.id(),"2026-09").outflow()).isEqualByComparingTo("100");var in=tx(e,b.id(),false,100,true);assertThat(status(e.unified.edit(out.id(),pair(e.money.transaction(out.id()),in)))).isEqualTo("APPLIED");assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-100");assertThat(e.product.balance(b.id()).amount()).isEqualByComparingTo("100");var unlink=e.unified.edit(out.id(),edit(e.money.transaction(out.id()),"UNLINK_TRANSFER",null));assertThat(status(unlink)).isEqualTo("APPLIED");assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-100");assertThat(e.product.balance(b.id()).amount()).isEqualByComparingTo("100");var key=UUID.fromString(result(unlink).get("undoId").toString());var v=e.money.transaction(out.id());assertThat(status(e.unified.edit(out.id(),new Edit(UUID.randomUUID(),v.version(),"UNDO_UNLINK",null,null,null,null,null,null,null,null,null,null,null,null,null,key)))).isEqualTo("APPLIED");assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-100");assertThat(e.product.balance(b.id()).amount()).isEqualByComparingTo("100");});}
  @Test void Q07_Q31_undoRejectsAnInterveningEdit(){check(e->{var a=account(e,AccountRole.SPENDING);var b=account(e,AccountRole.SAVINGS);var t=e.product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,a.id(),b.id(),BigDecimal.TEN,AT,null,null,null,false,null,null));var unlink=e.unified.edit(t.id(),edit(t,"UNLINK_TRANSFER",null));var first=e.money.transaction(t.id());e.unified.edit(first.id(),edit(first,"TYPE","EXPENSE"));var now=e.money.transaction(t.id());var result=e.unified.edit(now.id(),new Edit(UUID.randomUUID(),now.version(),"UNDO_UNLINK",null,null,null,null,null,null,null,null,null,null,null,null,null,UUID.fromString(result(unlink).get("undoId").toString())));assertThat(status(result)).isEqualTo("NOT_APPLIED");});}
- @Test void Q13_Q14_Q17_loanUnknownThenExactSplitHasOneWithdrawal(){check(e->{var a=account(e,AccountRole.SPENDING);var t=tx(e,a.id(),true,500000,true);var loan=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","합성 은행","PERSONAL",new BigDecimal("1000000"),new BigDecimal("1000000"),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));var pending=new Edit(UUID.randomUUID(),0L,"TYPE","LOAN_PAYMENT",null,null,loan.id(),loan.version(),null,null,null,null,null,null,null,null,null);assertThat(status(e.unified.edit(t.id(),pending))).isEqualTo("APPLIED");assertThat(e.financial.detail(t.id()).get("principal")).isNull();var split=new Edit(UUID.randomUUID(),1L,"TYPE","LOAN_PAYMENT",null,null,loan.id(),e.web.loan(loan.id()).version(),new BigDecimal("420000"),new BigDecimal("70000"),new BigDecimal("10000"),null,null,null,null,null,null);assertThat(status(e.unified.edit(t.id(),split))).isEqualTo("APPLIED");assertThat(e.web.loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("580000");assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-500000");var k=(Map<?,?>)e.web.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)k.get("consumption")).isEqualByComparingTo("80000");});}
+ @Test void Q13_Q14_Q17_loanUnknownThenExactSplitHasOneWithdrawal(){check(e->{var a=account(e,AccountRole.SPENDING);var t=tx(e,a.id(),true,500000,true);var loan=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","합성 은행","PERSONAL",new BigDecimal("1000000"),new BigDecimal("1000000"),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));var pending=new Edit(UUID.randomUUID(),0L,"TYPE","LOAN_PAYMENT",null,null,loan.id(),loan.version(),null,null,null,null,null,null,null,null,null);assertThat(status(e.unified.edit(t.id(),pending))).isEqualTo("APPLIED");assertThat(e.financial.detail(t.id()).get("principal")).isNull();var split=new Edit(UUID.randomUUID(),1L,"TYPE","LOAN_PAYMENT",null,null,loan.id(),e.web.loan(loan.id()).version(),new BigDecimal("420000"),new BigDecimal("70000"),new BigDecimal("10000"),null,null,null,null,null,null);assertThat(status(e.unified.edit(t.id(),split))).isEqualTo("APPLIED");assertThat(e.web.loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("580000");assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-500000");var k=(Map<?,?>)e.web.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)k.get("consumption")).isZero();});}
  @Test void Q14_invalidSplitRollsBackMeaningAndLoan(){check(e->{var a=account(e,AccountRole.SPENDING);var t=tx(e,a.id(),true,100,true);var loan=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성","은행","PERSONAL",BigDecimal.valueOf(500),BigDecimal.valueOf(500),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));var bad=new Edit(UUID.randomUUID(),0L,"TYPE","LOAN_PAYMENT",null,null,loan.id(),loan.version(),BigDecimal.TEN,BigDecimal.ONE,BigDecimal.ZERO,null,null,null,null,null,null);assertThat(status(e.unified.edit(t.id(),bad))).isEqualTo("NOT_APPLIED");assertThat(e.money.transaction(t.id()).meaningState()).isEqualTo("UNRESOLVED");assertThat(e.web.loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("500");});}
  @Test void partialAllocationIsRejectedWithoutChangingCashLoanOrMeaning(){check(e->{
   var a=account(e,AccountRole.SPENDING);var t=tx(e,a.id(),true,500000,true);
@@ -133,12 +233,13 @@ class MoneyUnifiedBookkeepingPostgresTest {
   var current=e.money.transaction(t.id());var correction=new Edit(UUID.randomUUID(),current.version(),"TYPE","LOAN_PAYMENT",null,null,loan.id(),e.web.loan(loan.id()).version(),new BigDecimal("430000"),new BigDecimal("60000"),new BigDecimal("10000"),null,null,null,null,null,null);
   assertThat(status(e.unified.edit(t.id(),correction))).isEqualTo("APPLIED");assertThat(status(e.unified.edit(t.id(),correction))).isEqualTo("APPLIED");
   assertThat(e.web.loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("570000");assertThat(e.product.balance(a.id()).amount()).isEqualByComparingTo("-500000");assertThat(e.db.queryForObject("select count(*) from money_transactions where user_id=?",Integer.class,MoneyPostgresIntegrationTest.OWNER)).isEqualTo(1);
-  assertThat((BigDecimal)((Map<?,?>)e.web.overview("2026-09-01","2026-09-30").get("kpis")).get("consumption")).isEqualByComparingTo("70000");
+  assertThat((BigDecimal)((Map<?,?>)e.web.overview("2026-09-01","2026-09-30").get("kpis")).get("consumption")).isZero();
  });}
- @Test void repaymentProjectionRetainsCanonicalTypeWhileConsumptionContainsOnlyInterestAndFee(){check(e->{
+ @Test void repaymentRetainsCanonicalTypeAndCannotBeAssignedALifeCategory(){check(e->{
   var a=account(e,AccountRole.SPENDING);var t=tx(e,a.id(),true,500000,true);var loan=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","은행","PERSONAL",new BigDecimal("1000000"),new BigDecimal("1000000"),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));
   assertThat(status(e.unified.edit(t.id(),new Edit(UUID.randomUUID(),0L,"TYPE","LOAN_PAYMENT",null,null,loan.id(),loan.version(),new BigDecimal("420000"),new BigDecimal("70000"),new BigDecimal("10000"),null,null,null,null,null,null)))).isEqualTo("APPLIED");
-  assertThat(e.web.bookkeepingRow(t.id())).containsEntry("financialType","LOAN_PAYMENT").containsEntry("type","EXPENSE");assertThat((BigDecimal)e.web.bookkeepingRow(t.id()).get("amount")).isEqualByComparingTo("80000");
+  assertThatThrownBy(()->e.web.bookkeepingRow(t.id())).isInstanceOf(ResourceNotFoundException.class);
+  assertThat(e.unified.row(t.id())).containsEntry("type","LOAN_PAYMENT").doesNotContainKey("book");
  });}
  @Test void unregisteredReviewIsNotALedgerRowAndRegisteredWarningCannotHideTheFact(){check(e->{
   var a=e.money.createAccount(new AccountInput("IBK","합성 검증 계좌",AccountRole.SPENDING,"975-******-01-014",null));

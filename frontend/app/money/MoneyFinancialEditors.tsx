@@ -332,7 +332,7 @@ function PaymentForm(
       <div className="money-financial-hero">
         <span>LOAN PAYMENT</span>
         <strong>{total ? won(Number(total)) : "상환 금액"}</strong>
-        <span>원금 상환은 저축과 소비에서 제외합니다.</span>
+        <span>대출상환액 전체를 저축과 소비에서 제외합니다.</span>
       </div>
       <Field label="연결 대출">
         <select

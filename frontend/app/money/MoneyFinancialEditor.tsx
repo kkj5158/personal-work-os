@@ -94,7 +94,7 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
      <h3 className="money-financial-subheading">대출 상환 정보</h3>
      <label>대출<select aria-label="상환 대출" value={loanId} disabled={row.type==='LOAN_PAYMENT'} onChange={e=>{const selected=loans.data?.find(l=>l.id===e.target.value);stage(old=>({...old,loanId:e.target.value,loanVersion:selected?.version}));}}><option value="">대출 선택</option>{loans.data?.filter(l=>l.status!=='INACTIVE'||l.id===row.loan_id).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
      {(loans.loading||loans.error)&&<LoadState loading={loans.loading} error={loans.error}/>}
-     <small>세 칸을 모두 비우면 상환 배분 미확정입니다. 확정 원금은 부채 감소, 확정 이자·수수료만 소비에 반영됩니다.</small>
+     <small>세 칸을 모두 비우면 상환 배분 미확정입니다. 확정 원금만 부채를 줄입니다. 상환액 전체는 소비에서 제외됩니다.</small>
      <div className="money-financial-split-grid">{(['principal','interest','fee'] as const).map((key,i)=><label key={key}>{['원금','이자','수수료'][i]}<input aria-label={['원금','이자','수수료'][i]} type="number" min="0" step="0.01" value={String(financialDraftValue(draft,key,row[key])??'')} onChange={e=>field(key,e.target.value===''?null:e.target.value)}/></label>)}</div>
      <small role="status" className={allocation.valid?'money-financial-allocation-ok':'money-financial-allocation-error'}>{allocation.unknown?'상환 배분 미확정 · 출금 '+moneyAmount(row.amount,row.currency):'배분 합계 '+moneyAmount(allocation.total,row.currency)+' / 출금 '+moneyAmount(row.amount,row.currency)}{!allocation.valid?' · 세 금액을 모두 0 이상, 소수 둘째 자리까지 입력하고 합계를 출금액과 맞춰 주세요.':''}{!loanReady&&!loans.loading?' · 비활성 대출은 대출 정보에서 상환 중으로 변경한 뒤 같은 거래를 정정하세요.':''}</small>
     </>}

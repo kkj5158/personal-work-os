@@ -33,9 +33,9 @@ public class MoneyWebService {
 
  public MoneyAccount inclusion(UUID id,AccountInclusion input){lock();var a=money.account(id);require(input!=null&&input.includeInAssets()!=null&&input.includeInStatistics()!=null,"Inclusion flags required");version(a.version(),input.expectedVersion());db.update("update money_accounts set include_in_assets=?,include_in_statistics=?,version=version+1,updated_at=now() where user_id=? and id=?",input.includeInAssets(),input.includeInStatistics(),owner(),id);return money.account(id);}
 
- static final String BOOK_BASE="""
+ private static final String BOOK_PROJECTION="""
   with effective as (
-   select t.id,t.currency,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as "occurrencePrecision",t.type as "financialType",case when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
+   select t.id,t.currency,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as "occurrencePrecision",t.type as "financialType",t.type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
     coalesce(rp.defaults,'{}'::jsonb)::text as "ruleDefaults",
     coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",ce.created_at as "classificationAt",ce.evidence->>'reason' as "classificationReason",
     mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
@@ -44,12 +44,12 @@ public class MoneyWebService {
     coalesce(original.from_account_id,t.from_account_id,t.to_account_id) as "trackingAccountId",
     coalesce(b.overrides,'{}'::jsonb)::text as overrides,
     jsonb_build_object('title',coalesce(t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')),
-      'memo',t.memo,'categoryId',t.category_id,'amount',case when t.type='LOAN_PAYMENT' then t.interest+t.fee else t.amount end,'accountId',coalesce(t.from_account_id,t.to_account_id),
+      'memo',t.memo,'categoryId',t.category_id,'amount',t.amount,'accountId',coalesce(t.from_account_id,t.to_account_id),
       'counterpartyText',t.counterparty_text,'occurredAt',t.occurred_at,'excluded',false)::text as source,
     case when jsonb_exists(b.overrides,'title') then b.overrides->>'title' else coalesce(rp.defaults->>'title',t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')) end as title,
     case when jsonb_exists(b.overrides,'memo') then b.overrides->>'memo' else coalesce(rp.defaults->>'memo',t.memo) end as memo,
     case when t.type='REFUND' and original.id is not null then case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end as "categoryId",
-    case when jsonb_exists(b.overrides,'amount') then (b.overrides->>'amount')::numeric else case when t.type='LOAN_PAYMENT' then t.interest+t.fee else t.amount end end as amount,
+    case when jsonb_exists(b.overrides,'amount') then (b.overrides->>'amount')::numeric else t.amount end as amount,
     case when jsonb_exists(b.overrides,'accountId') then (b.overrides->>'accountId')::uuid else coalesce(t.from_account_id,t.to_account_id) end as "accountId",
     case when jsonb_exists(b.overrides,'counterpartyText') then b.overrides->>'counterpartyText' else t.counterparty_text end as "counterpartyText",
     case when jsonb_exists(b.overrides,'occurredAt') then (b.overrides->>'occurredAt')::timestamptz else t.occurred_at end as "occurredAt",
@@ -67,10 +67,15 @@ public class MoneyWebService {
    left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id and b.slot=0
    left join money_accounts f on f.user_id=t.user_id and f.id=t.from_account_id
    left join money_accounts d on d.user_id=t.user_id and d.id=t.to_account_id
-   where t.user_id=? and t.meaning_state='CONFIRMED' and t.excluded=false and t.merged_into is null and ((t.type in ('INCOME','EXPENSE') or (t.type='REFUND' and original.id is not null)) or (t.type='LOAN_PAYMENT' and t.interest+t.fee>0))
-    and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)
-  )
+   where t.user_id=? and t.meaning_state='CONFIRMED' and t.excluded=false and t.merged_into is null and (t.type in ('INCOME','EXPENSE') or (t.type='REFUND' and original.id is not null))
   """;
+ static final String BOOK_BASE=BOOK_PROJECTION+" and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)) ";
+ static final String ACCOUNT_LEDGER_BOOK_BASE=BOOK_PROJECTION+") ";
+ static final String TRACKED_BOOK_ACCOUNT="""
+    exists(select 1 from money_tracking_accounts ta join money_accounts a on a.id=ta.account_id and a.user_id=ta.user_id
+      where ta.user_id=? and ta.kind=case when effective.type='INCOME' then 'INCOME' else 'EXPENSE' end
+        and not a.archived and ta.account_id=effective."trackingAccountId")
+    """;
  /** Bounds come from the complete effective projection, including owner date overrides. */
  @Transactional(readOnly=true) public Map<String,Object> bookkeepingAllPeriods(String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency) {
   var bounds=db.queryForMap(BOOK_BASE+"select coalesce(min((\"occurredAt\" at time zone 'Asia/Seoul')::date),current_date)::text first,coalesce(max((\"occurredAt\" at time zone 'Asia/Seoul')::date),current_date)::text last from effective",owner());
@@ -88,16 +93,20 @@ public class MoneyWebService {
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,currency,false);
  }
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency,boolean ordinarySpending){
+  return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,currency,ordinarySpending,false);
+ }
+ @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency,boolean ordinarySpending,boolean bookkeepingScope){
   require(classificationState!=null&&Set.of("ALL","RECENT_AUTO","UNCLASSIFIED","WORK_NEEDED","READY","ERRORS").contains(classificationState),"분류 상태를 확인해 주세요.");
-  page(limit,offset);var query=bookQuery(from,to,kind,search,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin);String filter=query.filter();Object[] args=query.parameters();
-  if(ordinarySpending)filter+=" and \"financialType\"<>'LOAN_PAYMENT'";
+  page(limit,offset);var query=bookQuery(from,to,kind,search,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,bookkeepingScope);String filter=query.filter();Object[] args=query.parameters();
+  // The legacy ordinarySpending flag is accepted; every projection now excludes repayments.
+  String base=bookkeepingScope?ACCOUNT_LEDGER_BOOK_BASE:BOOK_BASE;
   if(currency!=null){require(currency.matches("[A-Z]{3}"),"통화를 확인하세요.");filter+=" and currency=?";var scoped=new ArrayList<>(Arrays.asList(args));scoped.add(currency);args=scoped.toArray();}
-  var summary=rows(BOOK_BASE+"select count(*) count,string_agg(distinct currency,',') currencies,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
+  var summary=rows(base+"select count(*) count,string_agg(distinct currency,',') currencies,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
   var currencies=summary.get("currencies")==null?List.<String>of():Arrays.asList(summary.get("currencies").toString().split(","));boolean unsupported=currency==null&&currencies.stream().anyMatch(c->!"KRW".equals(c));summary.put("currencies",currencies);if(unsupported)summary.put("total",null);
   var listArgs=new ArrayList<>(Arrays.asList(args));listArgs.add(limit);listArgs.add(offset);
-  var items=rows(BOOK_BASE+"select *"+filter+" order by "+(classificationState.equals("RECENT_AUTO")?"\"classificationAt\" desc nulls last,":"")+"\"occurredAt\" desc,id limit ? offset ?",listArgs.toArray()).stream().map(this::decodeBook).toList();
-  var composition=unsupported?List.<Map<String,Object>>of():rows(BOOK_BASE+"select \"categoryId\",\"counterpartyText\",coalesce(sum(case when type='REFUND' then -amount else amount end),0) amount,count(*) count"+filter+" group by \"categoryId\",\"counterpartyText\" order by amount desc",args);
-  var trend=unsupported?List.<Map<String,Object>>of():rows(BOOK_BASE+"select to_char(\"occurredAt\" at time zone 'Asia/Seoul','YYYY-MM-DD') as \"day\",sum(case when type='REFUND' then -amount else amount end) amount"+filter+" group by \"day\" order by \"day\"",args);
+  var items=rows(base+"select *"+filter+" order by "+(classificationState.equals("RECENT_AUTO")?"\"classificationAt\" desc nulls last,":"")+"\"occurredAt\" desc,id limit ? offset ?",listArgs.toArray()).stream().map(this::decodeBook).toList();
+  var composition=unsupported?List.<Map<String,Object>>of():rows(base+"select \"categoryId\",\"counterpartyText\",coalesce(sum(case when type='REFUND' then -amount else amount end),0) amount,count(*) count"+filter+" group by \"categoryId\",\"counterpartyText\" order by amount desc",args);
+  var trend=unsupported?List.<Map<String,Object>>of():rows(base+"select to_char(\"occurredAt\" at time zone 'Asia/Seoul','YYYY-MM-DD') as \"day\",sum(case when type='REFUND' then -amount else amount end) amount"+filter+" group by \"day\" order by \"day\"",args);
   return Map.of("items",items,"total",summary.get("count"),"summary",summary,"composition",composition,"trend",trend,"currencies",currencies,"hasMixedCurrencies",unsupported,"analyticsUnavailable",unsupported);
  }
  private static final String PENDING_DRAFT="exists(select 1 from money_classification_drafts wd where wd.transaction_id=effective.id and wd.status not in ('SAVED','EXCLUDED'))";
@@ -106,7 +115,7 @@ public class MoneyWebService {
  @Transactional(readOnly=true) public Map<String,Object> calendarLedger(String month,String kind,String accountIds,String categoryIds){
   var selected=YearMonth.parse(month);var first=selected.atDay(1);var last=selected.atEndOfMonth();
   var result=new LinkedHashMap<String,Object>(bookkeeping(first.toString(),last.toString(),kind,null,1,0,false,accountIds,categoryIds,null,null));
-  var query=bookQuery(first.toString(),last.toString(),kind,null,false,accountIds,categoryIds,null,null,"ALL",null);
+  var query=bookQuery(first.toString(),last.toString(),kind,null,false,accountIds,categoryIds,null,null,"ALL",null,false);
   result.put("items",rows(BOOK_BASE+"select *"+query.filter()+" order by \"occurredAt\",id",query.parameters()).stream().map(this::decodeBook).toList());
   @SuppressWarnings("unchecked") var summary=new LinkedHashMap<String,Object>((Map<String,Object>)result.get("summary"));
   var counts=rows(BOOK_BASE+"select count(*) filter(where type='REFUND') as \"refundCount\",count(*) filter(where type<>'REFUND') as \"transactionCount\",count(distinct (\"occurredAt\" at time zone 'Asia/Seoul')::date) filter(where type='EXPENSE') as \"spendingDayCount\",count(distinct (\"occurredAt\" at time zone 'Asia/Seoul')::date) filter(where type='INCOME') as \"incomeDayCount\""+query.filter(),query.parameters()).getFirst();
@@ -116,11 +125,11 @@ public class MoneyWebService {
  }
  private record BookQuery(String filter,Object[] parameters){}
  /** Count and row reads share the same effective projection, predicates, binds and validation. */
- private BookQuery bookQuery(String from,String to,String kind,String search,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin){
+ private BookQuery bookQuery(String from,String to,String kind,String search,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,boolean bookkeepingScope){
   MoneyWebRevisionService.amountRange(minAmount,maxAmount);require(Set.of("EXPENSE","INCOME").contains(kind),"Bookkeeping view must be EXPENSE or INCOME");var dates=range(from,to);text(search,200,false,"Search");
   String filter=" from effective where \"occurredAt\">=? and \"occurredAt\"<? and "+(kind.equals("INCOME")?"type='INCOME'":"type in ('EXPENSE','REFUND')")+(includeExcluded?"":" and not excluded")+" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(memo,'')||' '||coalesce(\"counterpartyText\",'')))>0";
-  filter+=" and exists(select 1 from money_tracking_accounts ta join money_accounts a on a.id=ta.account_id and a.user_id=ta.user_id where ta.user_id=? and ta.kind=? and not a.archived and ta.account_id=effective.\"trackingAccountId\")";
-  var parameters=new ArrayList<Object>(Arrays.asList(owner(),dates[0],dates[1],search==null?"":search,owner(),kind));
+  filter+=" and "+TRACKED_BOOK_ACCOUNT;
+  var parameters=new ArrayList<Object>(Arrays.asList(owner(),dates[0],dates[1],search==null?"":search,owner()));
   if(classificationState.equals("UNCLASSIFIED"))filter+=" and \"categoryId\" is null";if(classificationState.equals("RECENT_AUTO"))filter+=" and \"classificationOrigin\" in ('AI','APPROVED_RULE','DIRECT_REFERENCE')";
 
   String choice="exists(select 1 from money_classification_choices wc where wc.transaction_id=effective.id)";
@@ -128,13 +137,13 @@ public class MoneyWebService {
   if(classificationState.equals("ERRORS"))filter+=" and ("+ISSUE+")";
   if(classificationState.equals("WORK_NEEDED"))filter+=" and (\"categoryId\" is null or (not \"directProtected\" and coalesce(\"classificationOrigin\",'') not in ('DIRECT','CONFIRMED') and (\"classificationOrigin\" in ('AI','APPROVED_RULE','DIRECT_REFERENCE') or (overrides::jsonb->>'categoryId' is null and source::jsonb->>'categoryId' is null))) or "+PENDING_DRAFT+" or "+choice+" or "+ISSUE+")";
   if(classificationOrigin!=null){var origins=new LinkedHashSet<>(Arrays.asList(classificationOrigin.split(",")));require(!origins.isEmpty()&&origins.stream().allMatch(Set.of("DIRECT","CONFIRMED","DIRECT_REFERENCE","APPROVED_RULE","AI")::contains),"분류 출처를 확인해 주세요.");filter+=" and \"classificationOrigin\"=any(?)";parameters.add(origins.toArray(new String[0]));}
-  filter+=bookFilter(parameters,accountIds,"accountId");filter+=bookFilter(parameters,categoryIds,"categoryId");
+  filter+=bookFilter(parameters,accountIds,bookkeepingScope?"trackingAccountId":"accountId");filter+=bookFilter(parameters,categoryIds,"categoryId");
   if(minAmount!=null){require(minAmount.signum()>=0,"Minimum must be nonnegative");filter+=" and amount>=?";parameters.add(minAmount);}
   if(maxAmount!=null){require(maxAmount.signum()>=0&&(minAmount==null||maxAmount.compareTo(minAmount)>=0),"Invalid amount range");filter+=" and amount<=?";parameters.add(maxAmount);}
   return new BookQuery(filter,parameters.toArray());
  }
  @Transactional(readOnly=true) Map<String,Object> bookkeepingStatusCounts(String from,String to,String kind,String search,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationOrigin){
-  var query=bookQuery(from,to,kind,search,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,"ALL",classificationOrigin);
+  var query=bookQuery(from,to,kind,search,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,"ALL",classificationOrigin,false);
   return new LinkedHashMap<>(db.queryForMap(BOOK_BASE+"select count(*) as \"ALL\",count(*) filter(where \"categoryId\" is null) as \"UNCLASSIFIED\",count(*) filter(where "+PENDING_DRAFT+") as \"READY\",count(*) filter(where "+ISSUE+") as \"ERRORS\""+query.filter(),query.parameters()));
  }
  private String bookFilter(List<Object> args,String values,String column){
@@ -149,11 +158,20 @@ public class MoneyWebService {
   }
   return " and ("+String.join(" or ",clauses)+")";
  }
- static final String ACCOUNT_LEDGER_BOOK_BASE=BOOK_BASE.replace("and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)","");
  /** Explicit owner category editing in the account ledger does not opt an account into statistics. */
  @Transactional(readOnly=true) Map<String,Object> accountLedgerBookkeepingRow(UUID id){var result=rows(ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=? and \"financialType\" in ('EXPENSE','INCOME')",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("계좌 거래장의 확정 소비·수입 거래가 필요합니다.");var book=decodeBook(result.getFirst());book.put("accountLedgerScope",true);return book;}
  @Transactional(readOnly=true) public Map<String,Object> bookkeepingRow(UUID id){var result=rows(BOOK_BASE+"select * from effective where id=?",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Bookkeeping row not found");return decodeBook(result.getFirst());}
- public Map<String,Object> saveBookkeeping(UUID id,BookkeepingEdit input){lock();require(input!=null&&input.overrides()!=null,"Overrides required");var source=money.transaction(id);var old=bookkeepingRow(id);return saveVerifiedBookkeeping(id,input,old,source.type());}
+ @Transactional(readOnly=true) public Map<String,Object> trackedBookkeepingRow(UUID id){
+  var result=rows(ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=? and "+TRACKED_BOOK_ACCOUNT,owner(),id,owner());
+  if(result.isEmpty())throw new ResourceNotFoundException("Bookkeeping row not found");
+  return decodeBook(result.getFirst());
+ }
+ /** The shared direct editor also serves explicitly tracked accounts excluded from global analytics. */
+ @Transactional(readOnly=true) Map<String,Object> editableBookkeepingRow(UUID id){
+  var result=rows(BOOK_BASE+"select * from effective where id=?",owner(),id);
+  return result.isEmpty()?trackedBookkeepingRow(id):decodeBook(result.getFirst());
+ }
+ public Map<String,Object> saveBookkeeping(UUID id,BookkeepingEdit input){lock();require(input!=null&&input.overrides()!=null,"Overrides required");var source=money.transaction(id);var old=editableBookkeepingRow(id);return saveVerifiedBookkeeping(id,input,old,source.type());}
  /** Item-transaction local reuse: caller holds the owner lock and has just validated this owned projection. */
  Map<String,Object> saveVerifiedBookkeeping(UUID id,BookkeepingEdit input,Map<String,Object> old,TransactionType type){version(((Number)old.get("transactionVersion")).longValue(),input.expectedTransactionVersion());version(((Number)old.get("version")).longValue(),input.expectedVersion());
   if(input.expectedProjectionVersion()!=null)version(((Number)old.get("projectionVersion")).longValue(),input.expectedProjectionVersion());
@@ -164,7 +182,7 @@ public class MoneyWebService {
   if(o.containsKey("categoryId")&&o.get("categoryId")!=null){var category=uuid(o.get("categoryId"));boolean retained=category.toString().equals(Objects.toString(old.get("categoryId"),""));require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and (? or (not c.archived and not coalesce(p.archived,false))))",Boolean.class,owner(),category,retained)),"Owned active category required");require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories where user_id=? and id=? and kind=?)",Boolean.class,owner(),category,type==TransactionType.INCOME?"INCOME":"EXPENSE")),"카테고리 유형이 가계부와 다릅니다.");}
   if(o.containsKey("occurredAt")){require(o.get("occurredAt") instanceof String,"Time required");Instant.parse((String)o.get("occurredAt"));}
   if(o.containsKey("excluded"))require(o.get("excluded") instanceof Boolean,"Excluded must be boolean");
-  db.update("insert into money_bookkeeping_overrides(id,user_id,transaction_id,overrides,version) values(?,?,?,cast(? as jsonb),1) on conflict(user_id,transaction_id,slot) do update set overrides=excluded.overrides,version=money_bookkeeping_overrides.version+1,updated_at=now()",UUID.randomUUID(),owner(),id,json.writeValueAsString(o));new MoneyMeaningService(db,users,json).audit(id,"BOOKKEEPING_OVERRIDE",old.get("overrides"),o);return Boolean.TRUE.equals(old.get("accountLedgerScope"))?accountLedgerBookkeepingRow(id):bookkeepingRow(id);
+  db.update("insert into money_bookkeeping_overrides(id,user_id,transaction_id,overrides,version) values(?,?,?,cast(? as jsonb),1) on conflict(user_id,transaction_id,slot) do update set overrides=excluded.overrides,version=money_bookkeeping_overrides.version+1,updated_at=now()",UUID.randomUUID(),owner(),id,json.writeValueAsString(o));new MoneyMeaningService(db,users,json).audit(id,"BOOKKEEPING_OVERRIDE",old.get("overrides"),o);return Boolean.TRUE.equals(old.get("accountLedgerScope"))?accountLedgerBookkeepingRow(id):editableBookkeepingRow(id);
  }
  private static UUID uuid(Object value){try{return UUID.fromString(Objects.toString(value,""));}catch(IllegalArgumentException e){throw new InvalidRequestException("Valid identifier required");}}
 
@@ -275,10 +293,10 @@ public class MoneyWebService {
         coalesce(sum(amount) filter(where type='LOAN_PAYMENT' and principal is null),0) as "unresolvedLoanPayments" from facts) x
     union all select 'trend',row_to_json(x)::text from
       (select to_char(date_trunc('%s',occurred_at at time zone 'Asia/Seoul'),'YYYY-MM-DD') as "day",
-        sum(income) income,sum(consumption) consumption,sum(savings) savings from facts group by 1 order by 1) x
+        sum(income) income,sum(consumption) consumption,sum(savings) savings from facts where type<>'LOAN_PAYMENT' group by 1 order by 1) x
     union all select 'composition',row_to_json(x)::text from
       (select type,category_id as "categoryId",counterparty_text as "counterpartyText",to_account_id as "toAccountId",
-        sum(income) income,sum(consumption) consumption,sum(savings) savings from facts group by 1,2,3,4) x
+        sum(income) income,sum(consumption) consumption,sum(savings) savings from facts where type<>'LOAN_PAYMENT' group by 1,2,3,4) x
     union all select 'flow',row_to_json(x)::text from
       (select type,case when type='TRANSFER' then least(from_account_id,to_account_id) else from_account_id end as "fromAccountId",
         case when type='TRANSFER' then greatest(from_account_id,to_account_id) else to_account_id end as "toAccountId",

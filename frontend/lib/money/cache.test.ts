@@ -113,3 +113,34 @@ test("AI evidence refresh follows financial and meaning mutations", () => {
     assert.equal(affectedBy(mutation, "/ai/operations"), true);
   }
 });
+
+test("tracking save clears projected amounts immediately and a ledger type change refreshes the same month and detail", async () => {
+  const keys=[
+    "/tracking",
+    "/bookkeeping?kind=EXPENSE&bookkeepingScope=true",
+    "/bookkeeping?kind=INCOME&bookkeepingScope=true",
+    "/bookkeeping/unified/loan-repayments?bookkeepingScope=true&accountIds=A",
+    "/bookkeeping/unified?bookkeepingScope=true&accountIds=A&repaymentPart=UNALLOCATED",
+  ];
+  const cache=new MoneyCache(async key=>key);
+  cache.setScope("synthetic-owner");
+  for(const key of keys)await cache.load(key);
+  cache.mutate("tracking");
+  for(const key of keys){
+    assert.equal(cache.snapshot(key).data,null,key);
+    await cache.load(key);
+  }
+  cache.mutate("transaction");
+  assert.ok(cache.snapshot("/tracking").expiresAt>0);
+  for(const key of keys.slice(1))assert.equal(cache.snapshot(key).expiresAt,0,key);
+});
+
+test("inline saves patch both legacy and scoped row detail immediately",async()=>{
+  const cache=new MoneyCache(async()=>({id:"a",title:"previous"}));
+  cache.setScope("owner");
+  const keys=["/bookkeeping/a","/bookkeeping/a?bookkeepingScope=true"];
+  for(const key of keys)await cache.load(key);
+  const updated={id:"a",title:"saved"};
+  cache.patchBooks([updated]);
+  for(const key of keys)assert.deepEqual(cache.snapshot(key).data,updated);
+});

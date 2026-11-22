@@ -170,11 +170,11 @@ public class MoneyReviewService {
  Map<String,Object> completeClassification(Complete input){
   lock();require(input!=null&&input.items()!=null&&!input.items().isEmpty()&&input.items().size()<=100,"Select 1–100 rows");require(input.items().stream().map(Completion::id).distinct().count()==input.items().size(),"Duplicate selection");
   for(var item:input.items()){
-   require(item.projectionVersion()!=null,"Projection version required");var row=web.bookkeepingRow(item.id());require(Set.of("EXPENSE","INCOME").contains(row.get("type")),"환불 연결과 대출 구성은 전용 상세에서 먼저 확인하세요.");
+   require(item.projectionVersion()!=null,"Projection version required");var row=web.editableBookkeepingRow(item.id());require(Set.of("EXPENSE","INCOME").contains(row.get("type")),"환불 연결과 대출 구성은 전용 상세에서 먼저 확인하세요.");
    require(item.overrides()!=null&&item.overrides().keySet().stream().allMatch(Set.of("title","memo","categoryId")::contains),"검토에서는 제목·메모·카테고리만 수정할 수 있습니다.");
    var all=new LinkedHashMap<String,Object>((Map<String,Object>)row.get("overrides"));all.putAll(item.overrides());
    web.saveBookkeeping(item.id(),new MoneyWebTypes.BookkeepingEdit(item.overrideVersion(),item.transactionVersion(),all,item.projectionVersion()));
-   var displayed=web.bookkeepingRow(item.id());
+   var displayed=web.editableBookkeepingRow(item.id());
    var previous=db.queryForList("select displayed::text from money_review_decisions where user_id=? and transaction_id=?",owner(),item.id());
    db.update("insert into money_review_decisions(user_id,transaction_id,transaction_version,override_version,projection_version,displayed) values(?,?,?,?,?,cast(? as jsonb)) on conflict(user_id,transaction_id) do update set transaction_version=excluded.transaction_version,override_version=excluded.override_version,projection_version=excluded.projection_version,displayed=excluded.displayed,completed_at=now()",owner(),item.id(),displayed.get("transactionVersion"),displayed.get("version"),displayed.get("projectionVersion"),json.writeValueAsString(displayed));
    meaning.audit(item.id(),"REVIEW_COMPLETE",previous,displayed);
