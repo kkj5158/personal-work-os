@@ -52,6 +52,7 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   if(path.startsWith('/v4/summary?')){
    const zero=q.get('from')==='2027-01-01'||q.get('accountIds')!=='source';
    if(q.get('from')==='2026-12-01'){await decemberRead;throw Error('월간 합계 테스트 실패');}
+   if(q.get('from')==='2027-01-01')return {actualIncome:0,consumption:-50000,totalExpense:-50000,loanRepayment:0,composition:[{bucket:'E',categoryId:null,amount:-50000,count:2}]} as T;
    return {actualIncome:100,consumption:100,totalExpense:zero?100:142100,loanRepayment:zero?0:142000,savingsIn:5100,savingsOut:900,savingsMovement:6000,savingsNet:4200,composition:[]} as T;
   }
   if(path.startsWith('/v4/contributions?')){const matching=q.get('search')?rows.filter(r=>r.title.includes(q.get('search')!)):rows,offset=Number(q.get('offset'));return {items:matching.slice(offset,offset+50),total:matching.length,filteredAmount:matching.length*100,totals:{amount:5100,count:51,analyticsUnavailable:false,unknownHistoryCount:0,currencies:['KRW'],composition:[{accountId:'installment',label:'purpose installment',amount:5100,count:51}]}} as T;}
@@ -141,6 +142,11 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   await act(()=>render({...props.period,from:'2027-01-01',to:'2027-01-31'}));await tick();
   assert.equal(document.querySelector('.money-month-loan strong')!.textContent,'0원');
   assert.match(document.querySelector('.money-month-summary')!.textContent!,/확정된 대출상환이 없습니다/);
+  const netChart=[...document.querySelectorAll('.money-month-donut')].find(chart=>chart.querySelector('h3')?.textContent==='일반 소비 구성')!;
+  assert.equal(netChart.querySelector('.money-month-center strong')?.textContent,'-50,000원');
+  assert.equal(netChart.querySelector('.money-month-legend strong')?.textContent,'-50,000원');
+  assert.equal(netChart.querySelectorAll('svg circle[role="button"]').length,0);
+  assert.match(netChart.textContent!,/음수 항목/);
   await act(()=>render());await tick();
   await act(()=>render(props.period,'installment'));await tick();
   assert.equal(document.querySelector('.money-month-loan strong')!.textContent,'0원','An income-only temporary account cannot widen expense tracking');
