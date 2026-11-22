@@ -23,3 +23,17 @@ test('response loss retries the same operation; conflict keeps draft until expli
   await act(()=>button('최신 메모 확인 후 내 입력 유지').click());assert.equal(calls.length,3);failure='none';await act(async()=>{button('메모 저장').click();});assert.equal(calls.at(-1)?.expectedMemoRevision,5);assert.notEqual(calls.at(-1)?.operationId,calls[2].operationId);assert.equal(held.at(-1),false);
  }finally{attentionApi.memo=original;await act(()=>root.unmount());dom.window.close();}
 });
+
+test('bound Desktop metadata card exposes its original-session action',async()=>{
+ const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/workflow/attention'});
+ Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+ const {createRoot}=await import('react-dom/client');
+ const root=createRoot(document.getElementById('root')!);
+ const item={id:crypto.randomUUID(),action:'검증',status:'OPEN',createdAt:new Date().toISOString(),source:{kind:'CODEX_DESKTOP',summaryOrigin:'EVENT_METADATA',reference:crypto.randomUUID()}} as AttentionItem;
+ let opened:AttentionItem|undefined;
+ try{
+  await act(()=>root.render(<AttentionCard item={item} lanes={[]} disabled={false} onComplete={()=>{}} onSource={value=>{opened=value;}} onEdit={()=>{}} onMemo={()=>{}} onHold={()=>{}}/>));
+  const source=document.querySelector<HTMLButtonElement>('button[title="출처 열기"]');
+  assert.ok(source);source.click();assert.equal(opened,item);
+ }finally{await act(()=>root.unmount());dom.window.close();}
+});
