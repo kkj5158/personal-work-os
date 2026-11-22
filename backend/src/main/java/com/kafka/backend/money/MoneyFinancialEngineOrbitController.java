@@ -16,16 +16,18 @@ public class MoneyFinancialEngineOrbitController {
             "occurred_at", "amount", "currency", "direction", "from_account_id", "to_account_id", "sourceCount",
             "baseFinancialType", "declaredFinancialType", "relationStatus", "meaningApplied", "categoryEligible");
     private final MoneyV4ReadService metrics;
+    private final MoneyStatisticalAccountService statisticalAccounts;
     private final MoneyFinancialEngineService engine;
     private final MoneyAccountLedgerService ledger;
     private final MoneyOrbitConsoleService console;
 
     public MoneyFinancialEngineOrbitController(MoneyFinancialEngineService engine, MoneyAccountLedgerService ledger,
-            MoneyOrbitConsoleService console, MoneyV4ReadService metrics) {
+            MoneyOrbitConsoleService console, MoneyV4ReadService metrics, MoneyStatisticalAccountService statisticalAccounts) {
         this.metrics = metrics;
         this.engine = engine;
         this.ledger = ledger;
         this.console = console;
+        this.statisticalAccounts = statisticalAccounts;
     }
 
     @GetMapping("/summary")
@@ -37,6 +39,16 @@ public class MoneyFinancialEngineOrbitController {
 
     @GetMapping("/savings-balance")
     public Object savingsBalance(@RequestParam(defaultValue="KRW") String currency) { return console.envelope(metrics.savingsBalance(currency)); }
+
+    @GetMapping("/composition")
+    public Object composition(@RequestParam java.time.LocalDate from, @RequestParam java.time.LocalDate to,
+            @RequestParam(defaultValue="KRW") String currency, @RequestParam(required=false) String accountIds,
+            @RequestParam(required=false) java.time.Instant asOf) {
+        MoneyService.require(!from.isAfter(to) && java.time.temporal.ChronoUnit.DAYS.between(from,to)<=366,"조회 기간을 확인하세요.");
+        return console.envelope(Map.of("flows",metrics.summary(from,to,currency,accountIds),
+            "incomeComposition",metrics.incomeComposition(from,to,currency,accountIds),
+            "balances",statisticalAccounts.snapshot(to,currency,accountIds,asOf)));
+    }
 
     @GetMapping("/ledger")
     public Object ledger(@RequestParam String from, @RequestParam String to, @RequestParam(required = false) UUID accountId,

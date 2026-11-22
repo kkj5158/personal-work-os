@@ -14,7 +14,7 @@ public final class OrbitMoneyRoutes {
   String route=path.substring(PREFIX.length());
   if(route.startsWith("financial-engine/")){
    String operation=route.substring("financial-engine/".length());
-   return "GET".equals(method)&&Set.of("summary","savings-balance","ledger","candidates","status","history","rules","backfill-preview","shadow-run").contains(operation)
+   return "GET".equals(method)&&Set.of("summary","composition","savings-balance","ledger","candidates","status","history","rules","backfill-preview","shadow-run").contains(operation)
        ||"POST".equals(method)&&Set.of("shadow","save-rule","batch-preview","batch-execute","quick-confirm","intent").contains(operation);
   }
   if(route.startsWith("recon/"))return "GET".equals(method)&&Set.of("capabilities","statements","statement","rows","status","candidate","observation","history","internal-events").contains(route.substring(6))||"POST".equals(method)&&Set.of("intake-start","intake-chunk","import-preview","analyze","batch-preview","batch-execute","remaining-preview","remaining-execute").contains(route.substring(6));

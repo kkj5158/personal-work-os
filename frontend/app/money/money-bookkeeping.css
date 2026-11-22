@@ -54,7 +54,9 @@
 .money-month-filter{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 14px;border:1px solid #aec6ef;border-radius:9px;font-size:13px}
 .money-month-filter small{color:#56677f}
 @container(min-width:248px){.money-month-donut-body{grid-template-columns:minmax(0,48%) minmax(0,1fr)}}
-@media(min-width:1280px){.money-month-kpis,.money-month-donuts{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:1280px){.money-month-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.money-month-donuts{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1720px){.money-month-donuts{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.money-month-evidence{display:block;white-space:normal}
 @media(max-width:600px){
  .money-month-kpis,.money-month-donuts{grid-template-columns:minmax(0,1fr);gap:10px}
  .money-month-kpis>section{padding:14px}
