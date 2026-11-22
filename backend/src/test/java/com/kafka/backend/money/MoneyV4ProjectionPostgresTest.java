@@ -63,7 +63,8 @@ class MoneyV4ProjectionPostgresTest {
             assertThat(latest.get("savings")).isEqualTo(List.of(savings.id()));
             assertThatThrownBy(()->tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(),List.of(),version+1)))
                 .isInstanceOf(com.kafka.backend.common.OptimisticLockConflictException.class);
-            var purchase=e.product().save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,payer.id(),null,new BigDecimal("100000"),october,"합성 구매",null,null,false,null,null));
+            var category=e.product().initializeCategories().stream().filter(c->"EXPENSE".equals(c.kind())).findFirst().orElseThrow();
+            var purchase=e.product().save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,payer.id(),null,new BigDecimal("100000"),october,"합성 구매",category.id(),null,false,null,null));
             var nov5=java.time.Instant.parse("2026-11-05T02:00:00Z");var nov22=java.time.Instant.parse("2026-11-22T01:00:00Z");
             var partial=e.product().save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,receiver.id(),new BigDecimal("30000"),nov5,null,null,null,false,purchase.id(),null));
             e.product().save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,receiver.id(),new BigDecimal("20000"),nov22,null,null,null,false,purchase.id(),null));
@@ -71,6 +72,10 @@ class MoneyV4ProjectionPostgresTest {
             var reads=new MoneyV4ReadService(new NamedParameterJdbcTemplate(db),()->owner);
             var from=LocalDate.parse("2026-11-01");var to=LocalDate.parse("2026-11-30");
             assertThat(reads.summary(from.minusMonths(1),from.minusDays(1),"KRW",null).consumption()).isEqualByComparingTo("100000");
+            assertThat(reads.summary(from.minusMonths(1),to,"KRW",null).consumption()).isEqualByComparingTo("50000");
+            var credit=reads.items(from,to,"KRW","E",payer.id().toString(),"direct:"+category.id(),null,null,50,0);
+            assertThat(credit.total()).isEqualTo(2);
+            assertThat(credit.filteredAmount()).isEqualByComparingTo("-50000");
             var metrics=reads.summary(from,to,"KRW",payer.id().toString());
             assertThat(metrics.consumption()).isEqualByComparingTo("-50000");
             assertThat(metrics.totalExpense()).isEqualByComparingTo("-50000");

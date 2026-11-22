@@ -71,7 +71,7 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
  api.post=async()=>{writes++;throw Error('Unexpected financial write');};
  const tick=()=>act(async()=>{await new Promise(r=>setTimeout(r,12));});
  try {
-  const render=(period=props.period,accountId='source')=>root.render(<SearchParamsContext value={new URLSearchParams({accountId})}><MoneyDataProvider><Bookkeeping {...props} period={period} select={selection=>{if(selection.kind==='transaction')selected=selection.value?.id??'';}}/></MoneyDataProvider></SearchParamsContext>);
+  const render=(period=props.period,accountId='source')=>root.render(<SearchParamsContext value={new URLSearchParams({accountId})}><MoneyDataProvider><Bookkeeping {...props} period={period} select={selection=>{if(selection.kind==='transaction')selected=selection.value?.id??'new-transaction';}}/></MoneyDataProvider></SearchParamsContext>);
   await act(()=>render());await tick();
   assert.ok(paths.includes('/tracking'));
   assert.ok(!paths.some(p=>p.includes('/loan-repayments?')));
@@ -159,6 +159,12 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   assert.ok(afterSave.includes('/tracking'));
   assert.ok(afterSave.some(p=>p.includes('/loan-repayments?')&&p.includes('accountIds=source')));
   assert.ok(afterSave.some(p=>p.startsWith('/v4/summary?')));
+  const buttonWithText=(text:string)=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===text)!;
+  await act(()=>buttonWithText('+ 거래 추가').click());assert.equal(selected,'new-transaction');
+  selected='';
+  await act(()=>buttonWithText('거래 등록·정정').click());await tick();
+  assert.ok(document.querySelector('[aria-label="전체 거래 가계부"]'));
+  await act(()=>buttonWithText('+ 거래 추가').click());assert.equal(selected,'new-transaction');
   assert.equal(writes,0);
  }finally{await act(()=>root.unmount());api.get=get;api.post=post;api.put=put;dom.window.close();}
 });
