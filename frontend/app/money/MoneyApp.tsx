@@ -162,6 +162,7 @@ export default function MoneyApp() {
   const [drawer,setDrawer]=useState(true);
   useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","workbench","review","classification"].includes(section)?1200:section==="accounts"||section==="loans"?900:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
   const modalPanel=drawer || section==="accounts";
+  const accountSettings = section === "accounts" && selection?.kind === "account" && !selection.action;
   const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
 
   const saved = () => {
@@ -234,8 +235,8 @@ export default function MoneyApp() {
         <span className="money-dirty" role="status">
           {dirtyVisible ? "저장되지 않은 변경사항" : ""}
         </span>
-        {modalPanel&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
-        {section==='accounts'&&selection.kind==='account'&&!selection.action?<RevisionAccountPanel
+        {modalPanel&&!accountSettings&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
+        {accountSettings&&selection.kind==='account'?<RevisionAccountPanel
           key={'account:'+ (selection.value?.id||'new')}
           value={selection.value}
           selection={selection}
@@ -243,7 +244,7 @@ export default function MoneyApp() {
           accounts={props.accounts}
           categories={props.categories}
           onClose={close}
-          onSaved={()=>{setDirty(false);cache.mutate('account');}}
+          onSaved={()=>cache.mutate('account')}
           select={select}
         />:<MoneyEditor
           key={
