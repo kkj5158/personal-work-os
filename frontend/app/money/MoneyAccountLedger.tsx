@@ -37,25 +37,34 @@ export function AccountLedger(p:Props){
  const [closedLink,setClosedLink]=useState<string|null>(null);
  const linked=useMoneyData<LedgerRow>(validLink&&closedLink!==transactionId?ACCOUNT_LEDGER+'/rows/'+transactionId:null);
  const [filters,setFilters]=useMoneyViewState<LedgerFilters>('account-ledger-filters',()=>({accountId:query.get('accountId')??query.get('account'),type:'',state:'ALL',search:'',view:'ledger',offset:0}));
- const [selection,setSelection]=useState<LedgerRow[]>([]),[expanded,setExpanded]=useState<{id:string;type?:string;categoryId?:string}|null>(null),[context,setContext]=useState(0),[message,setMessage]=useState(''),[error,setError]=useState('');
+ const [expanded,setExpanded]=useState<{id:string;type?:string;categoryId?:string}|null>(null),[context,setContext]=useState(0),[message,setMessage]=useState(''),[error,setError]=useState('');
  const [pendingRows,setPending]=usePendingRows<Pending>('ledger-advanced-requests'),[recovering,setRecovering]=useState(false);
  const [metadataRows,setMetadataPending]=usePendingRows<MetadataPending>('ledger-metadata-requests');
  const [categoryRows,setCategoryPending]=usePendingRows<CategoryPending>('ledger-category-requests');
  const linkedPeriod=!!requestedAccount&&!!requestedFrom&&!!requestedTo&&/^\d{4}-\d{2}-\d{2}$/.test(requestedFrom)&&/^\d{4}-\d{2}-\d{2}$/.test(requestedTo);
  const periodFrom=linkedPeriod?requestedFrom:p.period.from,periodTo=linkedPeriod?requestedTo:p.period.to;
+ const selectionScope=ledgerPath(periodFrom,periodTo,filters);
+ const [batch,setBatch]=useState(()=>({scope:selectionScope,generation:0,selection:[] as LedgerRow[],message:''}));
+ if(batch.scope!==selectionScope){
+  setBatch({scope:selectionScope,generation:batch.generation+1,selection:[],message:''});
+ }
+ const {selection,message:bulkMessage}=batch;
+ function setSelection(next:LedgerRow[]|((rows:LedgerRow[])=>LedgerRow[])){
+  setBatch(current=>({...current,selection:typeof next==='function'?next(current.selection):next}));
+ }
  const evidence=useMoneyData<StatisticalBalances>(linkedPeriod&&requestedAsOf&&filters.accountId===requestedAccount
   ?compositionPath('statistical-balances',periodFrom,periodTo,[requestedAccount],{asOf:requestedAsOf}):null);
  const member=evidence.data&&[...evidence.data.savings.members,...evidence.data.installment.members].find(row=>row.accountId===requestedAccount);
  const page=useMoneyData<LedgerPage>(filters.view!=='pending'?ledgerPath(periodFrom,periodTo,filters):null),raw=useMoneyData<PendingPage>(filters.view==='pending'?ledgerPath(periodFrom,periodTo,filters):null);
  const result=filters.view==='pending'?raw:page,data=result.data,counts=new Map(data?.accountCounts.map(a=>[a.accountId,a.count])??[]);
  const active=p.accounts.find(a=>a.id===filters.accountId),scope=active?.displayName??'전체 계좌';
- function change(next:Partial<LedgerFilters>){setBulkMessage('');setFilters(old=>({...old,...next,offset:0}));setExpanded(null);setSelection([]);setContext(value=>value+1);setError('');setMessage('필터를 변경하여 미확정 편집과 선택을 닫았습니다.');}
- function account(accountId:string|null){setBulkMessage('');setFilters(old=>changeLedgerScope(old,accountId));setExpanded(null);setSelection([]);setContext(value=>value+1);setError('');setMessage('계좌 관점을 전환했습니다. 미확정 편집과 선택을 닫았습니다.');}
+ function change(next:Partial<LedgerFilters>){setFilters(old=>({...old,...next,offset:0}));setExpanded(null);setSelection([]);setContext(value=>value+1);setError('');setMessage('필터를 변경하여 미확정 편집과 선택을 닫았습니다.');}
+ function account(accountId:string|null){setFilters(old=>changeLedgerScope(old,accountId));setExpanded(null);setSelection([]);setContext(value=>value+1);setError('');setMessage('계좌 관점을 전환했습니다. 미확정 편집과 선택을 닫았습니다.');}
  async function recover(pending:Pending,replay=false){if(!pending||recovering)return;setRecovering(true);try{let outcome=await api.get<UnifiedOutcome>('/bookkeeping/unified/outcomes/'+pending.operation.edit.requestId);if(replay&&outcome.status==='UNKNOWN')outcome=await recoverLedgerOperation(pending.id,pending.operation,(path,body)=>api.post(path,body),path=>api.get(path));if(outcome.status==='UNKNOWN'){setMessage('처리 결과를 아직 확인하지 못했습니다. 원래 요청 ID를 유지합니다.');return;}setPending(pending.id,null);cache.mutate('transaction');setMessage(outcome.status==='APPLIED'?'원래 요청의 저장 완료를 확인했습니다.':outcome.result?.message??'원래 요청은 적용되지 않았습니다. 초안을 다시 확인하세요.');}catch(e){setError(e instanceof Error?e.message:'원래 요청 조회 실패');}finally{setRecovering(false);}}
  async function recoverMetadata(metadataPending:MetadataPending){if(!metadataPending||recovering)return;setRecovering(true);try{const outcome=await api.get<UnifiedOutcome>('/bookkeeping/unified/outcomes/'+metadataPending.command.requestId);if(outcome.status==='UNKNOWN'){setMessage('제목·메모 원래 요청을 아직 확인하지 못했습니다. 새 ID로 저장하지 않습니다.');return;}setMetadataPending(metadataPending.id,null);cache.mutate('transaction');setMessage(outcome.status==='APPLIED'?'제목·메모 저장 완료를 확인했습니다.':outcome.result?.message??'제목·메모가 저장되지 않았습니다.');}catch(e){setError(e instanceof Error?e.message:'원래 요청 확인 실패');}finally{setRecovering(false);}}
  async function recoverCategory(categoryPending:CategoryPending,replay=false){if(!categoryPending||recovering)return;setRecovering(true);try{let outcome=await api.get<UnifiedOutcome>('/bookkeeping/unified/outcomes/'+categoryPending.command.requestId);if(replay&&outcome.status==='UNKNOWN')outcome=await api.post(ACCOUNT_LEDGER+'/rows/'+categoryPending.id+'/category',categoryPending.command);if(outcome.status==='UNKNOWN'){setMessage('카테고리 원래 요청을 아직 확인하지 못했습니다. 원래 요청 ID를 유지합니다.');return;}setCategoryPending(categoryPending.id,null);cache.mutate('transaction');cache.mutate('book');setMessage(outcome.status==='APPLIED'?'카테고리 저장 완료를 확인했습니다.':outcome.result?.message??'카테고리가 저장되지 않았습니다.');}catch(e){setError(e instanceof Error?e.message:'카테고리 원래 요청 확인 실패');}finally{setRecovering(false);}}
  const decisions=useFinancialDecisions(),[engineOpen,setEngineOpen]=useState(false);
- const [bulkType,setBulkType]=useState(''),[bulkBusy,setBulkBusy]=useState(false),[bulkMessage,setBulkMessage]=useState('');
+ const [bulkType,setBulkType]=useState(''),[bulkBusy,setBulkBusy]=useState(false);
  const rows=(page.data?.items??[]).map(row=>{
   const receipt=decisions.entries[row.id]?.receipt;
   if(!receipt||receipt.currentVersion<=row.version)return row;
@@ -63,7 +72,6 @@ export function AccountLedger(p:Props){
  });
  const visible=rows.map(row=>row.id),selectedRows=selection.filter(row=>visible.includes(row.id)),selected=selectedRows.map(r=>r.id);
  function rowBusy(id:string){const phase=decisions.entries[id]?.phase;return !!(pendingRows[id]||metadataRows[id]||categoryRows[id]||phase==='saving'||phase==='unknown');}
- useEffect(()=>{setSelection([]);setBulkMessage('');},[p.period.from,p.period.to]);
  useEffect(()=>{
   const signature=requestedAccount?[requestedAccount,requestedFrom,requestedTo].join(':'):null;
   if(signature===externalScope.current)return;
@@ -78,7 +86,7 @@ export function AccountLedger(p:Props){
  },[data,result.loading,filters.offset,setFilters]);
  async function applyBulk(){
   if(bulkBusy||!bulkType||!selectedRows.length)return;
-  setBulkBusy(true);setBulkMessage('');
+  setBulkBusy(true);setBatch(current=>({...current,message:''}));
   const targets=selectedRows.slice(0,50),remaining:LedgerRow[]=[],totals={saved:0,pending:0,skipped:0,failed:0};
   // Bound concurrent writes. Each command uses the version observed when its checkbox was selected.
   let next=0;
@@ -93,8 +101,8 @@ export function AccountLedger(p:Props){
   }
   try{
    await Promise.all(Array.from({length:Math.min(4,targets.length)},worker));
-   setSelection(remaining);
-   setBulkMessage('금융유형 일괄 결과 · 저장 '+totals.saved+'건 · 연결 대기 '+totals.pending+'건 · 제외 '+totals.skipped+'건 · 확인 필요 '+totals.failed+'건');
+   const message='금융유형 일괄 결과 · 저장 '+totals.saved+'건 · 연결 대기 '+totals.pending+'건 · 제외 '+totals.skipped+'건 · 확인 필요 '+totals.failed+'건';
+   setBatch(current=>current.generation===batch.generation?{...current,selection:remaining,message}:current);
    cache.mutate('transaction');
   }finally{setBulkBusy(false);}
  }

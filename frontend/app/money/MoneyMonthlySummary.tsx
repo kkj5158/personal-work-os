@@ -31,7 +31,7 @@ function Donut({title,total,totalLabel,rows,selected,selection,onSelect,onBack,u
   {rows.some(row=>row.amount<0)&&<small className="money-muted">음수 항목이 있어 구성비 대신 부호가 있는 금액을 표시합니다.</small>}
  </section>;
 }
-export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filter,onFilter,navigate}:{from:string;to:string;categories:Category[];scope:string[]|null;loanAccounts:string[]|null;filter:MonthlyFilter|null;onFilter:(filter:MonthlyFilter|null)=>boolean;navigate?:(path:string)=>void}){
+export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filter,onFilter}:{from:string;to:string;categories:Category[];scope:string[]|null;loanAccounts:string[]|null;filter:MonthlyFilter|null;onFilter:(filter:MonthlyFilter|null)=>boolean;navigate?:(path:string)=>void}){
  const metrics=useMoneyData<V4Summary>(loanAccounts===null?null:v4Path(from,to,scope));
  const data=metrics.data;
  const cache=useMoneyCache();
