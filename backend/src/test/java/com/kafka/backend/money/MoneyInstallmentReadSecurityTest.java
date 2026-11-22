@@ -48,7 +48,7 @@ class MoneyInstallmentReadSecurityTest {
   when(unified.loanRepayments(anyString(),anyString(),isNull())).thenAnswer(call->{
    assertThat(users.getCurrentUserId()).isEqualTo(owner);
    return new MoneyUnifiedBookkeepingService.LoanRepaymentSummary("KRW","0",
-       new MoneyUnifiedBookkeepingService.RepaymentBreakdown(List.of(),new MoneyUnifiedBookkeepingService.RepaymentSplit("0","0","0")),0);
+       new MoneyUnifiedBookkeepingService.RepaymentBreakdown(List.of(),new MoneyUnifiedBookkeepingService.RepaymentSplit("0","0","0","0")),0);
   });
   mvc.perform(get(summary+"&userId="+UUID.randomUUID()).with(jwt().jwt(j->j.subject(owner.toString()))))
       .andExpect(status().isOk()).andExpect(jsonPath("$.loanRepayment").value("0"))

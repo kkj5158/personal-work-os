@@ -28,6 +28,7 @@ class MoneyAccountLedgerSecurityTest {
   mvc.perform(get("/api/money/account-ledger?from=2026-09-01&to=2026-09-30")).andExpect(status().isUnauthorized());
   mvc.perform(get("/api/money/account-ledger/pending?from=2026-09-01&to=2026-09-30")).andExpect(status().isUnauthorized());
   mvc.perform(get(row)).andExpect(status().isUnauthorized());
+  mvc.perform(patch(row+"/financial-type").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
   for(String action:List.of("preview","execute","metadata","category"))mvc.perform(post(row+"/"+action).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());verifyNoInteractions(service);
  }
  @Test void identityComesFromJwtAndForeignRowRemainsIndistinguishableFromMissing()throws Exception{
@@ -35,6 +36,13 @@ class MoneyAccountLedgerSecurityTest {
   when(service.read(anyString(),anyString(),isNull(),isNull(),eq("ALL"),isNull(),eq(50),eq(0))).thenAnswer(call->{assertThat(users.getCurrentUserId()).isEqualTo(owner);return Map.of("items",List.of(),"total",0);});
   mvc.perform(get("/api/money/account-ledger?from=2026-09-01&to=2026-09-30&userId="+foreign).with(jwt().jwt(j->j.subject(owner.toString())))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
   when(service.row(foreign)).thenThrow(new ResourceNotFoundException("소유 거래를 찾을 수 없습니다."));mvc.perform(get("/api/money/account-ledger/rows/"+foreign).with(jwt().jwt(j->j.subject(owner.toString())))).andExpect(status().isNotFound());
+ }
+ @Test void directTypeRejectsAConcurrentVersionWithConflict()throws Exception{
+  UUID id=UUID.randomUUID();
+  when(service.financialType(eq(id),any())).thenThrow(new OptimisticLockConflictException("거래 버전 충돌"));
+  mvc.perform(patch("/api/money/account-ledger/rows/"+id+"/financial-type").with(jwt())
+      .contentType("application/json").content("{\"requestId\":\""+UUID.randomUUID()+"\",\"expectedVersion\":0,\"financialType\":\"EXPENSE\"}"))
+      .andExpect(status().isConflict());
  }
  @Test void malformedAndCombinedAccountIdentifiersReturn400()throws Exception{
   UUID owner=UUID.randomUUID();

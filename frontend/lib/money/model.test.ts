@@ -71,7 +71,7 @@ test("MONEY shell opens reconciliation and preserves only a valid account contex
   const account = "12345678-1234-1234-1234-123456789abc";
   const target = tabTarget(`/money/reconciliation?account=${account}&memo=private&token=private`);
   assert.equal(target?.system, "MONEY SYS");
-  assert.equal(target?.title, "MONEY SYS · 잔액 대사");
+  assert.equal(target?.title, "MONEY SYS · 잔액 점검");
   assert.equal(target?.route, `/money/reconciliation?account=${account}`);
   assert.equal(tabTarget("/money/reconciliation?account=private-text")?.route, "/money/reconciliation");
 });

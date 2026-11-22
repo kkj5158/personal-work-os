@@ -1,15 +1,15 @@
 # MONEY account transaction ledger V1.2
 
 `/money/ledger` is the account perspective on existing `money_transactions` and
-`money_transaction_sources`. It creates no financial ledger, account balance store,
-category system, or migration. MONEY navigation places 계좌 거래장 immediately after
+`money_transaction_sources`. Owner financial-type decisions are recorded separately
+from these cash facts. MONEY navigation places 계좌 거래장 immediately after
 가계부 in 02 · 거래 및 장부. Opening balances and balance adjustment anchors remain in
 their existing account/reconciliation tools, rather than ordinary movement rows.
 
 ## Read API
 
 `GET /api/money/account-ledger` accepts required inclusive KST dates `from`, `to`,
-optional single UUID `accountId`, `type`, `state=ALL|CONFIRMED|UNRESOLVED`, `search`,
+optional single UUID `accountId`, `type`, `state=ALL|CONFIRMED|UNRESOLVED|RELATION_PENDING`, `search`,
 `limit` and `offset`. Omit `accountId` for ALL; repeated parameters, comma-separated
 accounts and `accountIds` combinations are rejected. Existing generic APIs retain
 their original filter contracts. Results use stable occurrence-time/ID pagination.
@@ -21,9 +21,11 @@ matching result, before account scope and pagination. `summary.incoming/outgoing
 is available only for a single account in one currency; it is a period movement,
 never an observed or reconciled balance. ALL has no combined balance.
 
-`display_type` preserves financial types; SAVINGS/SAVINGS_WITHDRAWAL derive from
-canonical TRANSFER and occurrence-time account group history. UNRESOLVED represents
-admitted cash with unresolved meaning, excluded from confirmed semantic statistics.
+`declaredFinancialType` records the owner's selection. Use `canonicalType`,
+`meaningApplied` and `relationStatus` to distinguish its accounting effect and
+remaining work. Confirmed savings totals use the transfer route and historical
+account group membership. An unmatched savings intent may appear in the ledger
+while the cash movement still awaits verification.
 
 `GET /account-ledger/pending` uses the same period/account filters over existing
 Review Required RAW queue rows. Unknown accounts remain in ALL only. RAW has no
@@ -49,10 +51,19 @@ revalidates current evidence under the canonical owner lock. Durable request IDs
 recover through `/bookkeeping/unified/outcomes/{requestId}`. An uncertain response
 does not justify issuing a new request ID.
 
-Type selection only opens a draft. The user reviews the validated effect and
-explicitly confirms it. Account/filter changes close unconfirmed editors and clear
-bulk selections. Pending command identities remain recoverable at ledger level.
-Drafts pin their starting fingerprint; refresh cannot silently advance their basis.
+The ordinary picker sends a single `PATCH /api/money/account-ledger/rows/{id}/financial-type`
+with `requestId`, `expectedVersion` and `financialType`. The response includes
+`intentSaved`, `meaningApplied`, `relationStatus`, `currentVersion` and the row.
+Replay the exact payload and request ID after a lost response. A same-row stale
+version requires a fresh read and an explicit decision on the latest version.
+The advanced editor still previews changes to financial facts and verified links.
+
+The additive Flyway repeatable creates `money_owner_financial_decisions` keyed by
+owner and transaction. Existing rows require no backfill. An unpaired debit
+declared as TRANSFER retains its original outgoing leg. Pending loan repayment,
+loan receipt and refund decisions preserve cash, original purchase and loan
+principal until verified. For existing allocated or matched transactions the
+ledger can persist a requested correction while keeping the verified effects.
 
 `POST /rows/{id}/metadata` edits title/memo with expected transaction version,
 fingerprint and durable request ID, retaining coherent Bookkeeping metadata and

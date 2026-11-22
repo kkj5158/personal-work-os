@@ -1,12 +1,18 @@
 import type {BookRow} from '../../app/money/MoneyWebData';
 export const UNIFIED='/bookkeeping/unified';
-export type UnifiedRow={id:string;type:string;display_type?:string;meaning_state:'CONFIRMED'|'UNRESOLVED';from_account_id:string|null;to_account_id:string|null;amount:number;currency:string;occurred_at:string;transfer_destination_status?:'UNTRACKED_OWNED'|null;occurrence_precision?:'SECOND'|'DAY';title:string|null;memo:string|null;counterparty_text:string|null;version:number;loan_id:string|null;principal:number|null;interest:number|null;fee:number|null;refund_of:string|null;sourceCount:number;sources:{raw_event_id:string;parse_attempt_id:string|null;relationship:string;evidence:string}[];book?:BookRow};
+export type UnifiedRow={id:string;type:string;display_type?:string;declaredFinancialType?:string|null;relationStatus?:string;meaning_state:'CONFIRMED'|'UNRESOLVED';from_account_id:string|null;to_account_id:string|null;amount:number;currency:string;occurred_at:string;transfer_destination_status?:'UNTRACKED_OWNED'|null;occurrence_precision?:'SECOND'|'DAY';title:string|null;memo:string|null;counterparty_text:string|null;version:number;loan_id:string|null;principal:number|null;interest:number|null;fee:number|null;refund_of:string|null;sourceCount:number;sources:{raw_event_id:string;parse_attempt_id:string|null;relationship:string;evidence:string}[];book?:BookRow};
 export type UnifiedCommand={requestId:string;expectedVersion:number;action:string;[key:string]:unknown};
 export type UnifiedOutcome={status:'APPLIED'|'NOT_APPLIED'|'UNKNOWN';result?:{row?:UnifiedRow;undoId?:string;message?:string;reason?:string}};
 export type PendingSave={id:string;command:UnifiedCommand};
 export const typeLabels:Record<string,string>={EXPENSE:'소비',INCOME:'수입',TRANSFER:'이체',REFUND:'환불',LOAN_PAYMENT:'대출 상환',LOAN_RECEIPT:'대출 입금',INITIAL_BALANCE:'시작 잔액',BALANCE_ADJUSTMENT:'잔액 조정'};
 export const financialTypeLabels:Record<string,string>={...typeLabels,SAVINGS:'저축',SAVINGS_WITHDRAWAL:'저축 회수'};
-export function financialLabel(row:UnifiedRow){return row.meaning_state==='UNRESOLVED'?'유형 미확정':financialTypeLabels[row.display_type??row.type]??row.type;}
+export function financialLabel(row:UnifiedRow){
+ if(row.declaredFinancialType&&row.declaredFinancialType!=='UNRESOLVED'){
+  return financialTypeLabels[row.declaredFinancialType]??row.declaredFinancialType;
+ }
+ if(row.meaning_state==='UNRESOLVED'||row.declaredFinancialType==='UNRESOLVED')return '유형 미확정';
+ return financialTypeLabels[row.display_type??row.type]??row.type;
+}
 export function financialOptions(row:UnifiedRow){return allowedTypes(row).flatMap(type=>type==='TRANSFER'?['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL']:[type]);}
 /** UI intentions stay separate from canonical transaction types and command fields. */
 export function selectFinancialOption(row:UnifiedRow,draft:Record<string,unknown>,choice:string){
