@@ -183,6 +183,7 @@ final class StudyQuality {
     receipt.set("generation", output.path("provenance"));
     var reviewed = new HashMap<String, ReviewVerdict>();
     var privateReview = JSON.createObjectNode();
+    if (StudyReasoning.enabled(plan)) privateReview.put("dailyDigest", hash(output.path("followUps").toString()));
     var review = output.path("independentReview");
     if (output.path("provenance").path("provider").asString().equals("codex_cli") || output.has("independentReview")) {
       String version = review.path("version").asString();
@@ -230,6 +231,7 @@ final class StudyQuality {
         var diagnostic = privateReview.withArrayProperty("questions").addObject()
             .put("part", part).put("order", q.path("order").asInt()).put("questionId", id)
             .put("issue", issue).put("evidence", finding.evidence());
+        if (StudyReasoning.enabled(plan)) diagnostic.put("slotDigest", hash(JSON.createArrayNode().add(q).add(k).toString()));
         if (finding.answerCue() != null) diagnostic.put("answerCue", finding.answerCue());
         if (finding.revisedJudgment() != null) diagnostic.put("revisedJudgment", finding.revisedJudgment());
         if (issue.equals("uncertain") && !StudyReasoning.enabled(plan))

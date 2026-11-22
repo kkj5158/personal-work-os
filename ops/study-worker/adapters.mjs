@@ -1,4 +1,4 @@
-import {CONTRACT,preflight} from './reasoning.mjs';
+import {CONTRACT,REVIEW,preflight} from './reasoning.mjs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,7 +52,10 @@ export class CodexAdapter {
   const repairing=Boolean(prior && (targets.length || daily));
   const matches=(a,b)=>a.part===b.part && a.order===b.order;
   // Carry independently accepted designs from an interrupted preflight, or from untouched candidate slots.
-  const retained=job.previousPreflight?.slots??prior?.preflight?.slots.filter(s=>!targets.some(t=>matches(t,s)))??[];
+  const checkpoint=job.previousPreflight??prior?.preflight;
+  if(checkpoint && (checkpoint.version!==CONTRACT || checkpoint.inputDigest!==job.input.inputDigest ||
+      checkpoint.reviewVersion!==REVIEW))throw Error('INVALID_PREFLIGHT_CHECKPOINT');
+  const retained=checkpoint?.slots.filter(s=>job.previousPreflight || !targets.some(t=>matches(t,s)))??[];
   const proof=await preflight(job,this.run.bind(this),retained);
   const provenance={provider:'codex_cli',model:'codex-cli-authenticated-default',promptVersion:versionFor(job)};
   if(proof.slots.some(s=>s.issue))return {preflight:proof,provenance};

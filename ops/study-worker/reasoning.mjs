@@ -100,7 +100,7 @@ const reviewInstruction=[
 
 export async function preflight(job,run,retained=[]){
  const plan=job.input, frozen=Object.entries(plan.blueprint.slots).flatMap(([part,rows])=>rows.map(row=>({...row,part})));
- const kept=new Map(retained.filter(r=>!r.issue).map(r=>[identity(r),r]));
+ const kept=new Map(retained.filter(r=>!r.issue).map(r=>[identity(r),structuredClone(r)]));
  const todo=frozen.filter(s=>!kept.has(identity(s)));
  const proof={version:CONTRACT,reviewVersion:REVIEW,inputDigest:plan.inputDigest,slots:[]};
  if(!todo.length){proof.slots=frozen.map(s=>kept.get(identity(s)));return proof;}
