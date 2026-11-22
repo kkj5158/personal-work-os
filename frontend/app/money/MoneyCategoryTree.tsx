@@ -40,8 +40,8 @@ export function MoneyAnchoredPopover({ children, onClose, label, className = "",
       setPosition({ left,top,ready: true });
     };
     update(); const observer = new ResizeObserver(update); if (popup.current) observer.observe(popup.current);
-    const belongsToChild=(target:EventTarget|null)=>target instanceof Element && target.closest<HTMLElement>("[data-money-popovers]")?.dataset.moneyPopovers?.split(" ").includes(popoverId);
-    const outside = (e: PointerEvent) => { if (!belongsToChild(e.target) && !parent?.contains(e.target as Node)) closeRef.current(); };
+    const belongsToChild=(target:EventTarget|null)=>target instanceof window.Element && target.closest<HTMLElement>("[data-money-popovers]")?.dataset.moneyPopovers?.split(" ").includes(popoverId);
+    const outside = (e: PointerEvent) => { if (!popup.current?.contains(e.target as Node) && !belongsToChild(e.target) && !parent?.contains(e.target as Node)) closeRef.current(); };
     const key = (e: globalThis.KeyboardEvent) => { if(e.key === "Escape") {
       const top=document.querySelectorAll<HTMLElement>("[data-money-popovers]");
       if(top[top.length-1]!==popup.current)return;
