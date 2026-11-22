@@ -67,7 +67,26 @@ tasks.register('studyFont') {
         }
     }
 }
+// Google Fonts OFL CJK coverage for original glyphs absent from Nanum.
+tasks.register('studyFallbackFont') {
+    def destination = layout.buildDirectory.dir('study-fallback-font')
+    def files = ['NotoSansKR.ttf':['NotoSansKR%5Bwght%5D.ttf','194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252'],
+                 'Noto-OFL.txt':['OFL.txt','1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9']]
+    inputs.property('pinnedResources', files.toString())
+    outputs.dir(destination)
+    doLast {
+        files.each { name, spec ->
+            def file = destination.get().file(name).asFile
+            file.parentFile.mkdirs()
+            if (!file.exists()) new URI('https://raw.githubusercontent.com/google/fonts/cc39c4c2c304bc368c9b7c311ea2bcc6013299fe/ofl/notosanskr/' + spec[0]).toURL().withInputStream { input -> file.withOutputStream { it << input } }
+            if (java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString() != spec[1])
+                throw new GradleException('STUDY fallback font integrity mismatch')
+        }
+    }
+}
 tasks.named('processResources') {
+    dependsOn tasks.named('studyFallbackFont')
+    from(layout.buildDirectory.dir('study-fallback-font')) { into 'study-font' }
     dependsOn tasks.named('studyFont')
     from(layout.buildDirectory.dir('study-font')) { into 'study-font' }
 }

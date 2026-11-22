@@ -34,6 +34,8 @@ public class StudyEngine {
   int priorPilotTokens;
   @org.springframework.beans.factory.annotation.Value("${STUDY_V320_PRIOR_CALLS:0}")
   int priorPilotCalls;
+  @org.springframework.beans.factory.annotation.Value("${STUDY_V320_CLOSEOUT_ARCHIVE_SHA256:}")
+  String closeoutArchiveDigest = "";
   // Saved V3.1.3 fixtures replay their original policy in the isolated regression suite.
   boolean historicalFixturePolicy() { return false; }
   boolean pilot(UUID owner) { return owner.toString().equalsIgnoreCase(pilotOwner); }
@@ -330,6 +332,35 @@ public class StudyEngine {
     UUID owner = study.owner();
     return tx(
         () -> excerpt(excerpts.findByOwnerIdAndId(owner, id).orElseThrow(StudyException::missing)));
+  }
+
+  ObjectNode continueCampaign(String material, String raw) {
+    UUID owner=study.owner();
+    require(pilot(owner) && raw.length()<900000 && !closeoutArchiveDigest.isBlank()
+        && hash(raw).equals(closeoutArchiveDigest));
+    return tx(()->{
+      workspace(owner);
+      var existing=jobs.findByOwnerIdAndKindAndJobKey(owner,"GENERATE","pilot/v320/0");
+      if(existing.isPresent()) {
+        var existingJob=existing.get();
+        require(StudyCampaign.state(existingJob).path("continuation").path("archiveDigest").asString("").equals(closeoutArchiveDigest));
+        require(object(existingJob.input).path("selectedMaterialIds").path(0).asString().equals(material));
+        return publicJob(existingJob);
+      }
+      var archive=object(raw);
+      require(priorPilotCalls==StudyCampaignContinuation.OLD_CALLS && priorPilotTokens==StudyCampaignContinuation.OLD_TOKENS);
+      var created=plan(owner,LocalDate.parse(archive.path("date").asString()),1,"pilot/v320",Set.of(material),
+          Map.of(material,new StudySourceSelection.PageRange(26,53)),archive.path("golden")).getFirst();
+      var job=owned(owner,UUID.fromString(created.path("id").asString()));
+      var plan=object(job.input);
+      plan.put("choiceOptionCount",archive.path("choiceOptionCount").asInt()).put("parentCampaignId",archive.path("campaignId").asString());
+      plan.remove("inputDigest");plan.put("inputDigest",hash(plan.toString()));
+      var state=StudyCampaignContinuation.restore(plan,archive,closeoutArchiveDigest);
+      plan.remove("inputDigest");plan.put("inputDigest",hash(plan.toString()));
+      for(var slot:state.path("slots"))slot.asObject().put("manifestDigest",hash(plan.path("inputDigest")+"/"+slot.path("manifest")));
+      job.input=plan.toString();job.result=state.toString();
+      return publicJob(job);
+    });
   }
 
   public List<ObjectNode> plan(JsonNode request) {
@@ -871,6 +902,23 @@ public class StudyEngine {
         x.put("digest",hash(p.path("inputDigest").asString()+"/"+r.path("manifest")+"/"+c));
         x.set("question",StudyCampaign.learnerQuestion(c.path("question")));x.set("reading",StudyCampaign.spans(p,r.path("manifest").path("spanIds")));
         if(keys){x.set("key",c.path("key"));x.set("finding",r.path("finding"));x.set("review",r.path("review"));}
+      }
+      if(keys && s.has("continuation")){
+        out.set("campaignId",s.path("campaignId"));
+        var calibration=out.putArray("calibration");int index=0;
+        for(var control:p.path("controls")){
+          var item=calibration.addObject().put("reference",control.path("referenceId").asString("historical-control"))
+              .put("expected",control.path("expected").asString());
+          var verdict=s.path("controlReview").path("items").path(index++);
+          for(String field:List.of("issue","field","evidence","repair","grounded","hintsSafe","reasoning"))if(verdict.has(field))item.set(field,verdict.path(field));
+        }
+        var ledger=out.putArray("ledger");
+        for(var call:s.path("calls")){
+          var row=ledger.addObject();
+          for(String field:List.of("callId","campaign","stage","slot","revision","policy","status","usage","observedModel","observedEffort","inputDigest"))
+            if(call.has(field))row.set(field,call.path(field));
+        }
+        if(s.has("assembly"))out.set("followUps",s.path("assembly").path("followUps"));
       }
       return out;
     });

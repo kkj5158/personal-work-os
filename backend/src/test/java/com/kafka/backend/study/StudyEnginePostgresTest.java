@@ -196,6 +196,62 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     } finally {current.set(OWNER);engine.pilotOwner="";}
   }
 
+  @Test
+  @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named="STUDY_PRIVATE_CLOSEOUT",matches=".+")
+  void privateCloseoutReplaysOriginalReceiptsAndBindsHostedSources() throws Exception {
+    var raw=Files.readString(Path.of(System.getenv("STUDY_PRIVATE_CLOSEOUT")));
+    var archive=JSON.readTree(raw);var pdf=Files.readAllBytes(Path.of(System.getenv("STUDY_PRIVATE_PILOT")));
+    material();var ticket=upload(pdf,"material","chapter.pdf");complete(ticket);
+    var idx=UUID.fromString(engine.index(UUID.fromString(ticket.path("id").asString())).path("id").asString());engine.run(idx);
+    engine.pilotOwner=OWNER.toString();engine.closeoutArchiveDigest=hash(raw);engine.priorPilotCalls=16;engine.priorPilotTokens=398623;
+    try{
+      assertThatThrownBy(()->engine.continueCampaign("source",raw+" ")).isInstanceOf(StudyException.class);
+      var created=engine.continueCampaign("source",raw);var id=UUID.fromString(created.path("id").asString());
+      assertThat(engine.continueCampaign("source",raw).path("id")).isEqualTo(created.path("id"));
+      var j=engine.tx(()->engine.owned(OWNER,id));var plan=JSON.readTree(j.input);var state=StudyCampaign.state(j);
+      assertThat(state.path("calls")).isEqualTo(archive.path("calls"));
+      assertThat(state.path("continuation").path("originalSlots")).isEqualTo(archive.path("slots"));
+      assertThat(state.path("spent").asInt()).isEqualTo(398623);
+      assertThat(state.path("slots").size()).isEqualTo(8);
+      int[] expected={1,1,1,1,1,1,1,0};
+      for(int i=0;i<8;i++){
+        var r=state.path("slots").path(i);assertThat(r.path("cycles").asInt()).isEqualTo(expected[i]);
+        if(i==7)continue;
+        var cand=r.path("candidate");var old=archive.path("slots").path(i).path("candidate");
+        assertThat(cand.path("question").path("prompt")).isEqualTo(old.path("question").path("prompt"));
+        assertThat(cand.path("key").path("hints")).isEqualTo(old.path("key").path("hints"));
+        var byId=new java.util.HashMap<String,JsonNode>();
+        StudyCampaign.spans(plan,r.path("manifest").path("spanIds")).forEach(v->byId.put(v.path("id").asString(),v));
+        var single=StudyCampaign.checkCandidate(plan,r,cand);
+        if(i<4 || i==6){
+          assertThat(single).isEqualTo(i==6?"CITATION_LIMIT":"RUBRIC_COUNT");
+          assertThatThrownBy(()->validateItemKey(cand.path("key"),cand.path("question"),plan,true,byId)).isInstanceOf(StudyException.class);
+        }else{
+          assertThat(single).isEmpty();validateItemKey(cand.path("key"),cand.path("question"),plan,true,byId);
+        }
+      }
+      var learner=engine.campaignPreview(id,false);var owner=engine.campaignPreview(id,true);
+      assertThat(learner.has("ledger")).isFalse();assertThat(owner.path("ledger").size()).isEqualTo(16);
+      assertThat(owner.path("items").size()).isEqualTo(7);
+      for(boolean keys:List.of(false,true))try(var doc=Loader.loadPDF(engine.campaignPdf(id,keys))){
+        var rendered=new PDFTextStripper().getText(doc);assertThat(rendered).doesNotContain("[U+");
+        if(keys)assertThat(rendered).contains("四");
+      }
+      var worker=worker();var claim=engine.claimWorker(worker,id,true);
+      var lease=UUID.fromString(claim.path("leaseToken").asString());var initial=engine.reserveCall(worker,id,lease);
+      assertThat(initial.path("stage").asString()).isEqualTo("blind");
+      assertThat(initial.path("payload").size()).isEqualTo(6);
+      assertThat(initial.path("payload").path(2).path("learner").path("options").size()).isPositive();
+      assertThat(engine.reserveCall(worker,id,lease).path("action").asString()).isEqualTo("RECONCILE");
+      state.set("controlBlind",archive.path("oldControlBlind"));
+      var review=StudyCampaign.next(state,plan).path("payload");
+      assertThat(review.path(0).path("referenceContext").has("scenarioProvenance")).isTrue();
+      assertThat(review.path(0).path("referenceContext").has("rubric")).isTrue();
+      assertThat(review.path(0).has("expected")).isFalse();
+      current.set(OTHER);assertThatThrownBy(()->engine.campaignPreview(id,true)).isInstanceOf(StudyException.class);
+    } finally {current.set(OWNER);engine.pilotOwner="";engine.closeoutArchiveDigest="";engine.priorPilotCalls=0;engine.priorPilotTokens=0;}
+  }
+
   ObjectNode output(JsonNode plan, String marker) {
     ObjectNode n = JSON.createObjectNode().put("topic", "작은 실험 학습 " + marker);
     var keys = n.putArray("keys");

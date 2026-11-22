@@ -56,6 +56,11 @@ class StudyEngineController {
     return engine.passage(id);
   }
 
+  @PostMapping("/campaign/continue")
+  public JsonNode continueCampaign(@RequestParam String materialId,@RequestBody String archive) {
+    return engine.continueCampaign(materialId,archive);
+  }
+
   @PostMapping("/plan")
   public List<?> plan(@RequestBody JsonNode input) {
     return engine.plan(input);

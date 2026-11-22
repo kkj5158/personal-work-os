@@ -15,6 +15,8 @@ import tools.jackson.databind.*;
 final class StudyPdfRenderer implements AutoCloseable {
   final PDDocument doc = new PDDocument();
   final PDType0Font font;
+  PDType0Font fallback;
+  final Map<Integer, PDType0Font> glyphFonts = new HashMap<>();
   PDPageContentStream stream;
   float y;
   int pages;
@@ -51,9 +53,38 @@ final class StudyPdfRenderer implements AutoCloseable {
     stream.beginText();
     stream.setFont(font, SIZE);
     stream.newLineAtOffset(LEFT, y);
-    stream.showText(s);
+    if (!privateDraft) stream.showText(s);
+    else {
+      PDType0Font current = font;
+      var run = new StringBuilder();
+      for (int cp : s.codePoints().toArray()) {
+        var chosen = draftFont(cp);
+        if (chosen != current) {
+          if (!run.isEmpty()) stream.showText(run.toString());
+          run.setLength(0);current=chosen;stream.setFont(current,SIZE);
+        }
+        run.appendCodePoint(cp);
+      }
+      if (!run.isEmpty()) stream.showText(run.toString());
+    }
     stream.endText();
     y -= LINE;
+  }
+
+  PDType0Font draftFont(int cp) throws IOException {
+    var known=glyphFonts.get(cp);
+    if (known!=null) return known;
+    String ch=Character.toString(cp);
+    PDType0Font selected=font;
+    try { font.getStringWidth(ch); }
+    catch (IllegalArgumentException missing) {
+      if(fallback==null)try(var input=StudyPdfRenderer.class.getResourceAsStream("/study-font/NotoSansKR.ttf")){
+        if(input==null)throw new IOException("STUDY_FALLBACK_FONT_MISSING");
+        fallback=PDType0Font.load(doc,input,true);
+      }
+      fallback.getStringWidth(ch);selected=fallback;
+    }
+    glyphFonts.put(cp,selected);return selected;
   }
 
   void text(String text) throws IOException {
@@ -65,15 +96,12 @@ final class StudyPdfRenderer implements AutoCloseable {
         String ch = new String(Character.toChars(point));
         float w;
         try {
-          w = font.getStringWidth(ch) / 1000 * SIZE;
+          w = (privateDraft ? draftFont(point) : font).getStringWidth(ch) / 1000 * SIZE;
         } catch (IllegalArgumentException unsupported) {
           // Compatibility glyphs such as circled list numbers retain their text meaning.
           // A genuinely missing character still fails the pair instead of becoming a blank box.
           String plain = java.text.Normalizer.normalize(ch, java.text.Normalizer.Form.NFKC);
-          if (plain.equals(ch)) {
-            if (!privateDraft) throw unsupported;
-            plain = "[U+" + Integer.toHexString(point).toUpperCase(Locale.ROOT) + "]";
-          }
+          if (privateDraft || plain.equals(ch)) throw unsupported;
           ch = plain;
           w = font.getStringWidth(ch) / 1000 * SIZE;
         }
@@ -135,7 +163,7 @@ final class StudyPdfRenderer implements AutoCloseable {
     doc.getDocument().setDocumentID(ids);
     page();
     text("STUDY · " + book.path("date").asString() + " · v" + book.path("version").asInt());
-    if (privateDraft) text("소유자 검토 초안 · 글꼴에 없는 문자는 유니코드 번호로 표시합니다. 원문은 자료 보기에서 확인하세요.");
+    if (privateDraft) text("소유자 검토 초안 · 발행 전");
     text(kind.equals("question") ? "학습 문제집 · 이름: __________________" : "정답·해설 · 소유자 명시적 검토용");
     text(book.path("topic").asString());
     space(1);

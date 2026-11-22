@@ -247,6 +247,11 @@ final class StudyEngineRules {
       text(k, "explanation", 16000);
       strings(k.path("rubric"), 30);
       require(k.path("rubric").size() > 0);
+      if(StudyCampaign.enabled(plan)){
+        var rubric=k.path("rubric");
+        require(rubric.size()>=StudyCampaign.minRubrics(q.path("kind").asString()) && rubric.size()<=StudyCampaign.MAX_RUBRICS
+            && rubric.valueStream().map(v->normalized(v.asString())).distinct().count()==rubric.size());
+      }
       if (!quality) {
         strings(k.path("followUp"), 10);
         require(k.path("followUp").size() == 10 && !k.has("hints") && !k.has("reasoningMoves"));
@@ -254,7 +259,7 @@ final class StudyEngineRules {
       require(
           k.path("citations").isArray()
               && k.path("citations").size() > 0
-              && k.path("citations").size() <= 4);
+              && k.path("citations").size() <= StudyCampaign.MAX_CITATIONS);
       boolean primaryGrounded = false;
       for (JsonNode c : k.path("citations")) {
         fields(c, "excerptId", "quote");
