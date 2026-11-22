@@ -172,7 +172,7 @@ public class MoneyUnifiedBookkeepingService {
  Map<String,Object> applyValidatedEdit(UUID id,Edit input){
   var before=fact(id);version(before,input.expectedVersion());active(before);require(before.get("transfer_destination_status")==null||input.action().equals("ATTACH_SOURCE"),"관리 제외 본인 계좌 이체는 은행 대사 변경 이력으로 먼저 복구하세요.");UUID undo=null;
   switch(input.action()){
-   case "TYPE" -> type(id,input,before);
+   case "TYPE" -> {type(id,input,before);new MoneyOwnerFinancialDecision(db,owner()).supersede(id,input.requestId(),input.type());}
    case "CORRECT" -> correct(id,input,before);
    case "LINK_TRANSFER" -> link(id,input,before);
    case "UNLINK_TRANSFER" -> undo=unlink(id,before);

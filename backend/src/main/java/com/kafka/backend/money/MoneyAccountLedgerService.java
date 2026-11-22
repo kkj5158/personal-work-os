@@ -22,7 +22,7 @@ public class MoneyAccountLedgerService {
  private final MoneyService money;private final MoneyUnifiedBookkeepingService unified;private final MoneyWebService web;
  private final MoneyCommandService commands;private final TransactionTemplate previewTransaction;
  private static final Set<String> TYPES=Set.of("EXPENSE","INCOME","TRANSFER","SAVINGS","SAVINGS_WITHDRAWAL","LOAN_PAYMENT","LOAN_RECEIPT","REFUND","UNRESOLVED");
- private static final String DISPLAY="case when t.meaning_state='UNRESOLVED' then 'UNRESOLVED' else "+MoneySavingsReadService.displayTypeSql("t")+" end";
+ private static final String DISPLAY=MoneyOwnerFinancialDecision.DISPLAY;
  public MoneyAccountLedgerService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,MoneyService money,MoneyUnifiedBookkeepingService unified,MoneyWebService web,MoneyCommandService commands,PlatformTransactionManager manager){
   this.db=db;this.users=users;this.json=json;this.money=money;this.unified=unified;this.web=web;this.commands=commands;
   this.previewTransaction=new TransactionTemplate(manager);this.previewTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
@@ -31,14 +31,16 @@ public class MoneyAccountLedgerService {
  private record Query(String from,List<Object> args){}
  private Query filter(String from,String to,String type,String state,String search,boolean raw){
   MoneyService.text(search,200,false,"검색");LocalDate first=LocalDate.parse(from),last=LocalDate.parse(to);require(!first.isAfter(last),"기간을 확인하세요.");
-  require(type==null||type.isBlank()||TYPES.contains(type),"금융 유형 필터를 확인하세요.");require(Set.of("ALL","CONFIRMED","UNRESOLVED").contains(state),"금융 상태 필터를 확인하세요.");
+  require(type==null||type.isBlank()||TYPES.contains(type),"금융 유형 필터를 확인하세요.");require(Set.of("ALL","CONFIRMED","UNRESOLVED","RELATION_PENDING").contains(state),"금융 상태 필터를 확인하세요.");
   var args=new ArrayList<Object>();args.add(owner());args.add(Timestamp.from(first.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));args.add(Timestamp.from(last.plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));
-  String sql=raw?" from queue q where q.kind='RAW' and q.state in ('PENDING','DEFERRED') and q.\"occurredAt\">=? and q.\"occurredAt\"<?":" from money_transactions t where t.user_id=? and t.merged_into is null and not t.excluded and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and t.occurred_at>=? and t.occurred_at<?";
+  String sql=raw?" from queue q where q.kind='RAW' and q.state in ('PENDING','DEFERRED') and q.\"occurredAt\">=? and q.\"occurredAt\"<?":" from money_transactions t"+MoneyOwnerFinancialDecision.JOIN+" where t.user_id=? and t.merged_into is null and not t.excluded and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and t.occurred_at>=? and t.occurred_at<?";
   if(raw){
    // RAW has no confirmed financial meaning. A confirmed/type-specific filter cannot promote it into money.
-   if("CONFIRMED".equals(state)||type!=null&&!type.isBlank()&&!"UNRESOLVED".equals(type))sql+=" and false";
+   if("CONFIRMED".equals(state)||"RELATION_PENDING".equals(state)||type!=null&&!type.isBlank()&&!"UNRESOLVED".equals(type))sql+=" and false";
   }else{
-   if(!"ALL".equals(state)){sql+=" and t.meaning_state=?";args.add(state);}
+   if("RELATION_PENDING".equals(state))sql+=" and ("+MoneyOwnerFinancialDecision.RELATION+")<>'NONE'";
+   else if("UNRESOLVED".equals(state))sql+=" and ("+DISPLAY+")='UNRESOLVED'";
+   else if("CONFIRMED".equals(state))sql+=" and t.meaning_state='CONFIRMED'";
    if(type!=null&&!type.isBlank()){sql+=" and "+DISPLAY+"=?";args.add(type);}
   }
   if(search!=null&&!search.isBlank()){
@@ -55,19 +57,19 @@ public class MoneyAccountLedgerService {
  @Transactional(readOnly=true) public Map<String,Object> read(String from,String to,UUID accountId,String type,String state,String search,int limit,int offset){
   MoneyService.page(limit,offset);selected(accountId);var query=filter(from,to,type,state,search,false);var accountCounts=counts(query,false);var args=new ArrayList<>(query.args());String where=query.from();
   if(accountId!=null){where+=" and (t.from_account_id=? or t.to_account_id=?)";args.add(accountId);args.add(accountId);}
-  var summary=clean(db.queryForMap("select count(*) as total,count(*) filter(where t.meaning_state='UNRESOLVED') as unresolved"+where,args.toArray()));
+  var summary=clean(db.queryForMap("select count(*) as total,count(*) filter(where ("+DISPLAY+")='UNRESOLVED') as unresolved,count(*) filter(where ("+MoneyOwnerFinancialDecision.RELATION+")<>'NONE') as \"relationPending\""+where,args.toArray()));
   var currencies=db.queryForList("select distinct t.currency"+where+" order by t.currency",String.class,args.toArray());summary.put("currencies",currencies);
   // Amounts are only meaningful under one account and one currency; ALL never exposes an aggregate balance.
   summary.put("incoming",null);summary.put("outgoing",null);
   if(accountId!=null&&currencies.size()<=1){var sums=new ArrayList<Object>();sums.add(accountId);sums.add(accountId);sums.addAll(args);summary.putAll(db.queryForMap("select coalesce(sum(t.amount) filter(where t.to_account_id=?),0) as incoming,coalesce(sum(t.amount) filter(where t.from_account_id=?),0) as outgoing"+where,sums.toArray()));}
-  args.add(limit);args.add(offset);var items=db.queryForList("select t.*,"+DISPLAY+" as display_type"+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
+  args.add(limit);args.add(offset);var items=db.queryForList("select t.*,"+MoneyOwnerFinancialDecision.FIELDS+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
   enrich(items,accountId);return Map.of("items",items,"total",summary.get("total"),"accountCounts",accountCounts,"summary",summary);
  }
  private void enrich(List<Map<String,Object>> items,UUID accountId){
   if(items.isEmpty())return;UUID[] ids=items.stream().map(row->(UUID)row.get("id")).toArray(UUID[]::new);
   var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
   var tracked=new HashSet<UUID>(db.queryForList("select t.id from money_transactions t join money_accounts a on a.user_id=t.user_id and a.id=coalesce(t.from_account_id,t.to_account_id) join money_tracking_accounts k on k.user_id=t.user_id and k.account_id=a.id and k.kind=t.type where t.user_id=? and t.id=any(?) and not a.archived and coalesce(a.include_in_statistics,true)",UUID.class,owner(),ids));
-  var sources=new HashMap<UUID,List<Map<String,Object>>>();for(var source:db.queryForList("select transaction_id,raw_event_id,parse_attempt_id,relationship,evidence::text from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",owner(),ids)){UUID id=(UUID)source.remove("transaction_id");sources.computeIfAbsent(id,k->new ArrayList<>()).add(source);}
+  var sources=new HashMap<UUID,List<Map<String,Object>>>();for(var source:db.queryForList("select transaction_id,raw_event_id,parse_attempt_id,relationship from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",owner(),ids)){UUID id=(UUID)source.remove("transaction_id");sources.computeIfAbsent(id,k->new ArrayList<>()).add(source);}
   var origins=new HashMap<UUID,String>();
   for(var origin:db.queryForList("""
    select distinct on(a.subject_id) a.subject_id,a.next_value->>'origin' as origin
@@ -77,13 +79,14 @@ public class MoneyAccountLedgerService {
     order by a.subject_id,a.created_at desc,a.id desc
    """,owner(),ids))origins.put((UUID)origin.get("subject_id"),(String)origin.get("origin"));
   List<MoneyAccount> accounts=null;
-  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible="CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME").contains(item.get("type"));item.put("categoryEligible",eligible);
+  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible=MoneyOwnerFinancialDecision.meaningApplied(item)&&"CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME").contains(item.get("type"));item.put("categoryEligible",eligible);
    if(eligible&&books.containsKey(id)){var book=books.get(id);boolean inScope=tracked.contains(id)&&!Boolean.TRUE.equals(book.get("excluded"));item.put("classificationInScope",inScope);book.put("categoryWritePath",inScope?"RECOMMENDATION":"ACCOUNT_LEDGER");book.put("categoryScopeReason",inScope?"":"가계부 추적·통계 범위 밖입니다. 직접 분류는 이 거래에만 적용되며 통계 포함 설정은 바뀌지 않습니다.");item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
    else item.put("category_id",null);
    var links=sources.getOrDefault(id,List.of());item.put("sources",links);item.put("sourceCount",links.size());
-   item.put("meaningOrigin",origins.get(id));
+   item.put("meaningOrigin",item.get("declaredFinancialType")!=null?"OWNER":origins.get(id));
+   item.put("meaningApplied",MoneyOwnerFinancialDecision.meaningApplied(item));
    boolean quick=false;
-   if("UNRESOLVED".equals(item.get("meaning_state"))&&links.size()==1&&links.getFirst().get("parse_attempt_id")!=null){
+   if(item.get("declaredFinancialType")==null&&"UNRESOLVED".equals(item.get("meaning_state"))&&links.size()==1&&links.getFirst().get("parse_attempt_id")!=null){
     if(accounts==null)accounts=money.accounts();
     quick=MoneyFinancialEvidence.quickProof(db,owner(),money,money.transaction(id),accounts)!=null;
    }
@@ -100,7 +103,7 @@ public class MoneyAccountLedgerService {
   long total=db.queryForObject(MoneyReviewService.QUEUE+"select count(*)"+where,Long.class,args.toArray());args.add(limit);args.add(offset);
   var items=db.queryForList(MoneyReviewService.QUEUE+"select q.*"+where+" order by q.\"occurredAt\" desc,q.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
   items.forEach(row->{if(row.get("candidate")!=null)row.put("candidate",json.readValue(row.get("candidate").toString(),Map.class));});
-  var summary=new LinkedHashMap<String,Object>();summary.put("total",total);summary.put("unresolved",0);summary.put("incoming",null);summary.put("outgoing",null);summary.put("currencies",List.of());
+  var summary=new LinkedHashMap<String,Object>();summary.put("total",total);summary.put("unresolved",0);summary.put("relationPending",0);summary.put("incoming",null);summary.put("outgoing",null);summary.put("currencies",List.of());
   return Map.of("items",items,"total",total,"accountCounts",accountCounts,"summary",summary);
  }
  private Map<String,Object> evidence(UUID id){
@@ -113,9 +116,43 @@ public class MoneyAccountLedgerService {
   row.put("loan",db.queryForList("select l.id,l.version,l.remaining_principal,l.status from money_loans l join money_transactions t on t.loan_id=l.id and t.user_id=l.user_id where t.user_id=? and t.id=?",owner(),id));
   row.put("refundOriginal",db.queryForList("select p.id,p.version,p.amount,coalesce(b.version,0) override_version,coalesce(r.version,0) projection_version from money_transactions t join money_transactions p on p.id=t.refund_of and p.user_id=t.user_id left join money_bookkeeping_overrides b on b.transaction_id=p.id and b.user_id=p.user_id and b.slot=0 left join money_rule_projections r on r.transaction_id=p.id and r.user_id=p.user_id where t.user_id=? and t.id=?",owner(),id));return row;
  }
- @Transactional(readOnly=true) public Map<String,Object> row(UUID id){var evidence=evidence(id);String fingerprint=commands.fingerprint(evidence);var result=new LinkedHashMap<>(unified.row(id));enrich(List.of(result),null);result.put("fingerprint",fingerprint);result.put("audit",new MoneyMeaningService(db,users,json).history(id));return result;}
+ @Transactional(readOnly=true) public Map<String,Object> row(UUID id){var evidence=evidence(id);String fingerprint=commands.fingerprint(evidence);var result=clean(new MoneyOwnerFinancialDecision(db,owner()).fact(id,false));enrich(List.of(result),null);result.put("fingerprint",fingerprint);result.put("audit",new MoneyMeaningService(db,users,json).history(id));return result;}
  public record EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit,String previewToken){
   public EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit){this(fingerprint,edit,null);}
+ }
+ public record FinancialType(UUID requestId,Long expectedVersion,String financialType){}
+ public Map<String,Object> financialType(UUID id,FinancialType input){
+  require(input!=null&&input.financialType()!=null&&TYPES.contains(input.financialType()),"금융 유형을 선택하세요.");
+  var receipt=commands.executeFinancialType(owner(),input.requestId(),List.of(id,input),()->{
+   var decisions=new MoneyOwnerFinancialDecision(db,owner());
+   var before=decisions.fact(id,true);
+   decisions.apply(id,input,before);
+   var latest=clean(decisions.fact(id,false));
+   enrich(List.of(latest),null);
+   String relation=latest.get("relationStatus").toString();
+   var result=new LinkedHashMap<String,Object>();
+   result.put("requestId",input.requestId());result.put("transactionId",id);
+   result.put("status","NONE".equals(relation)?"APPLIED":"INTENT_SAVED_PENDING");
+   result.put("intentSaved",true);result.put("meaningApplied",latest.get("meaningApplied"));
+   result.put("declaredFinancialType",input.financialType());result.put("canonicalType",latest.get("canonicalType"));
+   result.put("relationStatus",relation);result.put("currentVersion",latest.get("version"));
+   audit(id,"ACCOUNT_LEDGER_FINANCIAL_TYPE",decisionSnapshot(before),decisionSnapshot(latest));
+   result.put("row",latest);return result;
+  });
+  @SuppressWarnings("unchecked") var result=(Map<String,Object>)receipt.get("result");
+  if("NOT_APPLIED".equals(receipt.get("status"))){
+   String message=Objects.toString(result.get("message"),"금융 유형을 저장할 수 없습니다.");
+   if("VERSION_CONFLICT".equals(result.get("reason")))throw new OptimisticLockConflictException(message);
+   if("NOT_FOUND".equals(result.get("reason")))throw new ResourceNotFoundException(message);
+   throw new InvalidRequestException(message);
+  }
+  return result;
+ }
+ private static Map<String,Object> decisionSnapshot(Map<String,Object> row){
+  var snapshot=new LinkedHashMap<String,Object>();
+  for(String key:List.of("version","type","meaning_state","declaredFinancialType","canonicalType","relationStatus","decisionRequestId","decisionVersion","decisionActorId"))
+   snapshot.put(key,row.get(key));
+  return snapshot;
  }
  public record Metadata(UUID requestId,Long expectedVersion,String fingerprint,String title,String memo){}
  public record Category(UUID requestId,Long expectedVersion,String fingerprint,UUID categoryId,Long expectedClassificationVersion,Boolean thisTransactionOnly){}
@@ -159,7 +196,7 @@ public class MoneyAccountLedgerService {
     if("LOAN_PAYMENT".equals(edit.type()))require(edit.principal()!=null&&edit.interest()!=null&&edit.fee()!=null,"원금·이자·수수료를 각각 확인하세요.");
     if(old.type()==TransactionType.TRANSFER&&old.fromAccountId()!=null&&old.toAccountId()!=null&&Set.of("TRANSFER","SAVINGS","SAVINGS_WITHDRAWAL").contains(Objects.toString(edit.type(),""))){
      String display=db.queryForObject("select "+MoneySavingsReadService.displayTypeSql("t")+" from money_transactions t where t.user_id=? and t.id=?",String.class,owner(),id);
-     require(display.equals(edit.type()),"저축 표시는 거래 당시 계좌 자금그룹으로 결정됩니다. 실제 반대편 근거와 계좌 이력을 확인하세요.");return Map.of("row",row(id));
+     require(display.equals(edit.type()),"저축 표시는 거래 당시 계좌 자금그룹으로 결정됩니다. 실제 반대편 근거와 계좌 이력을 확인하세요.");new MoneyOwnerFinancialDecision(db,owner()).supersede(id,edit.requestId(),edit.type());return Map.of("row",row(id));
     }
     require(!Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(Objects.toString(edit.type(),"")),"저축은 실제 반대편 거래를 연결한 이체와 거래 당시 자금그룹 근거가 필요합니다.");
     var result=unified.applyValidatedEdit(id,edit);
@@ -184,7 +221,7 @@ public class MoneyAccountLedgerService {
  }
  public Map<String,Object> category(UUID id,Category input){
   require(input!=null,"직접 선택한 분류가 필요합니다.");return commands.execute(owner(),input.requestId(),"ACCOUNT_LEDGER_CATEGORY",Arrays.asList(id,input),()->{
-   valid(id,input.fingerprint(),input.expectedVersion());var fact=money.transaction(id);require("CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(fact.type()),"확정 소비·수입에만 생활 분류를 지정할 수 있습니다.");
+   valid(id,input.fingerprint(),input.expectedVersion());var fact=money.transaction(id);require(MoneyOwnerFinancialDecision.meaningApplied(new MoneyOwnerFinancialDecision(db,owner()).fact(id,false))&&"CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(fact.type()),"확정 소비·수입에만 생활 분류를 지정할 수 있습니다.");
    require(input.categoryId()!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),input.categoryId(),fact.type().name())),"현재 거래 유형에 맞는 소유 활성 분류를 선택하세요.");
    require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_recommendation_save_items where user_id=? and transaction_id=? and status in ('QUEUED','OUTCOME_UNKNOWN'))",Boolean.class,owner(),id)),"원래 분류 저장 요청의 결과를 먼저 확인하세요.");
    require(db.queryForList(MoneyReviewService.QUEUE+"select reason from queue where id=? and kind='TRANSACTION' and reason='POSSIBLE_INTERNAL_TRANSFER'",owner(),id).isEmpty(),"이체 후보의 금융 의미를 먼저 확인하세요.");
@@ -200,7 +237,7 @@ public class MoneyAccountLedgerService {
  private Map<String,Object> unresolved(UUID id,MoneyUnifiedBookkeepingService.Edit edit){
   MoneyService.text(edit.reason(),500,true,"금융 의미 보류 사유");var t=money.transaction(id);require(Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(t.type())&&(t.fromAccountId()==null||t.toAccountId()==null),"대출·환불·연결 이체의 의미 보류는 전용 정정이 필요합니다.");
   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=? and not excluded and merged_into is null)",Boolean.class,owner(),id)),"연결된 환불을 먼저 확인하세요.");
-  db.update("update money_transactions set meaning_state='UNRESOLVED',category_id=null,refund_of=null,version=version+1 where user_id=? and id=?",owner(),id);audit(id,"ACCOUNT_LEDGER_UNRESOLVED",t,edit);return Map.of("row",row(id));
+  db.update("update money_transactions set meaning_state='UNRESOLVED',category_id=null,refund_of=null,version=version+1 where user_id=? and id=?",owner(),id);new MoneyOwnerFinancialDecision(db,owner()).supersede(id,edit.requestId(),"UNRESOLVED");audit(id,"ACCOUNT_LEDGER_UNRESOLVED",t,edit);return Map.of("row",row(id));
  }
  private Map<String,Object> loanReceipt(UUID id,MoneyUnifiedBookkeepingService.Edit edit){
   MoneyService.text(edit.reason(),500,true,"대출 수령 확인 사유");var t=money.transaction(id);require("KRW".equals(t.currency())&&t.fromAccountId()==null&&t.toAccountId()!=null&&Set.of(TransactionType.INCOME,TransactionType.LOAN_RECEIPT).contains(t.type()),"실제 입금 거래와 KRW 대출 관계가 필요합니다.");require(edit.loanId()!=null,"기존 대출을 선택하세요.");
@@ -210,6 +247,6 @@ public class MoneyAccountLedgerService {
   require(loan.originalPrincipal()==null||loan.remainingPrincipal().add(t.amount()).compareTo(loan.originalPrincipal())<=0,"대출 약정 원금을 초과합니다. 기존 대출 잔액을 확인하세요.");
   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_bookkeeping_overrides where user_id=? and transaction_id=? and (jsonb_exists(overrides,'amount') or jsonb_exists(overrides,'accountId') or jsonb_exists(overrides,'occurredAt')))",Boolean.class,owner(),id)),"기존 가계부 금융 표시 정정을 먼저 확인하세요.");
   db.update("update money_transactions set type='LOAN_RECEIPT',meaning_state='CONFIRMED',loan_id=?,principal=amount,interest=0,fee=0,category_id=null,version=version+1 where user_id=? and id=?",loan.id(),owner(),id);
-  db.update("update money_loans set remaining_principal=remaining_principal+?,version=version+1,updated_at=now() where user_id=? and id=?",t.amount(),owner(),loan.id());audit(id,"ACCOUNT_LEDGER_LOAN_RECEIPT",t,edit);return Map.of("row",row(id));
+  db.update("update money_loans set remaining_principal=remaining_principal+?,version=version+1,updated_at=now() where user_id=? and id=?",t.amount(),owner(),loan.id());new MoneyOwnerFinancialDecision(db,owner()).supersede(id,edit.requestId(),"LOAN_RECEIPT");audit(id,"ACCOUNT_LEDGER_LOAN_RECEIPT",t,edit);return Map.of("row",row(id));
  }
 }
