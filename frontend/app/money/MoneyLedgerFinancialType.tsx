@@ -1,10 +1,10 @@
 "use client";
-import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {ApiError} from '@/lib/api/client';
 import {moneyApi} from '@/lib/money/model';
 import {ACCOUNT_LEDGER,ledgerDisplayType,ledgerTypes,type LedgerRow} from '@/lib/money/accountLedger';
-import {financialDirections,type FinancialDirection} from '@/lib/money/unified';
+import {baseDirection,baseDirectionLabel,protectedMeaning,type BaseDirection} from '@/lib/money/categorySemantics';
 import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
 
 const labels:Record<string,string>={
@@ -102,23 +102,16 @@ export function useFinancialDecisions(){
 }
 
 export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disabled:boolean;onChoose:(type:string)=>void}){
- const current=ledgerDisplayType(row),id=useId(),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null),searchInput=useRef<HTMLInputElement>(null);
- const [open,setOpen]=useState(false),[search,setSearch]=useState(''),[highlight,setHighlight]=useState(0);
- const [direction,setDirection]=useState<FinancialDirection|null>(null);
- const [position,setPosition]=useState({top:8,left:8,maxHeight:380});
+ const current=baseDirection(row),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null);
+ const [open,setOpen]=useState(false);
+ const [position,setPosition]=useState({top:8,left:8,maxHeight:220});
  const restoreAfterSave=useRef(false);
- useEffect(()=>{
-  if(!disabled&&restoreAfterSave.current){
-   restoreAfterSave.current=false;
-   if(document.activeElement===document.body)trigger.current?.focus();
-  }
- },[disabled]);
- const activeTypes:readonly string[]=financialDirections.find(option=>option.id===direction)?.types??[];
- const options=Object.entries(ledgerTypes).filter(([value,label])=>activeTypes.includes(value)&&(label+value).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
- const enabled=options.filter(([type])=>!directionHint(row,type));
- const active=enabled[Math.min(highlight,enabled.length-1)]?.[0];
- function close(restore=true){setOpen(false);if(restore)trigger.current?.focus();}
- function choose(type:string){close();if(type!==current){restoreAfterSave.current=true;onChoose(type);}}
+ useEffect(()=>{if(!disabled&&restoreAfterSave.current){restoreAfterSave.current=false;if(document.activeElement===document.body)trigger.current?.focus();}},[disabled]);
+ function close(){setOpen(false);trigger.current?.focus();}
+ function choose(next:BaseDirection){
+  close();
+  if(next!==current || (row.meaning_state==='UNRESOLVED' && (!row.declaredFinancialType||row.declaredFinancialType==='UNRESOLVED'))){restoreAfterSave.current=true;onChoose(next);}
+ }
  useLayoutEffect(()=>{
   if(!open)return;
   function place(){
@@ -135,24 +128,21 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
   window.visualViewport?.addEventListener('resize',place);document.addEventListener('pointerdown',outside);
   return ()=>{window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);window.visualViewport?.removeEventListener('resize',place);document.removeEventListener('pointerdown',outside);};
  },[open]);
- useEffect(()=>{if(open&&active)document.getElementById(id+'-'+active)?.scrollIntoView?.({block:'nearest'});},[open,active,id]);
- useEffect(()=>{if(open&&direction)searchInput.current?.focus();},[open,direction]);
- return <><button type="button" ref={trigger} className={'al-type-trigger '+(current==='UNRESOLVED'?'unresolved':'')} aria-label={(row.title??'거래')+' 금융 유형'} aria-haspopup="dialog" aria-expanded={open} disabled={disabled}
- onClick={()=>{if(open)close();else{setDirection(null);setSearch('');setHighlight(0);setOpen(true);}}}>{ledgerTypes[current]??current}<span aria-hidden="true">⌄</span></button>
- {open&&createPortal(<div ref={menu} className="al-type-menu" role="dialog" aria-label="금융 유형 편집" style={position} onBlur={e=>{
-  if(e.relatedTarget&&!e.currentTarget.contains(e.relatedTarget))setOpen(false);
- }} onKeyDown={e=>{
-  if(e.key==='Escape'){e.preventDefault();close();}
-  if(e.target===searchInput.current&&(e.key==='ArrowDown'||e.key==='ArrowUp')){e.preventDefault();setHighlight(n=>Math.max(0,Math.min(enabled.length-1,n+(e.key==='ArrowDown'?1:-1))));}
-  if(e.target===searchInput.current&&e.key==='Enter'&&active){e.preventDefault();choose(active);}
- }}><div role="group" aria-label="거래 방향">{financialDirections.map(option=><button type="button" key={option.id} aria-pressed={direction===option.id}
-  disabled={option.types.every(type=>!!directionHint(row,type))} onClick={()=>{setDirection(option.id);setSearch('');setHighlight(0);}}>{option.label}</button>)}</div>
- {direction&&<><label>세부 금융 유형<input ref={searchInput} placeholder="유형 검색" aria-label="금융유형 검색" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls={id} aria-activedescendant={active?id+'-'+active:undefined} value={search} onChange={e=>{setSearch(e.target.value);setHighlight(0);}}/></label>
- <div id={id} role="listbox" aria-label="금융유형">{options.map(([type,label])=>{
-  const hint=directionHint(row,type);
-  return <button type="button" key={type} id={id+'-'+type} role="option" tabIndex={-1} aria-selected={current===type} disabled={!!hint} data-highlight={active===type} onMouseDown={e=>e.preventDefault()} onClick={()=>choose(type)}><span>{label}</span>{hint?<small>{hint}</small>:current===type?<span aria-hidden="true">✓</span>:null}</button>;
- })}{!options.length&&<small>검색 결과가 없습니다.</small>}</div></>}
- {current!=='UNRESOLVED'&&<button type="button" onClick={()=>choose('UNRESOLVED')}>의미 미확정으로 되돌리기</button>}
+ return <><button type="button" ref={trigger} className="al-type-trigger" aria-label={(row.title??'거래')+' 금융 유형'} aria-haspopup="dialog" aria-expanded={open} disabled={disabled}
+ onClick={()=>open?close():setOpen(true)}>{baseDirectionLabel(row)}<span aria-hidden="true">⌄</span></button>
+ {open&&createPortal(<div ref={menu} className="al-type-menu" role="dialog" aria-label="금융 유형 편집" style={position}
+ onBlur={e=>{if(e.relatedTarget&&!e.currentTarget.contains(e.relatedTarget))setOpen(false);}}
+ onKeyDown={e=>{
+  if(e.key==='Escape'){e.preventDefault();close();return;}
+  const buttons=Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+  const index=buttons.indexOf(document.activeElement as HTMLButtonElement);
+  if(index<0)return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();buttons[(index+buttons.length+(e.key==='ArrowDown'?1:-1))%buttons.length]?.focus();}
+  else if(e.key==='Enter'){e.preventDefault();buttons[index].click();}
+ }}>
+ <div role="group" aria-label="거래 방향">{(['INCOME','EXPENSE','TRANSFER'] as const).map(type=><button type="button" key={type} aria-pressed={current===type}
+ disabled={!!directionHint(row,type)||!!(row.from_account_id&&row.to_account_id)||protectedMeaning(row)} onClick={()=>choose(type)}>{baseDirectionLabel({type})}</button>)}</div>
+ {protectedMeaning(row)&&<small>연결된 금융 관계는 상세 편집에서 정정 근거와 영향을 확인하세요.</small>}
  </div>,document.body)}</>;
 }
 

@@ -6,6 +6,10 @@ import {moneyApi as api,type Account} from '@/lib/money/model';
 import type {UnifiedRow,UnifiedOutcome} from '@/lib/money/unified';
 import {MoneyDataProvider} from './MoneyDataProvider';
 
+import * as nodeModule from 'node:module';
+const {registerHooks}=nodeModule as unknown as {registerHooks:(hooks:{load:(url:string,context:unknown,next:(url:string,context:unknown)=>unknown)=>unknown})=>unknown};
+registerHooks({load(url,context,next){if(url.endsWith('.css'))return {format:'module',source:'export {};',shortCircuit:true};return next(url,context);}});
+
 const initial:UnifiedRow={id:'fact',type:'EXPENSE',meaning_state:'CONFIRMED',from_account_id:'account',to_account_id:null,amount:500000,currency:'KRW',occurred_at:'2026-10-28T01:00:00Z',title:'합성 상환 거래',memo:null,counterparty_text:'합성 은행',version:1,loan_id:null,principal:null,interest:null,fee:null,refund_of:null,sourceCount:0,sources:[]};
 const run=async(action:()=>void)=>{await act(async()=>{action();for(let i=0;i<5;i++)await new Promise(resolve=>setTimeout(resolve,0));});};
 function button(label:string){const node=[...document.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent?.trim()===label||node.getAttribute('aria-label')===label||node.classList.contains('money-financial-choice')&&node.textContent?.endsWith(label));assert.ok(node,'Missing '+label);return node;}
@@ -24,6 +28,7 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   if(path.includes('/outcomes/'))return {status:'UNKNOWN'} as T;
   if(path.includes('/rows/')){if(readsFail)throw Error('read failed');return {...row} as T;}
   if(path==='/loans')return [{id:'loan',name:'합성 대출',status:'ACTIVE',version:loanVersion}] as T;
+  if(path.includes('category-groups')||path.includes('categories/groups'))return [] as T;
   return {items:[]} as T;
  };
  api.post=async<T,>(path:string,body:unknown)=>{
@@ -46,25 +51,27 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   assert.ok(document.activeElement===button('금융 편집 닫기'),'Opening moves focus into the editor');
   assert.equal(document.querySelector<HTMLDetailsElement>('details')?.open,false);
   assert.equal(button('변경 저장').disabled,true);
-  await choose('↗출금');await change('세부 금융 유형','LOAN_PAYMENT');assert.equal(posts.length,0);
-  assert.equal(button('변경 저장').disabled,true);
-  await change('상환 대출','loan');assert.equal(button('변경 저장').disabled,false,'Unresolved allocation remains saveable');
-  await change('원금','420000');assert.equal(button('변경 저장').disabled,true,'Partial split is rejected');
-  await change('이자','70000');await change('수수료','9999');assert.equal(button('변경 저장').disabled,true);
-  await change('수수료','10000');assert.equal(button('변경 저장').disabled,false);
-  await close();await open();assert.equal(control('원금').value,'420000');
-  await evict();assert.equal(control('원금').value,'420000','Provider preserves the draft across row eviction');
-  await change('세부 금융 유형','EXPENSE');assert.equal(document.querySelector('[aria-label="원금"]'),null);
-  assert.equal(button('변경 저장').disabled,false,'Irrelevant split cannot disable expense save');
+  assert.equal(document.querySelector('[aria-label="세부 금융 유형"]'),null);
+  await choose('↗출금');assert.equal(posts.length,0,'Direction navigation does not post cash or liabilities');
+  const categoryTrigger=button('금융 카테고리');
+  await run(()=>categoryTrigger.click());
+  const search=control('카테고리 검색');
+  await run(()=>search.dispatchEvent(new dom.window.Event('pointerdown',{bubbles:true})));
+  assert.ok(document.querySelector('[aria-label="금융 유형 편집"]'));
+  await run(()=>search.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
+  assert.ok(document.querySelector('[aria-label="금융 유형 편집"]'));
+  assert.equal(document.activeElement,categoryTrigger);
+
   await choose('변경 저장');assert.deepEqual(Object.keys(posts.at(-1)!.body).sort(),['action','expectedVersion','requestId','type']);
   assert.match(document.body.textContent??'',/서버에 저장했습니다/);
   await close();row={...initial,type:'LOAN_PAYMENT',loan_id:'loan',principal:420000,interest:70000,fee:10000,version:3};await open();
   assert.equal(control('원금').value,'420000');assert.equal(control('상환 대출').disabled,true);
-  await choose('↗출금');await change('세부 금융 유형','LOAN_PAYMENT');assert.equal(control('원금').value,'420000');
+  await change('원금','420001');assert.equal(button('변경 저장').disabled,true,'Split must equal cash outflow');
+  await change('원금','420000');await close();await open();await evict();assert.equal(control('원금').value,'420000');
   await change('이자','60000');await change('수수료','20000');
   outcome='NOT_APPLIED';await choose('변경 저장');assert.equal(control('원금').value,'420000');assert.match(document.body.textContent??'',/합성 거절/);
   assert.equal(posts.at(-1)!.body.loanId,'loan');assert.equal(posts.at(-1)!.body.loanVersion,7);
-  assert.equal(posts.at(-1)!.body.principal,420000);
+  assert.equal(Number(posts.at(-1)!.body.principal),420000);
   failureReason='VERSION_CONFLICT';row={...row,version:4};loanVersion=8;await choose('변경 저장');
   assert.equal(button('변경 저장').disabled,true);assert.match(document.body.textContent??'',/다른 기기에서 변경/);
   await choose('최신 값과 비교 후 재적용 준비');assert.equal(button('변경 저장').disabled,false);
@@ -73,7 +80,7 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   await choose('처리 결과 확인');assert.equal(posts.length,count);
   await choose('같은 요청 재시도');assert.deepEqual(posts.at(-1)!.body,frozen);assert.equal(frozen.expectedVersion,4);assert.equal(frozen.loanVersion,8);
   outcome='APPLIED';await choose('같은 요청 재시도');await close();
-  row={...initial,version:9};await open();await choose('⇄이체');await change('세부 금융 유형','TRANSFER');await close();row={...row,version:10};await open();
+  row={...initial,version:9};await open();await choose('⇄이체');await close();row={...row,version:10};await open();
   assert.equal(button('변경 저장').disabled,true,'Reopening an externally changed draft requires comparison');
   await choose('최신 값과 비교 후 재적용 준비');await choose('변경 저장');await close();
   for(const type of ['INITIAL_BALANCE','BALANCE_ADJUSTMENT','LOAN_RECEIPT']){

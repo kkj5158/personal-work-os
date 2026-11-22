@@ -4,6 +4,8 @@ import {seoul,type Account,type Category} from '@/lib/money/model';
 import type {AiItem} from '@/lib/money/ai';
 import {moneyAmount} from '@/lib/money/accounts';
 import {financialTypeLabels,selectFinancialOption,loanAllocation,type UnifiedRow} from '@/lib/money/unified';
+import {activeCategories} from '@/lib/money/categorySemantics';
+import {CategoryPicker} from './MoneyCategoryPicker';
 import {affectedBy} from '@/lib/money/cache';
 import {useMoneyCache,useMoneyRows,useMoneyViewState} from './MoneyDataProvider';
 import {useMoneyData,LoadState,type Loan} from './MoneyWebData';
@@ -33,7 +35,16 @@ export function ReviewFinancialInline({row,accounts,categories,disabled,onSaved,
  const base={amount,principal:null,interest:null,fee:null,type:direction==='OUT'?'EXPENSE':'INCOME'} as UnifiedRow;
  const allocation=loanAllocation(base,draft),blocked=disabled||busy||pending||!!registered;
  function field(key:string,value:unknown){if(blocked)return;coordinator.keepDraft(row.id,'review',{type:choice});setDraft(old=>({...old,[key]:value}));setPreview(null);setError('');}
- function selectType(value:string){coordinator.keepDraft(row.id,'review',{type:value});setDraft(old=>{const next=selectFinancialOption(base,old,value);for(const key of ['partnerId','otherAccountId','approveArchived','categoryId','existingTransactionId'])delete next[key];return next;});setPreview(null);setError('');}
+ const categoryKind=direction==='IN'?'INCOME':'EXPENSE';
+ const selected=categories.find(c=>c.id===draft.categoryId);
+ function chooseCategory(id:string){
+  const category=activeCategories(categories,categoryKind).find(c=>c.id===id);
+  if(id&&!category)return;
+  const nextType=category?.semanticCode??categoryKind;
+  coordinator.keepDraft(row.id,'review',{type:nextType,categoryId:id});
+  setDraft(old=>({...selectFinancialOption(base,old,nextType),categoryId:id}));
+  setPreview(null);setError('');
+ }
  function prepare(action:string,unresolved=false){try{
   if(!e||!accountId||!Number.isFinite(amount)||amount<=0||!at)throw Error('계좌·금액·발생시각을 확인하세요.');
   if(action==='REGISTER'&&!unresolved&&type==='LOAN_PAYMENT'&&(!loan||allocation.unknown||!allocation.valid))throw Error('대출과 원금·이자·수수료의 정확한 합계를 확인하세요.');
@@ -42,10 +53,14 @@ export function ReviewFinancialInline({row,accounts,categories,disabled,onSaved,
   if(e.manualRequired&&(!e.manualReason||!draft.direction||!draft.occurredAt||!draft.reason))throw Error('원문과 비교하여 방향·실제 발생시각·사유를 확인하세요.');
   if(action==='REGISTER'&&!unresolved&&transfer&&!otherId)throw Error('상대 소유 계좌를 선택하세요.');
   const linking=action==='LINK_DUPLICATE';
-  setPreview({fingerprint:e.fingerprint,action,accountId,accountVersion:accounts.find(a=>a.id===accountId)?.version,
+  if(!linking && selected?.semanticCode && !Number.isInteger(selected.semanticPolicyVersion))throw Error('최신 분류 정책을 확인하세요.');
+  if(!linking&&!unresolved&&type==='LOAN_RECEIPT'&&!loan)throw Error('연결할 대출을 선택하거나 연결 대기로 등록하세요.');
+  const policy=!linking && selected?.semanticCode?{semanticCategoryId:selected.id,semanticPolicyVersion:selected.semanticPolicyVersion}:{};
+
+  setPreview({...policy,fingerprint:e.fingerprint,action,accountId,accountVersion:accounts.find(a=>a.id===accountId)?.version,
    otherAccountId:transfer&&!unresolved?otherId:null,otherAccountVersion:accounts.find(a=>a.id===otherId)?.version,
    existingTransactionId:linking?draft.existingTransactionId:null,existingTransactionVersion:duplicates.find(t=>t.id===draft.existingTransactionId)?.version,
-   financial:{type:unresolved?'UNRESOLVED':choice,currency:draft.currency??e.currency,direction,amount,occurredAt:draft.occurredAt?new Date(at+'+09:00').toISOString():e.occurredAt,reason:draft.reason||null,title:draft.title||null,memo:draft.memo||null,categoryId:!unresolved&&!linking?draft.categoryId||null:null,
+   financial:{type:unresolved?'UNRESOLVED':choice,currency:draft.currency??e.currency,direction,amount,occurredAt:draft.occurredAt?new Date(at+'+09:00').toISOString():e.occurredAt,reason:draft.reason||null,title:draft.title||null,memo:draft.memo||null,categoryId:!unresolved&&!linking&&!selected?.semanticCode?draft.categoryId||null:null,
     loanId:['LOAN_PAYMENT','LOAN_RECEIPT'].includes(type)&&!unresolved&&!linking?loan?.id:null,loanVersion:loan?.version,principal:type==='LOAN_PAYMENT'&&!unresolved?draft.principal:null,interest:type==='LOAN_PAYMENT'&&!unresolved?draft.interest:null,fee:type==='LOAN_PAYMENT'&&!unresolved?draft.fee:null,
     refundOf:type==='REFUND'&&!unresolved?refund?.id:null,refundVersion:refund?.version,partnerId:transfer&&!unresolved?partner?.id:null,partnerVersion:partner?.version,partnerFingerprint:partner?.fingerprint,approveArchived:!!draft.approveArchived}});setError('');
  }catch(error){setError(error instanceof Error?error.message:'입력값을 확인하세요.');}}
@@ -66,9 +81,7 @@ export function ReviewFinancialInline({row,accounts,categories,disabled,onSaved,
     setDraft(old=>({...old,type:value==='IN'?'INCOME':value==='OUT'?'EXPENSE':value==='TRANSFER'?'TRANSFER':'UNRESOLVED',
       direction:value==='TRANSFER'?e.direction??'':value,otherAccountId:null,categoryId:null,refundOf:null,loanId:null,transferIntent:undefined,partnerId:null,existingTransactionId:null}));setPreview(null);
    }}><option value="">선택</option><option value="IN">입금</option><option value="OUT">출금</option><option value="TRANSFER">이체</option></select></label>
-   {type!=='UNRESOLVED'&&<details><summary>세부 금융 유형</summary><label>금융 의미<select aria-label="Financial Type · 금융 유형" value={choice} onChange={event=>selectType(event.target.value)}>
-    {(transfer?['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL']:direction==='IN'?['INCOME','REFUND','LOAN_RECEIPT']:['EXPENSE','LOAN_PAYMENT']).map(t=><option key={t} value={t}>{label(t)}</option>)}</select></label></details>}
-   <label>Category · 분류<select aria-label="Category · 분류" value={String(draft.categoryId??'')} onChange={event=>field('categoryId',event.target.value)} disabled={!['EXPENSE','INCOME'].includes(type)}><option value="">미분류 · 선택 없이 등록 가능</option>{categories.filter(c=>!c.archived&&!c.effectiveArchived&&(c.kind??'EXPENSE')===type).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+   {!transfer&&type!=='UNRESOLVED'&&<CategoryPicker label="Category · 분류" value={String(draft.categoryId??'')} categories={activeCategories(categories,categoryKind)} onChange={chooseCategory}/>}
    <label>내 소유 계좌<select aria-label="내 소유 계좌" value={accountId} onChange={event=>field('accountId',event.target.value)}><option value="">계좌 선택</option>{accountOptions()}</select></label>
    {transfer&&<label>입출금 방향<select aria-label="입출금 방향" value={direction} onChange={event=>field('direction',event.target.value)}><option value="">방향 확인</option><option value="OUT">출금</option><option value="IN">입금</option></select></label>}
    {e.manualRequired&&input('currency','원문 통화 (예: KRW)','text',e.currency)}{input('amount','금액 ('+(currency||'통화 확인')+')','number',e.amount)}{input('occurredAt','발생시각 (서울)','datetime-local',at)}{input('title','제목')}{input('memo','메모')}
@@ -79,7 +92,7 @@ export function ReviewFinancialInline({row,accounts,categories,disabled,onSaved,
   <label>정정·별도 거래 확정 사유<textarea value={String(draft.reason??'')} onChange={event=>field('reason',event.target.value)} placeholder="원래 금액·방향·계좌·시각과 다르면 근거를 설명하세요."/></label>
   {(e.archived||partner?.archived)&&<label><input type="checkbox" checked={!!draft.approveArchived} onChange={event=>field('approveArchived',event.target.checked)}/>제외된 원문을 이 금융 판단에 연결하는 데 동의합니다.</label>}
   <div className="money-actions">{onCancel&&<button onClick={()=>{if(Object.keys(draft).length>2&&!window.confirm('입력한 초안을 버릴까요?'))return;
-   setDraft({type:'UNRESOLVED',accountId:row.accountId??''});coordinator.discardDraft(row.id,'review');setPreview(null);onCancel();}}>취소</button>}<button onClick={()=>prepare('REGISTER')}>거래 확정 · 가계부 반영 미리보기</button><button onClick={()=>prepare('REGISTER',true)}>확인된 현금만 등록 · 유형 미확정</button></div>
+   setDraft({type:'UNRESOLVED',accountId:row.accountId??''});coordinator.discardDraft(row.id,'review');setPreview(null);onCancel();}}>취소</button>}<button onClick={()=>prepare('REGISTER')}>거래 확정 · 가계부 반영 미리보기</button><button onClick={()=>prepare('REGISTER',true)}>{selected?.semanticCode?'확인된 현금만 등록 · 관계 연결 대기':'확인된 현금만 등록 · 유형 미확정'}</button></div>
   <LoadState loading={similar.loading} error={similar.error}/>{!!duplicates.length&&<div><label>기존 거래·출처 연결<select aria-label="기존 거래·출처 연결" value={String(draft.existingTransactionId??'')} onChange={event=>field('existingTransactionId',event.target.value)}><option value="">동일 사실의 기존 거래 선택</option>{duplicates.map(t=><option key={t.id} value={t.id}>{financialTypeLabels[t.type]} · {t.title||t.merchant||t.id}</option>)}</select></label><button disabled={!draft.existingTransactionId} onClick={()=>prepare('LINK_DUPLICATE')}>기존 거래 연결 미리보기</button></div>}
   </fieldset>
   {preview&&<div className="money-review-impact" role="region" aria-label="금융 영향 미리보기"><h3>확정 전 금융 영향</h3><p>{preview.action==='LINK_DUPLICATE'?'기존 거래에 원문만 연결 · 추가 현금 이동 없음':label(String((preview.financial as Draft).type))+' · '+moneyAmount(amount,currency)+' · '+(direction==='OUT'?'출금':'입금')}</p><p>{String((preview.financial as Draft).type)==='UNRESOLVED'?'잔액 반영 · 수입·소비·저축·대출·환불 통계 미확정':type==='LOAN_PAYMENT'?'원금 '+String(draft.principal)+' / 이자 '+String(draft.interest)+' / 수수료 '+String(draft.fee)+' · 상환액 전체 소비 제외':transfer?'이체 한 건 · 선택된 모든 원문 연결 · 수입·소비 중복 없음':type==='REFUND'?(refund?'원소비의 추적 자격에 따라 환불월 소비에서 차감':'원거래 연결 대기 · 소비 차감 보류')+' · 수입 집계 제외':'선택한 금융 유형으로 한 건 반영'}</p><p>연결 원본 {row.id} · {currency} · {at} (서울)</p><p>원문과 정정 이력을 보존합니다. 서버가 최신 버전과 금융 근거를 다시 검증합니다.</p><button className="money-primary" disabled={disabled||busy||!!registered} onClick={()=>void confirm()}>{pending?'원래 요청 결과 확인 · 같은 요청 재시도':'거래 확정 · 가계부 반영'}</button><button disabled={busy||pending} onClick={()=>setPreview(null)}>계속 수정</button></div>}

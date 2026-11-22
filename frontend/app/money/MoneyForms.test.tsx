@@ -133,3 +133,29 @@ test("manual transfer form keeps two account sides and submits one ledger record
     dom.window.close();
   }
 });
+
+test("manual refund selected by policy ID stays pending until the owner verifies a purchase",async()=>{
+ const {EntryForm}=await import("./MoneyForms"),{MoneyDataProvider}=await import("./MoneyDataProvider");
+ const {moneyApi}=await import("@/lib/money/model");
+ const dom=new JSDOM('<div id="root"></div>',{url:'https://money.test/money/bookkeeping'});
+ Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,ResizeObserver:class{observe(){}disconnect(){}},IS_REACT_ACT_ENVIRONMENT:true});
+ dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+ dom.window.HTMLDialogElement.prototype.close=function(){};
+ const root=createRoot(document.getElementById("root")!);
+ const get=moneyApi.get,commands:Record<string,unknown>[]=[];
+ moneyApi.get=async<T,>()=>[] as T;
+ const category={id:"bound-refund",name:"반품 정산",kind:"INCOME" as const,archived:false,color:"#778899",version:3,semanticCode:"REFUND" as const,semanticPolicyVersion:1};
+ try{
+  await act(()=>root.render(<MoneyDataProvider><EntryForm value={{type:'INCOME',toAccountId:'fixture',amount:30000}}
+   accounts={[account]} categories={[category]} refunds={[]} onSave={async body=>{commands.push(body);}} onClose={()=>{}}/></MoneyDataProvider>));
+  const button=(label:string)=>document.querySelector<HTMLButtonElement>('[aria-label="'+label+'"]')!;
+  await act(()=>button('수입 카테고리').click());
+  await act(()=>button('반품 정산 직접 지정').click());
+  assert.equal(commands.length,0);assert.match(document.body.textContent!,/원소비 검색/);
+  const submit=()=>act(()=>{document.querySelector('form')!.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));});
+  await submit();assert.equal(commands.length,1);assert.equal(commands[0].type,'INCOME');assert.equal(commands[0].semanticCategoryId,'bound-refund');
+  assert.equal(commands[0].semanticPolicyVersion,1);assert.equal(commands[0].categoryId,null);
+  const approve=[...document.querySelectorAll('label')].find(el=>el.textContent?.includes('관계와 금액을 확인'))!.querySelector('input')!;
+  await act(()=>approve.click());await submit();assert.equal(commands.length,1);assert.match(document.querySelector('[role=alert]')!.textContent!,/원소비/);
+ }finally{moneyApi.get=get;await act(()=>root.unmount());dom.window.close();}
+});

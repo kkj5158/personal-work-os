@@ -58,6 +58,8 @@ export const reconciliationStatus: Record<Reconciliation["status"], string> = {
   NO_OBSERVATION: "관측 없음",
 };
 export type Category = {
+  semanticCode?: "LOAN_PAYMENT" | "LOAN_RECEIPT" | "REFUND" | null;
+  semanticPolicyVersion?: number | null;
   structuralGroupId?: string | null;
   iconType?: "EMOJI" | "ICON" | "ASSET" | null;
   iconValue?: string | null;

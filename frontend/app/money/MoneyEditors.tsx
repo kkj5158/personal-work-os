@@ -351,13 +351,16 @@ export function RawEvidence({ id }: { id: string }) {
 function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
   const t = p.value;
   const coordinator=useMoneyRows();
+  const [loanFlow,setLoanFlow]=useState(false);
+  const availableLoans=useMoneyData<import('./MoneyWebData').Loan[]>(loanFlow?"/loans":null);
+  const [refundSearch,setRefundSearch]=useState("");
   const [refundFlow, setRefundFlow] = useState(t?.type === "REFUND");
   const {
     data,
     error: refundError,
     loading: refundLoading,
   } = useMoneyData<{ items: Transaction[] }>(
-    refundFlow ? "/transactions?type=EXPENSE&limit=200" : null,
+    refundFlow ? "/transactions?type=EXPENSE&limit=200&search="+encodeURIComponent(refundSearch) : null,
   );
   const [error, setError] = useState("");
   return (
@@ -366,15 +369,26 @@ function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
       accounts={p.accounts}
       categories={p.categories}
       refunds={data?.items || []}
-      onTypeChange={(type) => setRefundFlow(type === "REFUND")}
+      loans={availableLoans.data??[]} loanError={availableLoans.error}
+      onTypeChange={(type) => {setRefundFlow(type === "REFUND");setLoanFlow(type==="LOAN_PAYMENT"||type==="LOAN_RECEIPT");}}
       onClose={p.onClose}
-      onSpecialType={t?.id?undefined:(_type,draft)=>p.select({kind:"transaction",value:draft})}
+      manual={!t?.id} onRefundSearch={setRefundSearch}
       title={t?.id ? "거래 수정" : "수동 거래 추가"}
       onSave={async (input) => {
         if (t?.id) await api.put("/transactions/" + t.id, input);
-        else await coordinator.execute("manual-entry-create","/manual-entries",{transaction:input,
-          fromVersion:p.accounts.find(a=>a.id===input.fromAccountId)?.version,toVersion:p.accounts.find(a=>a.id===input.toAccountId)?.version,
-          refundVersion:data?.items.find(r=>r.id===input.refundOf)?.version});
+        else {
+          const {semanticCategoryId,semanticPolicyVersion,loanId,loanVersion,principal,interest,fee,...transaction}=input;
+          const policy=semanticCategoryId?{semanticCategoryId,semanticPolicyVersion}:{};
+          if(transaction.type==="LOAN_PAYMENT"){
+            await coordinator.execute("manual-entry-create","/manual-entries/loan-payment",{...policy,title:transaction.title,counterpartyText:transaction.counterpartyText,memo:transaction.memo,fromVersion:p.accounts.find(a=>a.id===transaction.fromAccountId)?.version,payment:{loanId,paymentAccountId:transaction.fromAccountId,
+              amount:transaction.amount,principal,interest,fee,occurredAt:transaction.occurredAt,note:transaction.memo,expectedLoanVersion:loanVersion}});
+          }else if(transaction.type==="LOAN_RECEIPT"){
+            await coordinator.execute("manual-entry-create","/manual-entries/loan-receipt",{...policy,title:transaction.title,counterpartyText:transaction.counterpartyText,memo:transaction.memo,receipt:{loanId,loanVersion,accountId:transaction.toAccountId,
+              accountVersion:p.accounts.find(a=>a.id===transaction.toAccountId)?.version,amount:transaction.amount,occurredAt:transaction.occurredAt,note:transaction.memo}});
+          }else await coordinator.execute("manual-entry-create","/manual-entries",{...policy,transaction,
+            fromVersion:p.accounts.find(a=>a.id===transaction.fromAccountId)?.version,toVersion:p.accounts.find(a=>a.id===transaction.toAccountId)?.version,
+            refundVersion:data?.items.find(r=>r.id===transaction.refundOf)?.version});
+        }
         p.onSaved();
       }}
     >

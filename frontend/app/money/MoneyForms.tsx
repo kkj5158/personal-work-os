@@ -4,7 +4,9 @@ import Image from "next/image";
 import { MoneyPanel as Dialog, PanelContext } from "./MoneyPanel";
 import { useState, useContext, useId, Children, isValidElement, cloneElement, type ReactNode, type ReactElement } from "react";
 import { Button } from "@/components/ui/Button";
-import {useMoneyData} from "./MoneyWebData";
+import {activeCategories,baseDirection} from "@/lib/money/categorySemantics";
+import {loanAllocation,type UnifiedRow} from "@/lib/money/unified";
+import {useMoneyData,type Loan} from "./MoneyWebData";
 import { CategoryPicker } from "./MoneyCategoryPicker";
 import {
   Account,
@@ -358,7 +360,9 @@ export function EntryForm({
   onTypeChange,
   onSave,
   onClose,
-  onSpecialType,
+  manual = false,
+  loans=[],loanError,
+  onRefundSearch,
   title = "거래 기록",
   children,
 }: {
@@ -366,7 +370,9 @@ export function EntryForm({
   accounts: Account[];
   categories: Category[];
   refunds: Transaction[];
-  onSpecialType?: (type:"LOAN_PAYMENT"|"LOAN_RECEIPT",draft:Partial<Transaction>)=>void;
+  manual?: boolean;
+  loans?: Loan[];loanError?:string|null;
+  onRefundSearch?: (search:string)=>void;
   onTypeChange?: (type: Kind) => void;
   onSave: (input: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
@@ -381,13 +387,31 @@ export function EntryForm({
       seoul(value?.occurredAt ?? new Date().toISOString()),
     ),
     [cp, setCp] = useState(value?.counterpartyText ?? ""),
-    [cat, setCat] = useState(value?.categoryId ?? ""),
+    [cat, setCat] = useState(value?.type==="REFUND"&&!value.id
+      ? activeCategories(categories,"INCOME").find(c=>c.semanticCode==="REFUND")?.id??"" : value?.categoryId??""),
     [memo, setMemo] = useState(value?.memo ?? ""),
     [entryTitle, setEntryTitle] = useState(value?.title ?? ""),
     [excluded, setExcluded] = useState(value?.excluded ?? false),
     [refund, setRefund] = useState(value?.refundOf ?? ""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const direction=baseDirection({type});
+  const selected=categories.find(c=>c.id===cat);
+  const special=selected?.semanticCode;
+  const [loanId,setLoanId]=useState(""),[principal,setPrincipal]=useState(""),[interest,setInterest]=useState(""),[fee,setFee]=useState("");
+  const [approve,setApprove]=useState(false);
+  const loanType=type==="LOAN_PAYMENT"||type==="LOAN_RECEIPT";
+  const loan=loans.find(l=>l.id===loanId && l.status!=="INACTIVE");
+  function chooseCategory(id:string) {
+    const category=activeCategories(categories,direction).find(c=>c.id===id);
+    if(id&&!category)return;
+    if(value?.id && (category?.semanticCode || value.type==="REFUND")) {
+      setError("연결된 거래의 금융 의미는 거래장 상세 편집에서 영향을 확인한 뒤 정정하세요.");
+      return;
+    }
+    const next=category?.semanticCode??direction;
+    setCat(id);setType(next);if(category?.semanticCode)setExcluded(false);onTypeChange?.(next);setRefund("");setLoanId("");setPrincipal("");setInterest("");setFee("");setApprove(false);
+  }
   return (
     <Dialog title={title} onClose={() => !busy && onClose()}>
       <form
@@ -396,20 +420,31 @@ export function EntryForm({
           setBusy(true);
           setError("");
           try {
+            if(special && (!Number.isInteger(selected?.semanticPolicyVersion)||value?.id)) throw Error("거래장 상세 편집에서 최신 분류 정책을 확인하세요.");
+            if(!value?.id && ["REFUND","LOAN_PAYMENT","LOAN_RECEIPT"].includes(type) && !special)throw Error("적용 가능한 금융 분류를 먼저 선택하세요.");
+            const pending=!!special&&!approve;
+            if (approve && loanType && !loan) throw Error("연결할 대출을 확인하세요.");
+            if (approve && type==="LOAN_PAYMENT") {
+              const allocation=loanAllocation({amount:Number(amount)} as UnifiedRow,{principal,interest,fee});
+              if(!allocation.valid || allocation.unknown) throw Error("원금·이자·수수료 합계를 출금액과 맞춰 주세요.");
+            }
+            if (approve && type==="REFUND" && !refund) throw Error("환불을 확정할 원소비를 선택하세요.");
             await onSave({
-              type,
+              type: pending ? direction : type,
+              ...(special?{semanticCategoryId:cat,semanticPolicyVersion:selected?.semanticPolicyVersion}:{}),
+              ...(approve&&loanType?{loanId,loanVersion:loan?.version,principal,interest,fee}:{}),
               fromAccountId:
-                type === "EXPENSE" || type === "TRANSFER" ? from || null : null,
-              toAccountId: type !== "EXPENSE" ? to || null : null,
+                direction === "EXPENSE" || direction === "TRANSFER" ? from || null : null,
+              toAccountId: direction !== "EXPENSE" ? to || null : null,
               amount: Number(amount),
               occurredAt: value?.occurredAt && at === seoul(value.occurredAt) ? value.occurredAt : iso(at),
               counterpartyText: cp || null,
               categoryId:
-                type === "INCOME" || type === "EXPENSE" || type === "REFUND" ? cat || null : null,
+                special ? null : cat || null,
               memo: memo || null,
               title: entryTitle || null,
               excluded,
-              refundOf: type === "REFUND" ? refund || null : null,
+              refundOf: !pending&&type === "REFUND" ? refund || null : null,
               expectedVersion: value?.version,
             });
           } catch (e) {
@@ -421,23 +456,14 @@ export function EntryForm({
       >
         <div className="money-form-grid">
           <Field label="유형">
-            <select value={type==="REFUND"?"INCOME":type} onChange={e=>{
+            <select disabled={!!(value?.id&&value.type==="REFUND")} value={direction} onChange={e=>{
               const next=e.target.value as Kind;
               if(categories.find(c=>c.id===cat)?.kind!==categoryKind(next))setCat("");
-              setType(next);setRefund("");onTypeChange?.(next);
+              setType(next);setRefund("");setApprove(false);onTypeChange?.(next);
             }}>
               <option value="INCOME">입금</option><option value="EXPENSE">출금</option><option value="TRANSFER">이체</option>
             </select>
           </Field>
-          {type!=="TRANSFER"&&<details open={type==="REFUND"||undefined}><summary>세부 금융 유형</summary>
-            {type!=="EXPENSE"&&<label><input type="checkbox" checked={type==="REFUND"} onChange={e=>{
-              const next=e.target.checked?"REFUND":"INCOME";setType(next);setCat("");setRefund("");onTypeChange?.(next);
-            }}/>환불 입금</label>}
-            {onSpecialType&&type!=="REFUND"&&<button type="button" onClick={()=>{
-              const special=type==="EXPENSE"?"LOAN_PAYMENT":"LOAN_RECEIPT";
-              onSpecialType(special,{type:special,fromAccountId:from||null,toAccountId:to||null,amount:Number(amount)||undefined,occurredAt:iso(at),memo:memo||null});
-            }}>{type==="EXPENSE"?"대출 상환":"대출금 수령"}</button>}
-          </details>}
           <Field label="금액 (KRW)">
             <input
               required
@@ -456,7 +482,7 @@ export function EntryForm({
               onChange={(e) => setAt(e.target.value)}
             />
           </Field>
-          {(type === "EXPENSE" || type === "TRANSFER") && (
+          {(direction === "EXPENSE" || direction === "TRANSFER") && (
             <Field label="출금 계좌">
               <select
                 required
@@ -467,7 +493,7 @@ export function EntryForm({
               </select>
             </Field>
           )}
-          {type !== "EXPENSE" && (
+          {direction !== "EXPENSE" && (
             <Field label="입금 계좌">
               <select
                 required
@@ -485,21 +511,20 @@ export function EntryForm({
               onChange={(e) => setCp(e.target.value)}
             />
           </Field>
-          {(type === "INCOME" || type === "EXPENSE" || type === "REFUND") && (
-            <Field label={type === "INCOME" ? "수입 카테고리" : "소비 카테고리"}>
-              <CategoryPicker
-                label={type === "INCOME" ? "수입 카테고리" : "소비 카테고리"}
-                value={cat}
-                onChange={setCat}
-                categories={categories.filter((c) => c.kind === categoryKind(type))}
-              />
-            </Field>
-          )}
+          {direction!=="TRANSFER"&&<Field label={direction==="INCOME"?"수입 카테고리":"소비 카테고리"}>
+            <CategoryPicker label={direction==="INCOME"?"수입 카테고리":"소비 카테고리"} value={cat} onChange={chooseCategory}
+              categories={activeCategories(categories,direction).filter(c=>!value?.id || !c.semanticCode)}/>
+          </Field>}
         </div>
+        {loanType&&<section><Field label="연결 대출"><select value={loanId} onChange={e=>{setLoanId(e.target.value);setApprove(false);}}>
+          <option value="">대출 연결 대기</option>{loans.filter(l=>l.status!=="INACTIVE").map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></Field>
+          {loanError&&<p role="alert">{loanError}</p>}
+          {type==="LOAN_PAYMENT"&&<div className="money-form-grid">{([["원금",principal,setPrincipal],["이자",interest,setInterest],["수수료",fee,setFee]] as const).map(([name,value,set])=><Field key={name} label={name}><input type="number" min="0" step="0.01" value={value} onChange={e=>{set(e.target.value);setApprove(false);}}/></Field>)}</div>}
+        </section>}
         {type === "TRANSFER" && <p className="money-financial-notice">내 소유 계좌 사이의 이동입니다. 수입·소비로 합산하지 않으며 저축 영역을 넘는 순이동만 순저축에 반영합니다.</p>}
         {type === "REFUND" && <p className="money-financial-notice">연결한 소비를 상쇄하는 환불입니다. 일반 수입으로 합산하지 않습니다.</p>}
         {type === "REFUND" && (
-          <Field label="원 소비 연결 (선택)">
+          <><Field label="원소비 검색"><input onChange={e=>onRefundSearch?.(e.target.value)}/></Field><Field label="원 소비 연결 (선택)">
             <select value={refund} onChange={(e) => setRefund(e.target.value)}>
               <option value="">연결 없이 환불로 기록</option>
               {refunds.map((t) => (
@@ -512,9 +537,11 @@ export function EntryForm({
                 <option value={refund}>연결된 원 소비</option>
               )}
             </select>
-          </Field>
+          </Field></>
         )}
-        {onSpecialType&&<SimilarEntries account={type==="EXPENSE"||type==="TRANSFER"?from:to} at={at} amount={Number(amount)}/>}
+        {special&&<label className="money-check"><input type="checkbox" checked={approve} onChange={e=>setApprove(e.target.checked)}/>관계와 금액을 확인하여 금융 원장에 반영</label>}
+        {special&&!approve&&<p role="status">연결 대기로 저장합니다. 계좌 이동을 기록하고 부채와 환불 차감은 보류합니다.</p>}
+        {manual&&<SimilarEntries account={direction==="EXPENSE"||direction==="TRANSFER"?from:to} at={at} amount={Number(amount)}/>}
         <Field label="제목">
           <input
             maxLength={240}
@@ -535,6 +562,7 @@ export function EntryForm({
           <input
             type="checkbox"
             checked={excluded}
+            disabled={!!special}
             onChange={(e) => setExcluded(e.target.checked)}
           />{" "}
           장부 및 통계에서 제외
