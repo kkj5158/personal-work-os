@@ -104,11 +104,18 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
  const current=ledgerDisplayType(row),id=useId(),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null),searchInput=useRef<HTMLInputElement>(null);
  const [open,setOpen]=useState(false),[search,setSearch]=useState(''),[highlight,setHighlight]=useState(0);
  const [position,setPosition]=useState({top:8,left:8,maxHeight:380});
+ const restoreAfterSave=useRef(false);
+ useEffect(()=>{
+  if(!disabled&&restoreAfterSave.current){
+   restoreAfterSave.current=false;
+   if(document.activeElement===document.body)trigger.current?.focus();
+  }
+ },[disabled]);
  const options=Object.entries(ledgerTypes).filter(([value,label])=>(label+value).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
  const enabled=options.filter(([type])=>!directionHint(row,type));
  const active=enabled[Math.min(highlight,enabled.length-1)]?.[0];
  function close(restore=true){setOpen(false);if(restore)trigger.current?.focus();}
- function choose(type:string){close();if(type!==current)onChoose(type);}
+ function choose(type:string){close();if(type!==current){restoreAfterSave.current=true;onChoose(type);}}
  useLayoutEffect(()=>{
   if(!open)return;
   function place(){
@@ -146,5 +153,5 @@ export function DecisionStatus({row,entry,retry,undo}:{row:LedgerRow;entry?:Deci
  if(entry&&entry.phase!=='saved')return <div className="al-decision-result" role="status"><span>{ledgerTypes[entry.command.financialType]} · {entry.message}</span><button type="button" onClick={()=>retry(entry,row)}>{entry.phase==='unknown'?'원래 요청 재확인':'선택 다시 적용'}</button></div>;
  const saved=entry?.receipt?.currentVersion===row.version;
  return <div className="al-decision-result" role="status"><span className={'al-status '+(relation||ledgerDisplayType(row)==='UNRESOLVED'?'unresolved':'')}>{relation||(saved?'저장됨':ledgerDisplayType(row)==='UNRESOLVED'?'금융 의미 미확정':row.meaningOrigin==='AUTO'?'자동 확정':row.declaredFinancialType||row.meaningOrigin==='OWNER'?'직접 확정':'확정')}</span>
- {relation&&<small>{row.meaningApplied===false?'유형 선택 저장 · 금융 반영 대기':'유형 저장됨'}</small>}{saved&&entry&&<button type="button" onClick={()=>undo(entry)}>실행 취소</button>}</div>;
+ {relation&&<small>{row.meaningApplied===false?'유형 선택 저장 · 금융 반영 대기':'유형 저장됨'}</small>}{entry?.receipt&&entry.receipt.currentVersion<row.version&&<small>이후 수정되어 실행 취소할 수 없습니다.</small>}{saved&&entry&&<button type="button" onClick={()=>undo(entry)}>실행 취소</button>}</div>;
 }
