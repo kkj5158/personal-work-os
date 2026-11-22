@@ -17,7 +17,7 @@ const expense={...base,id:'expense',title:'Expense',type:'EXPENSE',from_account_
 const transfer={...base,id:'transfer',title:'Transfer',type:'TRANSFER',from_account_id:'one',to_account_id:'two',categoryEligible:false,signedAmount:null,direction:'TRANSFER'} as unknown as LedgerRow;
 const refund={...base,id:'refund',title:'Refund',type:'REFUND',from_account_id:null,to_account_id:'two',categoryEligible:false,signedAmount:100,direction:'IN',book:{id:'refund',type:'REFUND'}} as unknown as LedgerRow;
 const props={accounts,categories:[],ready:true,period:{preset:'month',from:'2026-11-01',to:'2026-11-30'},select:()=>{},navigate:()=>{}} as Props;
-async function mount(){const dom=new JSDOM('<div id="root"></div>',{url:'https://test.example/money/ledger'});Object.assign(globalThis,{React,self:dom.window,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});Object.assign(dom.window.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});const {createRoot}=await import('react-dom/client');return {dom,root:createRoot(document.getElementById('root')!)};}
+async function mount(){const dom=new JSDOM('<div id="root"></div>',{url:'https://test.example/money/ledger'});Object.assign(globalThis,{React,self:dom.window,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,ResizeObserver:class { observe(){} disconnect(){} },Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});Object.assign(dom.window.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});const {createRoot}=await import('react-dom/client');return {dom,root:createRoot(document.getElementById('root')!)};}
 async function tick(){await act(async()=>{await new Promise(r=>setTimeout(r,8));});}
 function page(path:string){if(path==='/category-groups'||path==='/loans')return [];if(path.startsWith('/account-ledger/rows/'))return expense;if(path.startsWith('/account-ledger/pending?'))return {items:[{id:'raw',title:'Unposted RAW',occurredAt:base.occurred_at,amount:99,accountId:null,reason:'확인 필요'}],total:1,accountCounts:[],summary:{total:1,unresolved:0}};if(path.startsWith('/account-ledger?')){const q=new URL(path,'https://test.example').searchParams,scope=q.get('accountId'),all=[expense,transfer,refund],items=all.filter(row=>!scope||row.from_account_id===scope||row.to_account_id===scope).map(row=>({...row,signedAmount:scope?(row.from_account_id===scope?-row.amount:row.amount):row.signedAmount}));return {items,total:items.length,accountCounts:[{accountId:'one',count:120},{accountId:'two',count:85}],summary:{total:items.length,unresolved:0,currencies:['KRW']}};}if(path.endsWith('/activity'))return {recommendations:[],saves:[]};if(path.endsWith('/usage'))return {items:[]};return {items:[]};}
 test('account chips select exactly one scope and full counts are independent of current page',async()=>{const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;let writes=0;api.get=async<T,>(path:string)=>page(path) as T;api.post=async()=>{writes++;throw Error('Unexpected write');};try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();assert.equal(document.querySelectorAll('[data-transaction-id="transfer"]').length,1);assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.match(document.querySelector('.al-account-buttons')!.textContent!,/120/);assert.equal(document.querySelectorAll('[aria-label$="생활 카테고리"]').length,2);const one=document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[0];await act(()=>one.click());await tick();assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.equal(document.querySelectorAll('[data-transaction-id]').length,2);assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/−100/);await act(()=>document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[1].click());await tick();assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/\+100/);await act(()=>document.querySelector<HTMLButtonElement>('.al-account-all')!.click());await tick();assert.equal(document.querySelectorAll('[data-transaction-id]').length,3);assert.equal(writes,0);}finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}});
@@ -247,28 +247,116 @@ test('same-row conflict keeps desired type, refreshes latest row and requires ex
  });
 });
 
-test('a renamed policy category opens loan details and pending classification reuses the same request without posting principal',async()=>{
- const {AccountLedgerEditor}=await import('./MoneyAccountLedgerEditor'),{dom,root}=await mount();
+test('source-backed 8,000 KRW incoming cash saves a category on selection without opening financial details',async()=>{
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount();
+ const get=api.get,post=api.post;
+ const category={id:'income',name:'합성 수입',kind:'INCOME' as const,color:'#778899',archived:false,version:1};
+ let row:LedgerRow={...incoming,amount:8000,signedAmount:8000,book:undefined,classificationVersion:3,quickConfirmAvailable:true,sourceCount:1};
+ let acknowledge!:()=>void;
+ const requests:{path:string;body:Record<string,unknown>}[]=[];
+ api.get=async<T,>(path:string)=>(path.startsWith('/account-ledger?')?{...page(path),items:[row]}:path.endsWith('/rows/credit')?row:page(path)) as T;
+ api.post=async<T,>(path:string,body:unknown)=>{
+  requests.push({path,body:body as Record<string,unknown>});
+  await new Promise<void>(resolve=>{acknowledge=resolve;});
+  row={...row,meaning_state:'CONFIRMED',version:2,classificationVersion:4,categoryEligible:true,book:{...incoming.book!,categoryId:category.id,classificationVersion:4}};
+  return {status:'APPLIED',result:{row}} as T;
+ };
+ try{
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props} categories={[category]}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  const transaction=()=>document.querySelector('[data-transaction-id=credit]')!;
+  assert.match(transaction().textContent!,/8,000/);
+  assert.match(transaction().textContent!,/금융 의미 미확정/);
+  await act(()=>transaction().querySelector<HTMLButtonElement>('[aria-label="Credit 생활 카테고리"]')!.click());
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="합성 수입 직접 지정"]')!.click());await tick();
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].path,'/account-ledger/rows/credit/category');
+  assert.equal(requests[0].body.baseDirection,'INCOME');
+  assert.equal(requests[0].body.expectedClassificationVersion,3);
+  assert.match(transaction().textContent!,/저장 중/);
+  assert.doesNotMatch(transaction().textContent!,/저장됨/);
+  assert.equal(document.querySelector('.al-editor-row'),null);
+  await act(()=>acknowledge());await tick();
+  assert.match(transaction().textContent!,/저장됨/);
+  assert.match(transaction().textContent!,/합성 수입/);
+  assert.equal(document.querySelector('.al-editor-row'),null);
+ }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
+});
+
+test('special category intent saves inline, recovers the same request and opens guarded details only on demand',async()=>{
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount();
  const get=api.get,post=api.post;
  const category={id:'bound',name:'은행 분할',kind:'EXPENSE' as const,color:'#778899',archived:false,version:2,semanticCode:'LOAN_PAYMENT' as const,semanticPolicyVersion:1};
  const ordinary={...category,id:'copy',name:'대출 상환',semanticCode:null,semanticPolicyVersion:null};
- const requests:{path:string;body:Record<string,unknown>}[]=[];
- api.get=async<T,>(path:string)=>(path.includes('/outcomes/')?{status:'UNKNOWN'}:path==='/category-groups'||path==='/loans'?[]:expense) as T;
+ const requests:{path:string;body:Record<string,unknown>}[]=[],reads:string[]=[];
+ let row=expense;
+ api.get=async<T,>(path:string)=>{
+  reads.push(path);
+  return (path.includes('/outcomes/')?{status:'UNKNOWN'}:path.startsWith('/account-ledger?')?{...page(path),items:[row]}:path.endsWith('/rows/expense')?row:page(path)) as T;
+ };
  api.post=async<T,>(path:string,body:unknown)=>{
   requests.push({path,body:body as Record<string,unknown>});
-  return (requests.length===1?{status:'UNKNOWN'}:{status:'APPLIED'}) as T;
+  if(requests.length===1)throw Error('Lost response');
+  row={...row,semanticCategoryId:category.id,declaredFinancialType:'LOAN_PAYMENT',relationStatus:'LOAN_SPLIT_PENDING',meaning_state:'UNRESOLVED',meaningApplied:false,version:2,classificationVersion:1};
+  return {status:'APPLIED',result:{row}} as T;
  };
- const click=async(label:string)=>{const node=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===label);assert.ok(node,label);await act(()=>node.click());await tick();};
- const render=async(id:string)=>{await act(()=>root.render(<MoneyDataProvider><AccountLedgerEditor key={id} id={expense.id} initialCategoryId={id} accounts={accounts} categories={[category,ordinary]} pending={null} onPending={()=>{}} onClose={()=>{}}/></MoneyDataProvider>));await tick();};
+ const transaction=()=>document.querySelector('[data-transaction-id=expense]')!;
+ async function click(selector:string){const node=document.querySelector<HTMLButtonElement>(selector);assert.ok(node,selector);await act(()=>node.click());await tick();}
  try{
-  await render('copy');assert.equal(document.querySelector('[aria-label="연결 대출"]'),null);
-  await render('bound');assert.ok(document.querySelector('[aria-label="연결 대출"]'));assert.equal(requests.length,0);
-  await click('분류 저장 · 관계 확인 대기');assert.equal(requests.length,1);
-  await click('처리 결과 확인');assert.equal(requests.length,1);
-  await click('같은 요청 재시도');assert.deepEqual(requests[0],requests[1]);
-  assert.ok(requests.every(r=>r.path==='/account-ledger/rows/expense/category'));
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props} categories={[category,ordinary]}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  await click('[aria-label="Expense 생활 카테고리"]');await click('[aria-label="은행 분할 직접 지정"]');
+  assert.equal(requests.length,1);
+  assert.match(transaction().textContent!,/은행 분할.*원래 요청 결과/);
+  assert.equal(document.querySelector('.al-editor-row'),null);
+  await act(()=>[...transaction().querySelectorAll('button')].find(button=>button.textContent==='원래 요청 재확인')!.click());await tick();
+  assert.deepEqual(requests[0],requests[1]);
+  assert.equal(reads.filter(path=>path.endsWith('/outcomes/'+requests[0].body.requestId)).length,2);
+  assert.equal(requests[0].path,'/account-ledger/rows/expense/category');
   assert.equal(requests[0].body.categoryId,'bound');assert.equal(requests[0].body.semanticPolicyVersion,1);
   assert.equal(requests[0].body.thisTransactionOnly,true);assert.equal(requests[0].body.principal,undefined);
+  assert.match(transaction().textContent!,/저장됨.*원금·이자 분할 미확정/);
+  assert.equal(document.querySelector('[aria-label="연결 대출"]'),null);
+  await act(()=>[...transaction().querySelectorAll('button')].find(button=>button.textContent==='관계 확인')!.click());await tick();
+  assert.ok(document.querySelector('[aria-label="연결 대출"]'));
+  assert.equal(document.querySelector('.al-editor-row')?.textContent?.includes('분류 저장'),false);
+  assert.equal(requests.length,2);
+ }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
+});
+
+test('category conflict keeps the draft, and confirmed ordinary category undo uses fresh versions',async()=>{
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;
+ const categories=['이전 식비','새 식비'].map((name,i)=>({id:String(i),name,kind:'EXPENSE' as const,color:'#778899',archived:false,version:1}));
+ let row:LedgerRow={...expense,classificationVersion:1,book:{...expense.book!,categoryId:'0',classificationVersion:1}};
+ const writes:Record<string,unknown>[]=[];
+ api.get=async<T,>(path:string)=>(path.startsWith('/account-ledger?')?{...page(path),items:[row]}:path.endsWith('/rows/expense')?row:page(path)) as T;
+ api.post=async<T,>(_path:string,body:unknown)=>{
+  const command=body as Record<string,unknown>;
+  writes.push(command);
+  const nextVersion=(row.classificationVersion??0)+1;
+  row={...row,classificationVersion:nextVersion,book:{...row.book!,classificationVersion:nextVersion,
+   categoryId:writes.length===1?'0':String(command.categoryId)}};
+  return (writes.length===1?{status:'NOT_APPLIED',result:{reason:'VERSION_CONFLICT'}}:{status:'APPLIED',result:{row}}) as T;
+ };
+ const cell=()=>document.querySelector('[data-transaction-id=expense] .al-category-result')!;
+ function button(label:string){return [...cell().querySelectorAll('button')].find(b=>b.textContent===label)!;}
+ async function pick(){
+  await act(()=>cell().querySelector<HTMLButtonElement>('.category-picker button')!.click());
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="새 식비 직접 지정"]')!.click());await tick();
+ }
+ try{
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props} categories={categories}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  await pick();
+  assert.match(cell().textContent!,/이전 식비.*새 식비.*저장 충돌/);
+  await act(()=>button('선택 다시 적용').click());await tick();
+  assert.match(cell().textContent!,/새 식비.*저장됨/);
+  assert.equal(writes[1].expectedClassificationVersion,2);
+  assert.notEqual(writes[0].requestId,writes[1].requestId);
+  await pick();
+  assert.equal(writes.length,2);
+  await act(()=>button('카테고리 실행 취소').click());await tick();
+  assert.equal(writes[2].categoryId,'0');
+  assert.equal(writes[2].expectedClassificationVersion,3);
+  assert.notEqual(writes[1].requestId,writes[2].requestId);
+  assert.match(cell().textContent!,/이전 식비.*저장됨/);
  }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
 });
 

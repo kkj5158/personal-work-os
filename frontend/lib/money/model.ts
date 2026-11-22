@@ -166,9 +166,10 @@ export type AccountDetail = {
   }[];
 };
 export const moneyApi = {
-  get: <T>(path: string) => apiClient.get<T>("/api/money" + path),
-  post: <T>(path: string, value: unknown) =>
-    apiClient.post<T>("/api/money" + path, value),
+  get: <T>(path: string, owner?: string) =>
+    owner ? apiClient.scoped<T>(owner, "/api/money" + path) : apiClient.get<T>("/api/money" + path),
+  post: <T>(path: string, value: unknown, owner?: string) =>
+    owner ? apiClient.scoped<T>(owner, "/api/money" + path, "POST", value) : apiClient.post<T>("/api/money" + path, value),
   patch: <T>(path: string, value: unknown, owner?: string) => owner ? apiClient.scoped<T>(owner, "/api/money" + path, "PATCH", value) : apiClient.patch<T>("/api/money" + path, value),
   put: <T>(path: string, value: unknown) =>
     apiClient.put<T>("/api/money" + path, value),
