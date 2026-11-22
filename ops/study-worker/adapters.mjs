@@ -1,4 +1,5 @@
 import {CONTRACT,REVIEW,preflight} from './reasoning.mjs';
+import {GROUNDING,auditAnswer} from './grounding.mjs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -66,10 +67,15 @@ export class CodexAdapter {
   if(proof.slots.some(s=>s.issue))return {preflight:proof,provenance};
   const selected=repairing?proof.slots.filter(s=>targets.some(t=>matches(t,s))):proof.slots;
   const design=selected.map(s=>({slot:s.design,binding:s.binding}));
-  const directions=prompt(job,design)+'\nUse case zero only for the student, preserving every necessary observation and the decision criteria. The other cases are editorial tests. Use the accepted excerptId as primary citation. Keep private reasoning and counterfactuals out of student content.';
+  const keyRules=job.input.answerGrounding===GROUNDING?
+   '\nGround every assertion in answer, explanation, grading requirements and incorrect reasons in what the learner can read. Separate observed inputs from actual-world facts. A replacement does not imply retained defaults. An omitted fact need not be false. If context is incomplete, identify the missing field, a concrete check and distinct conditional responses. Accept other defensible routes. Do not reward generic uncertainty, invent case facts, or reveal an answer with a giveaway condition.':'';
+  const directions=prompt(job,design)+keyRules+'\nUse case zero only for the student, preserving every necessary observation and the decision criteria. The other cases are editorial tests. Use the accepted excerptId as primary citation. Keep private reasoning and counterfactuals out of student content.';
   let result;
   if(repairing){
-   const drafts=targets.map(s=>({part:s.part,question:prior[s.part][s.order-1]}));
+   const drafts=targets.map(s=>{
+    const question=prior[s.part][s.order-1];
+    return {part:s.part,question,key:prior.keys.find(k=>k.part===s.part && k.questionId===question.id)};
+   });
    const schema=repairSchema(job,targets.length);
    if(daily){
     schema.properties.followUps=generationSchemaFor(job).properties.followUps;
@@ -86,7 +92,15 @@ export class CodexAdapter {
   result.provenance=provenance;
   const review=await this.run(reviewSchema,reviewPrompt(job,result)+'\nSolve the public task before checking its key. Check the winning answer against each plausible alternative, actual evidence and all hints. Reject uncertainty. Check that the task still tests the following approved objectives and observations: '+JSON.stringify(proof.slots.map(({part,order,design:d})=>({part,order,objective:d.objective,factors:d.factors,observations:d.cases[0].values}))), 'candidate_review');
   result.independentReview={version:REVIEW_VERSION,model:provenance.model,verdicts:review.verdicts};
-  for(const s of proof.slots){const q=result[s.part][s.order-1];s.questionId=q.id;s.questionVersion=q.version;}
+  for(const s of proof.slots){
+   const q=result[s.part][s.order-1];
+   s.questionId=q.id;s.questionVersion=q.version;
+   if(job.input.answerGrounding===GROUNDING){
+    const key=result.keys.find(k=>k.part===s.part && k.questionId===q.id);
+    if(!key)throw Error('MISSING_CANDIDATE_KEY');
+    s.answerAudit=await auditAnswer(job.input,s.part,q,key,this.run.bind(this));
+   }
+  }
   result.preflight=proof;
   return result;
  }
@@ -97,7 +111,7 @@ export class CodexAdapter {
    const statLine={phase,model:'MODEL_UNVERIFIED',effort:'NOT_REPORTED',usage:null};
    await new Promise((resolve,reject)=>{
     const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|CODEX_HOME)$/i.test(k)));
-    const child=spawn('codex',['exec','--ephemeral',...(['design','decision_audit','blueprint_review','candidate_review','blind_solve'].includes(phase)?['-c','model_reasoning_effort="high"']:[]),'--ignore-user-config','--sandbox','read-only','--skip-git-repo-check','--cd',dir,'--output-schema',schema,'--output-last-message',output,'--json','-'],{env,windowsHide:true,stdio:['pipe','pipe','pipe']});
+    const child=spawn('codex',['exec','--ephemeral',...(['design','decision_audit','blueprint_review','candidate_review','blind_solve','answer_grounding','generation','repair'].includes(phase)?['-c','model_reasoning_effort="high"']:[]),'--ignore-user-config','--sandbox','read-only','--skip-git-repo-check','--cd',dir,'--output-schema',schema,'--output-last-message',output,'--json','-'],{env,windowsHide:true,stdio:['pipe','pipe','pipe']});
     let bytes=0,usedTool=false,pending='';const timeout=setTimeout(()=>child.kill(),480000);
     child.stdout.on('data',chunk=>{bytes+=chunk.length;pending+=chunk.toString();let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{const event=JSON.parse(line);if(event.type==='turn.completed'&&event.usage){statLine.usage=Object.fromEntries(Object.entries(event.usage).filter(([k,v])=>/token/.test(k)&&Number.isSafeInteger(v)&&v>=0));}if(/command_execution|mcp_tool_call|web_search|file_change/.test(JSON.stringify(event.item?.type??'')))usedTool=true;}catch{}}if(bytes>MAX*2)child.kill();});
     // Raw Codex diagnostics can contain source text; never print/store them as operational logs.

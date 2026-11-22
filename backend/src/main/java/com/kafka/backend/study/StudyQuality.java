@@ -25,7 +25,7 @@ final class StudyQuality {
   }
 
   static void blueprint(ObjectNode plan, List<StudySourceSelection.Candidate> passages, int day) {
-    plan.put("decisionAudit", StudyReasoning.SEMANTIC).put("reasoningContract", StudyReasoning.VERSION).put("schemaVersion", QUALITY_VERSION).put("promptVersion", QUALITY_VERSION);
+    plan.put("answerGrounding", StudyAnswerGrounding.VERSION).put("decisionAudit", StudyReasoning.SEMANTIC).put("reasoningContract", StudyReasoning.VERSION).put("schemaVersion", QUALITY_VERSION).put("promptVersion", QUALITY_VERSION);
     var blueprint = plan.putObject("blueprint")
         .put("learningObjective", plan.path("plannedTopic").asString() + "의 근거를 해석하고 사례의 해결책을 비교·설계한다.")
         .put("decisionStandard", "학습자가 관찰이나 자료의 역할을 해석하고, 같은 제약 아래 가능해 보이는 대응을 비교해야 한다. 관찰 근거는 제시하되 승패를 결정하는 판단은 미리 내려 주지 않는다.")
@@ -240,6 +240,20 @@ final class StudyQuality {
           String code = "REVIEW_" + issue.toUpperCase(Locale.ROOT);
           codes.add(code);
           diagnostic.put("code", code);
+        }
+      }
+      if (StudyAnswerGrounding.VERSION.equals(plan.path("answerGrounding").asString())) {
+        var record = output.path("preflight").path("slots").valueStream()
+            .filter(r -> r.path("part").asString().equals(part) && r.path("order").equals(q.path("order"))).findFirst().orElseThrow();
+        var claims = StudyAnswerGrounding.inspect(StudyAnswerGrounding.inventory(plan, part, q, k), record.path("answerAudit"),
+            Set.of("essay", "case_analysis", "short_answer", "diagram").contains(q.path("kind").asString()));
+        if (!claims.isEmpty()) {
+          if (!codes.contains("REVIEW_UNGROUNDED")) codes.add("REVIEW_UNGROUNDED");
+          var findings = privateReview.withArrayProperty("questions");
+          var diagnostic = findings.valueStream().filter(v -> id.equals(v.path("questionId").asString())
+              && (!v.has("code") || v.path("code").asString().equals("REVIEW_UNGROUNDED"))).findFirst()
+              .map(JsonNode::asObject).orElseGet(() -> findings.addObject().put("part", part).put("order", q.path("order").asInt()).put("questionId", id));
+          diagnostic.put("code", "REVIEW_UNGROUNDED").set("claimFindings", claims);
         }
       }
       var slot = plan.path("blueprint").path("slots").path(part).path(q.path("order").asInt() - 1);

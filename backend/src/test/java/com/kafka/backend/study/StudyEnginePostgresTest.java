@@ -296,11 +296,30 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
                "missingDiscriminator":"None for the next test","repair":"Retain both observations","best":[0],"testsDiscriminate":"yes",
                "tests":[{"option":0,"costRisk":"Read-only trace","predictions":["missing","present"]},{"option":1,"costRisk":"Irreversible replay","predictions":["missing","missing"]}]}
               """));
+        if (StudyAnswerGrounding.VERSION.equals(plan.path("answerGrounding").asString())) {
+          var k = keys.valueStream().filter(v -> v.path("questionId").equals(q.path("id"))).findFirst().orElseThrow();
+          record.set("answerAudit", syntheticGrounding(plan, part, q, k));
+        }
         record.putObject("review").put("part", part).put("order", order).put("issue", "none")
             .put("evidence", "Synthetic adjudication").set("answers", JSON.readTree("[[0],[1],[1],[0,1],[0,1]]"));
       }
     }
     return n;
+  }
+
+  static ObjectNode syntheticGrounding(JsonNode plan, String part, JsonNode q, JsonNode key) {
+    var inventory = StudyAnswerGrounding.inventory(plan, part, q, key);
+    var a = JSON.createObjectNode().put("version", StudyAnswerGrounding.VERSION).put("digest", inventory.digest())
+        .put("rubric", "grounded").put("rubricEvidence", "synthetic independent review");
+    var rows = a.putArray("components");
+    inventory.targets().forEach((field,value) -> {
+      var c = rows.addObject().put("field",field).putArray("claims").addObject().put("anchor",value)
+          .put("basis","DERIVED").put("treatment","asserted").put("verdict","supported").put("negativeFact",false)
+          .put("justification","synthetic controlled entailment").put("repair","none");
+      c.putArray("premises").addObject().put("field","prompt").put("quote",q.path("prompt").asString());
+      c.putArray("scope");
+    });
+    return a;
   }
 
   ObjectNode generate(StudyEngineWorker w, String marker) {
@@ -674,6 +693,8 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
       var question = candidate.path("required").get(1).asObject();
       question.put("context", "가상 사례입니다. 결재 효력일과 완료 기준이 각각 기록 A의 날짜와 수치에 해당한다고 명시했습니다. real-draft-marker");
       assertThat(StudyQuality.questionIssues(question, candidate.path("keys").get(1))).isEmpty();
+      var changedProof = candidate.path("preflight").path("slots").valueStream().filter(r -> r.path("part").asString().equals("required") && r.path("order").asInt()==2).findFirst().orElseThrow().asObject();
+      changedProof.set("answerAudit", syntheticGrounding(input, "required", question, candidate.path("keys").get(1)));
       var verdicts = separateReview(candidate);
       previousEvidence = "지문이 이미 효력일과 완료 기준을 제시해 값을 대응시키면 됩니다. 검토 " + attempt;
       verdicts.get(1).asObject().put("issue", "trivial_reasoning").put("evidence", previousEvidence)
@@ -721,7 +742,7 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     verdicts.get(0).asObject().put("issue", "uncertain");
     assertThatThrownBy(() -> validate(good, input, Set.of())).isInstanceOfSatisfying(StudyQuality.Rejected.class,
         e -> assertThat(e.evaluation.path("issues").toString()).contains("REVIEW_UNCERTAIN"));
-    var legacy = input.deepCopy().asObject().without("reasoningContract");
+    var legacy = input.deepCopy().asObject().without("reasoningContract").without("answerGrounding");
     good.remove("preflight");
     var evaluated = validate(good, legacy, Set.of()).path("quality");
     assertThat(evaluated.path("result").asString()).isEqualTo("needs_owner_review");
@@ -837,6 +858,52 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     altered.path("keys").path(0).path("hints").asArray().set(0, JSON.getNodeFactory().stringNode("changed"));
     assertThatThrownBy(() -> StudyReasoning.preserve(good, quality, altered)).isInstanceOfSatisfying(StudyException.class,
         e -> assertThat(e.code).isEqualTo("PROTECTED_SLOT_CHANGED"));
+  }
+
+  @Test
+  void groundingBlocksHiddenRoomDefaultAndUnfairRubricAndPreservesPrivateFindings() throws Exception {
+    indexSource(1,true);
+    var job = planDay();
+    var worker = worker();
+    var claim = engine.claimWorker(worker);
+    var input=claim.path("input");
+    var candidate=output(input,"grounding");
+    var q=candidate.path("extension").get(0).asObject();
+    q.put("context","The rerun lists a memo and a room-dependent rule. The actual room and retained defaults are unobserved.");
+    var key=candidate.path("keys").valueStream().filter(k->k.path("questionId").equals(q.path("id"))).findFirst().orElseThrow().asObject();
+    key.put("model","The room was north. The default instruction persisted.");
+    var rec=candidate.path("preflight").path("slots").valueStream().filter(s->s.path("questionId").equals(q.path("id"))).findFirst().orElseThrow().asObject();
+    var a=syntheticGrounding(input,"extension",q,key);
+    var inv=StudyAnswerGrounding.inventory(input,"extension",q,key);
+    var model=a.path("components").valueStream().filter(c->c.path("field").asString().equals("model")).findFirst().orElseThrow();
+    var wrong=model.path("claims").get(0).asObject().put("anchor","room was north").put("basis","UNKNOWN").put("repair","ROOM_PRIVATE_SENTINEL");
+    var prior=wrong.deepCopy().put("anchor","default instruction persisted").put("repair","DEFAULT_PRIVATE_SENTINEL");
+    model.path("claims").asArray().add(prior);
+    a.put("rubric","hidden_requirement");
+    var issues=StudyAnswerGrounding.inspect(inv,a,true);
+    assertThat(issues.size()).isEqualTo(3);
+    rec.set("answerAudit",a);
+    var id=UUID.fromString(job.path("id").asString()); var lease=UUID.fromString(claim.path("leaseToken").asString());
+    var rejected=engine.complete(worker,id,lease,candidate);
+    assertThat(rejected.toString()).contains("REVIEW_UNGROUNDED").doesNotContain("ROOM_PRIVATE_SENTINEL","DEFAULT_PRIVATE_SENTINEL","claimFindings");
+    assertThat(engine.complete(worker,id,lease,candidate)).isEqualTo(rejected);
+    assertThat(engine.claimWorker(worker,id).path("input").path("repairFeedback").toString())
+        .contains("ROOM_PRIVATE_SENTINEL","DEFAULT_PRIVATE_SENTINEL","UNSUPPORTED_GRADING_REQUIREMENT");
+
+    key.put("model","If the room is north, apply the local rule. Check the booking to distinguish the branches.");
+    a=syntheticGrounding(input,"extension",q,key);
+    var c=a.path("components").valueStream().filter(v->v.path("field").asString().equals("model")).findFirst().orElseThrow().path("claims").get(0).asObject();
+    c.put("basis","CONDITIONAL").put("treatment","conditional");
+    inv=StudyAnswerGrounding.inventory(input,"extension",q,key);
+    assertThat(StudyAnswerGrounding.inspect(inv,a,true).isEmpty()).isTrue();
+    c.put("basis","DIRECTLY_GIVEN").put("treatment","asserted");
+    c.path("premises").get(0).asObject().put("field","context").put("quote","The room was north");
+    assertThat(StudyAnswerGrounding.inspect(inv,a,true).toString()).contains("PREMISE_BINDING");
+    q.put("context","The room was north for this rerun.");
+    inv=StudyAnswerGrounding.inventory(input,"extension",q,key); a.put("digest",inv.digest());
+    assertThat(StudyAnswerGrounding.inspect(inv,a,true).isEmpty()).isTrue();
+    c.put("negativeFact",true);
+    assertThat(StudyAnswerGrounding.inspect(inv,a,true).toString()).contains("OBSERVATION_SCOPE");
   }
 
   private ArrayNode separateReview(ObjectNode candidate) {
