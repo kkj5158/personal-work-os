@@ -52,8 +52,8 @@ public class MoneyOwnerReviewService {
  @Transactional(readOnly=true) public Map<String,Object> context(UUID id){
   try{return parsedContext(id);}catch(InvalidRequestException unavailable){
    var manual=manual();var result=new LinkedHashMap<String,Object>(manual.context(id));var raw=money.notification(id);var candidate=new LinkedHashMap<String,Object>();
-   candidate.put("postedAt",raw.postedAt());candidate.put("providerOccurredAt",null);candidate.put("timeSource","OWNER_ENTERED");
-   result.remove("attempts");result.put("candidate",candidate);result.put("raw",safeSource(raw));result.put("occurredAt",raw.postedAt());result.put("amount",null);result.put("currency",raw.rawPayload().get("currency"));result.put("direction",null);result.put("partners",List.of());result.put("duplicates",List.of());result.put("archived",archived(id));result.put("manualRequired",true);result.put("manualReason",unavailable.getMessage());return result;
+   candidate.put("postedAt",raw.postedAt());candidate.put("providerOccurredAt",null);candidate.put("timeSource","UNCONFIRMED");
+   result.remove("attempts");result.put("candidate",candidate);result.put("raw",safeSource(raw));result.put("occurredAt",null);result.put("amount",null);result.put("currency",raw.rawPayload().get("currency"));result.put("direction",null);result.put("partners",List.of());result.put("duplicates",List.of());result.put("archived",archived(id));result.put("manualRequired",true);result.put("manualReason",unavailable.getMessage());return result;
   }
  }
  private Map<String,Object> parsedContext(UUID id){

@@ -58,7 +58,7 @@ class MoneyOwnerReviewPostgresTest{
   var raw=f.money.ingest(Map.of("sourcePackage","com.ibk.android.ionebank","title","합성 알림","text","합성 123-456-789 확인 필요","postedAt",at.toString(),"currency","KRW")).notification();
   f.money.finishProcessing(raw.id(),ProcessingState.FAILED,"UNRECOGNIZED_SHAPE");
   var context=service.context(raw.id());
-  assertThat(context).containsEntry("manualRequired",true).containsEntry("amount",null).containsEntry("direction",null);
+  assertThat(context).containsEntry("manualRequired",true).containsEntry("amount",null).containsEntry("direction",null).containsEntry("occurredAt",null);
   assertThat(context.get("raw").toString()).doesNotContain("123-456-789");
   assertThat(service.refunds(raw.id(),"","KRW",at)).containsKey("items");
   var financial=new MoneyOwnerReviewService.Financial("REFUND",Direction.IN,new BigDecimal("40000"),at,"합성 자료로 확인","합성 환불",null,null,null,null,null,null,null,null,null,null,null,null,false,"KRW");
