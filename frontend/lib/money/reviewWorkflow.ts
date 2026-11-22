@@ -5,9 +5,11 @@ export type ReviewPreviewRow = Pick<AiItem, 'id' | 'kind' | 'occurredAt' | 'merc
 export type ReviewPreview = {previewId: string; scope: string; action: ReviewAction; selectedCount: number; eligibleCount: number; excludedCount: number; items: ReviewPreviewRow[]; groups: Record<string, number>};
 export type ReviewResult = {id: string; kind: string; status: string; eventId?: string; transactionId?:string; canUndo?: boolean; message?: string};
 export type ReviewOutcome = {requestId: string; completed: boolean; items: ReviewResult[]};
-export type ReviewPage = {items: AiItem[]; total: number; reasons?: string[]};
+export type ReviewPage = {items: AiItem[]; total: number; reasons?: string[]; counts?: Record<'PENDING' | 'DEFERRED' | 'COMPLETED', number>};
+export const REVIEW_BATCH_LIMIT = 10000;
+export const reviewLedgerHref = (id: string) => '/money/ledger?transactionId=' + encodeURIComponent(id);
 export const reviewKey = (row: {id: string; kind: string}) => row.kind + ':' + row.id;
-export const reviewActionLabel = (action: ReviewAction) => ({MOVE_TO_BOOKKEEPING: '가계부 이동', DEFER: '제외', NON_TRANSACTION: '비거래 처리', REOPEN: '복원'})[action];
+export const reviewActionLabel = (action: ReviewAction) => ({MOVE_TO_BOOKKEEPING: '거래장 이동', DEFER: '제외', NON_TRANSACTION: '비거래 처리', REOPEN: '복원'})[action];
 
 /** Only the server can establish a domestic currency default from financial evidence. */
 export function reviewCurrency(row: {currency?: string | null; effectiveCurrency?: string | null}) {
@@ -22,7 +24,7 @@ export function reviewMerchant(row: {merchant: string | null; title: string | nu
 }
 export function reviewDirection(row: {type: string | null; candidate?: AiItem['candidate']; transferCandidates?: number; transferPartnerId?: string | null}) {
   if (row.type === 'TRANSFER' || row.transferPartnerId || (row.transferCandidates ?? 0) > 0) return '이체 확인';
-  return ({EXPENSE: '출금 · 지출', INCOME: '입금 · 수입', REFUND: '환불', LOAN_PAYMENT: '대출 상환'} as Record<string, string>)[row.type ?? ''] || (row.candidate?.direction === 'IN' ? '입금' : row.candidate?.direction === 'OUT' ? '출금' : '방향 확인 필요');
+  return ({EXPENSE: '출금', INCOME: '입금', REFUND: '환불', LOAN_PAYMENT: '대출 상환'} as Record<string, string>)[row.type ?? ''] || (row.candidate?.direction === 'IN' ? '입금' : row.candidate?.direction === 'OUT' ? '출금' : '방향 확인 필요');
 }
 /** Count only newly confirmed results; recovery may return the same successful item repeatedly. */
 export function removeConfirmedReviewRows(page: ReviewPage, saved: ReviewResult[]) {

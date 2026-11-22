@@ -16,7 +16,7 @@ test('merchant hierarchy preserves merchant text and rejects notification-title 
   assert.equal(reviewMerchant({merchant: null, title: '출금 알림'}), '거래처 미확인');
 });
 test('transfer evidence remains explicit even when a candidate direction exists', () => {
-  assert.equal(reviewDirection({type: 'EXPENSE'}), '출금 · 지출');
+  assert.equal(reviewDirection({type: 'EXPENSE'}), '출금');
   assert.equal(reviewDirection({type: null, transferPartnerId: 'partner'}), '이체 확인');
   assert.equal(reviewDirection({type: null}), '방향 확인 필요');
 });
@@ -27,5 +27,5 @@ test('frozen confirmed scope removes only successes and accounts for off-page ro
   assert.equal(next.total, 50);
   assert.deepEqual(next.items.map(row => row.id), ['failed']);
   assert.equal(page.total, 52);
-  assert.deepEqual(['MOVE_TO_BOOKKEEPING', 'DEFER', 'NON_TRANSACTION'].map(action => reviewActionLabel(action as Parameters<typeof reviewActionLabel>[0])), ['가계부 이동', '제외', '비거래 처리']);
+  assert.deepEqual(['MOVE_TO_BOOKKEEPING', 'DEFER', 'NON_TRANSACTION'].map(action => reviewActionLabel(action as Parameters<typeof reviewActionLabel>[0])), ['거래장 이동', '제외', '비거래 처리']);
 });
