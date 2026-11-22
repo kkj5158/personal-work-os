@@ -74,6 +74,11 @@ final class StudyAnswerGrounding {
       return "UNKNOWN_CLASSIFICATION";
     if (basis.equals("UNKNOWN") && !use.equals("unresolved") || basis.equals("CONDITIONAL") && !use.equals("conditional"))
       return "HIDDEN_PREMISE";
+    if (!use.equals("asserted")) {
+      var branch=c.path("resolution");
+      if (!bounded(branch.path("verify")) || !bounded(branch.path("firstOutcome")) || !bounded(branch.path("otherOutcome"))
+          || branch.path("firstOutcome").asString().strip().equals(branch.path("otherOutcome").asString().strip())) return "MISSING_DISCRIMINATING_CHECK";
+    }
     var refs = c.path("premises");
     if (!references(in.visible, refs, 5) || refs.isEmpty()) return "PREMISE_BINDING";
     if (basis.equals("SOURCE_SUPPORTED") && refs.valueStream().noneMatch(v -> v.path("field").asString().startsWith("source."))) return "SOURCE_BINDING";

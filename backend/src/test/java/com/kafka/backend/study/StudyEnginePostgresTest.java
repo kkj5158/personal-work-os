@@ -894,6 +894,8 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     a=syntheticGrounding(input,"extension",q,key);
     var c=a.path("components").valueStream().filter(v->v.path("field").asString().equals("model")).findFirst().orElseThrow().path("claims").get(0).asObject();
     c.put("basis","CONDITIONAL").put("treatment","conditional");
+    assertThat(StudyAnswerGrounding.inspect(StudyAnswerGrounding.inventory(input,"extension",q,key),a,true).toString()).contains("MISSING_DISCRIMINATING_CHECK");
+    c.putObject("resolution").put("verify","Check the booking for this rerun").put("firstOutcome","North: apply local rule").put("otherOutcome","South: verify its own rule");
     inv=StudyAnswerGrounding.inventory(input,"extension",q,key);
     assertThat(StudyAnswerGrounding.inspect(inv,a,true).isEmpty()).isTrue();
     c.put("basis","DIRECTLY_GIVEN").put("treatment","asserted");
