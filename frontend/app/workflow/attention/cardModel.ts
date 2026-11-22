@@ -1,6 +1,10 @@
 import type {AttentionItem,SummaryOrigin} from '../../../lib/api/attention';
 
 const origins:SummaryOrigin[]=['SOURCE_PROVIDED','LOCAL_EXTRACTIVE','EVENT_METADATA'];
+export function codexThreadUrl(item:AttentionItem){
+  const ref=item.source.reference?.replace(/^codex:\/\/threads\//,'');
+  return item.source.kind==='CODEX_DESKTOP' && ref && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(ref) ? 'codex://threads/'+ref : null;
+}
 export function codexMetadata(item:AttentionItem){return item.source.kind==='CODEX_DESKTOP'&&item.source.summaryOrigin==='EVENT_METADATA'&&!item.content;}
 export function groundedSummary(item:AttentionItem){
  if(item.source.capture?.response)return {text:item.source.capture.response.text,origin:'LOCAL_EXTRACTIVE' as const};
