@@ -104,6 +104,42 @@ class MoneyFinancialEnginePostgresTest {
         });
     }
 
+    @Test void inlineCategoryConfirmsOnlyVerifiedOneSidedCashAndReplaysExactly() {
+        fixture.check(e -> {
+            var s = services(e, MoneyPostgresIntegrationTest.OWNER);
+            var account = account(e, "8557");
+            var proven = admitted(e, account, true, 8000, "8557", "합성 카페", AT);
+            var unverified = fixture.tx(e, account.id(), true, 7000, true);
+            var category = e.product().saveCategory(null,
+                    new MoneyProductService.CategoryInput("합성 식비", "#778899", false, null, "EXPENSE", null, 0));
+            var balance = e.product().balance(account.id()).amount();
+            for (var fact : List.of(proven, unverified)) {
+                var row = s.ledger().row(fact.id());
+                var command = new MoneyAccountLedgerService.Category(UUID.randomUUID(), fact.version(),
+                        row.get("fingerprint").toString(), category.id(),
+                        ((Number)row.get("classificationVersion")).longValue(), true, null, "EXPENSE");
+                var receipt = s.ledger().category(fact.id(), command);
+                assertThat(s.ledger().category(fact.id(), command)).isEqualTo(receipt);
+                assertThat(s.commands().outcome(MoneyPostgresIntegrationTest.OWNER, command.requestId())).isEqualTo(receipt);
+                if (fact.equals(proven)) {
+                    assertThat(receipt).containsEntry("status", "APPLIED");
+                    var updated = e.money().transaction(fact.id());
+                    assertThat(updated.meaningState()).isEqualTo("CONFIRMED");
+                    assertThat(updated.sources()).isEqualTo(fact.sources());
+                    assertThat(updated.amount()).isEqualByComparingTo(fact.amount());
+                    assertThat(e.web().accountLedgerBookkeepingRow(fact.id())).containsEntry("categoryId", category.id());
+                    var stale = new MoneyAccountLedgerService.Category(UUID.randomUUID(), command.expectedVersion(),
+                            command.fingerprint(), category.id(), command.expectedClassificationVersion(), true, null, "EXPENSE");
+                    assertThat(s.ledger().category(fact.id(), stale).get("result").toString()).contains("VERSION_CONFLICT");
+                } else {
+                    assertThat(receipt).containsEntry("status", "NOT_APPLIED");
+                    assertThat(e.money().transaction(fact.id())).isEqualTo(fact);
+                }
+            }
+            assertThat(e.product().balance(account.id()).amount()).isEqualByComparingTo(balance);
+        });
+    }
+
     @Test void shadowIsDeterministicAndBatchRejectsStaleTargetsAtomically() {
         fixture.check(e -> {
             var s = services(e, MoneyPostgresIntegrationTest.OWNER);
