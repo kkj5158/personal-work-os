@@ -54,7 +54,8 @@
 .money-month-filter{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 14px;border:1px solid #aec6ef;border-radius:9px;font-size:13px}
 .money-month-filter small{color:#56677f}
 @container(min-width:310px){.money-month-donut-body{grid-template-columns:minmax(0,44%) minmax(0,1fr)}}
-@media(min-width:1280px){.money-month-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.money-month-donuts{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:900px){.money-month-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1280px){.money-month-kpis{grid-template-columns:repeat(5,minmax(0,1fr))}.money-month-donuts{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:1720px){.money-month-donuts{grid-template-columns:repeat(5,minmax(0,1fr))}}
 .money-month-evidence{display:block;white-space:normal}
 @media(max-width:600px){
@@ -64,3 +65,7 @@
  .money-month-donut{padding:14px}
 }
 .money-monthly-filters>summary{display:none}.money-workbench-compact-filters>summary{cursor:pointer;font-size:13px;padding:10px 0;color:#64748b}
+
+.money-row-management{display:flex;align-items:flex-start;flex-wrap:wrap;gap:6px}
+.money-row-management button{min-height:32px}
+@media(max-width:720px){.money-row-management button{min-height:44px}}
