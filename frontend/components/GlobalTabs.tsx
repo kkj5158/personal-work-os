@@ -48,7 +48,7 @@ function NewSpaceTabMenu({ history, open, setOpen, onOpen }: {
     if (!open) return;
     const align = () => {
       if (popup.current && trigger.current) {
-        popup.current.dataset.align = trigger.current.getBoundingClientRect().left + popup.current.offsetWidth + 8 > window.innerWidth ? "right" : "left";
+        popup.current.dataset.align = trigger.current.getBoundingClientRect().left + popup.current.offsetWidth + 8 > document.documentElement.clientWidth ? "right" : "left";
       }
     };
     align();
