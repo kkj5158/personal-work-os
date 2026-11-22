@@ -8,6 +8,9 @@ import { CategoryIconView } from "./MoneyCategoryIcon";
 import { MoneyAnchoredPopover, CategoryTreeColumns, useCategoryGroups } from "./MoneyCategoryTree";
 
 const matches = (text: string, query: string) => !query || normalizeIconQuery(text).includes(normalizeIconQuery(query));
+function PickerIcon({category}:{category:Category}){
+  return <span className="category-picker-icon" style={{borderInlineStartColor:category.color}} aria-hidden="true"><CategoryIconView category={category}/></span>;
+}
 function Steps({step,setStep}:{step:number;setStep:(n:number)=>void}) { return <nav className="money-tree-steps" aria-label="분류 탐색 단계">{["L1 그룹","L2 분류","L3 세부분류"].map((s,i)=><button type="button" key={s} aria-pressed={step===i} onClick={()=>setStep(i)}>{s}</button>)}</nav>; }
 export function CategoryPicker({ categories, value, onChange, label = "카테고리", triggerLabel, groups: supplied, disabled=false, allowUncategorized=true }:  { categories: Category[]; value: string; onChange: (id: string) => void; label?: string; triggerLabel?: string; groups?: CategoryGroup[]; disabled?:boolean; allowUncategorized?:boolean }) {
   const groups = useCategoryGroups(supplied), tree = categoryTree(categories,groups.data);
@@ -29,8 +32,8 @@ export function CategoryPicker({ categories, value, onChange, label = "카테고
       <Steps step={step} setStep={setStep}/>
       <CategoryTreeColumns step={step}>
         <section className="money-tree-column"><h4>L1 · 구조 그룹</h4><div className="money-tree-scroll"><button type="button" aria-pressed={!groupId} onClick={()=>{setGroup("");setRoot("");setStep(1);}}>모든 그룹 ›</button>{tree.structural.filter(g=>tree.rootsFor([g.id]).some(tree.active)).map(g=><button type="button" key={g.id} aria-pressed={groupId===g.id} onClick={()=>{setGroup(g.id);setRoot("");setStep(1);}}>{g.name} ›</button>)}</div><small>구조 전용 · 거래 지정 불가</small></section>
-        <section className="money-tree-column"><h4>L2 · 거래에 사용 가능</h4><div className="money-tree-scroll">{roots.map(c=><div className="money-tree-row" key={c.id}><button type="button" aria-pressed={rootId===c.id} onClick={()=>{setRoot(c.id);setStep(2);}}><CategoryIconView category={c}/>{c.name} ›</button><button type="button" aria-label={`${c.name} 직접 지정`} onClick={()=>select(c.id)}>지정</button></div>)}{!roots.length&&<p>검색과 일치하는 분류가 없습니다.</p>}</div><small>자식이 있어도 L2를 지정할 수 있습니다.</small></section>
-        <section className="money-tree-column"><h4>L3 · 세부분류</h4><div className="money-tree-scroll">{children.map(c=><button type="button" key={c.id} aria-pressed={value===c.id} onClick={()=>select(c.id)}><CategoryIconView category={c}/>{c.name}</button>)}{!children.length&&<p>{rootId?"세부분류가 없습니다. L2를 그대로 지정하세요.":"L2를 선택하면 세부분류를 탐색합니다."}</p>}</div></section>
+        <section className="money-tree-column"><h4>L2 · 거래에 사용 가능</h4><div className="money-tree-scroll">{roots.map(c=><div className="money-tree-row" key={c.id}><button type="button" aria-pressed={rootId===c.id} onClick={()=>{setRoot(c.id);setStep(2);}}><PickerIcon category={c}/>{c.name} ›</button><button type="button" aria-label={`${c.name} 직접 지정`} onClick={()=>select(c.id)}>지정</button></div>)}{!roots.length&&<p>검색과 일치하는 분류가 없습니다.</p>}</div><small>자식이 있어도 L2를 지정할 수 있습니다.</small></section>
+        <section className="money-tree-column"><h4>L3 · 세부분류</h4><div className="money-tree-scroll">{children.map(c=><button type="button" key={c.id} aria-pressed={value===c.id} onClick={()=>select(c.id)}><PickerIcon category={c}/>{c.name}</button>)}{!children.length&&<p>{rootId?"세부분류가 없습니다. L2를 그대로 지정하세요.":"L2를 선택하면 세부분류를 탐색합니다."}</p>}</div></section>
       </CategoryTreeColumns>
       <div className="money-tree-footer">{allowUncategorized&&<button type="button" onClick={()=>select("")}>미분류 지정</button>}<small>Enter 지정 · ↑↓ 탐색 · ←→ 단계 · Esc 취소</small></div>
       {groups.error&&<small role="status">구조 그룹을 불러오지 못해 기존 분류를 표시합니다.</small>}

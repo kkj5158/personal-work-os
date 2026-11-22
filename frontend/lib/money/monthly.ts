@@ -54,7 +54,7 @@ export const balanceEvidenceLabels:Record<string,string> = {
  MEMBERSHIP_HISTORY_MISSING:"기준일 계좌 상태 이력 없음",PURPOSE_UNASSIGNED:"통계용 용도 미지정",NO_ANCHOR:"잔액 근거 없음",
  NO_OBSERVATION_AT_CUTOFF:"기준 시각 확인 기록 없음",OBSERVATIONS_DISAGREE:"같은 시각 잔액 기록 불일치",CURRENCY_SCOPE_UNVERIFIED:"계좌의 통화 범위 확인 필요",
  OBSERVATION_LEDGER_MISMATCH:"관측 잔액과 장부 잔액 불일치",
- BANK_OBSERVED:"은행 명세 확인",OWNER_CHECKED:"소유자 확인",
+ BANK_OBSERVED:"은행 명세 확인",OWNER_CHECKED:"소유자 확인",LEDGER_ESTIMATE:"장부 기준 추정",
 };
 export function compositionPath(endpoint:string,from:string,to:string,accounts:string[]|null,extra?:Record<string,string>){
  const query=new URLSearchParams({from,to,currency:"KRW",...extra});
