@@ -7,6 +7,51 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { GlobalTabsProvider, useGlobalTabs, useShellNavigationGuard } from "./GlobalTabs";
 import { EMPTY_TABS, TAB_STORAGE_KEY, visitTab } from "../lib/globalTabs";
+import { SPACE_STORAGE_KEY, SPACES } from "../lib/spaceNavigation";
+
+test("the plus menu offers exactly five Spaces and every destination waits for the leave guard", async () => {
+  const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/calendar", pretendToBeVisual: true });
+  Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  window.sessionStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify({ version: 1, spaces: { knowledge: "/blog" }, systems: {
+    "WORK FLOW": "/workflow/projects", "NOTE SYS": "/notes?workspace=demo&module=GRAPH", "MONEY SYS": "/money/loans",
+  } }));
+  let proceed: (() => void) | undefined;
+  function Guard() { useShellNavigationGuard(next => { proceed = next; }); return null; }
+  const destinations: string[] = [];
+  const router = { push: (href: string) => destinations.push(href) } as unknown as React.ContextType<typeof AppRouterContext>;
+  const root = createRoot(document.getElementById("root")!);
+  await act(() => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/calendar"><SearchParamsContext.Provider value={new URLSearchParams()}><GlobalTabsProvider><Guard/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
+  const trigger = document.querySelector<HTMLButtonElement>('.orbit-new-tab > button')!;
+  const menuItems = () => Array.from(document.querySelectorAll<HTMLButtonElement>('.orbit-new-tab-menu [role="menuitem"]'));
+  const press = async (key: string) => act(() => document.activeElement!.dispatchEvent(new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })));
+  await act(() => trigger.focus());
+  await press("ArrowUp");
+  assert.deepEqual(menuItems().map(item => item.textContent), SPACES.map(space => `${space.name} 새 탭으로 열기`));
+  assert.equal(document.activeElement, menuItems()[4]);
+  await press("Home");
+  assert.equal(document.activeElement, menuItems()[0]);
+  await press("ArrowDown");
+  assert.equal(document.activeElement, menuItems()[1]);
+  await press("Escape");
+  assert.equal(menuItems().length, 0);
+  assert.equal(document.activeElement, trigger);
+  const recent = window.sessionStorage.getItem(SPACE_STORAGE_KEY);
+  const expected = ["/workflow/projects", "/notes?module=GRAPH&workspace=demo", "/study", "/life/categories", "/money/loans"];
+  for (const [index, href] of expected.entries()) {
+    const tabs = window.sessionStorage.getItem(TAB_STORAGE_KEY);
+    await act(() => trigger.click());
+    await act(() => menuItems()[index].click());
+    assert.equal(destinations.length, index);
+    assert.equal(window.sessionStorage.getItem(TAB_STORAGE_KEY), tabs);
+    assert.equal(window.sessionStorage.getItem(SPACE_STORAGE_KEY), recent);
+    assert.ok(proceed);
+    await act(() => proceed!());
+    proceed = undefined;
+    assert.equal(destinations[index], href);
+    assert.equal(JSON.parse(window.sessionStorage.getItem(TAB_STORAGE_KEY)!).tabs.length, index + 2);
+  }
+  await act(() => root.unmount()); dom.window.close();
+});
 
 test("shell switch and active close wait for the domain leave continuation, inactive close is safe", async () => {
   const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/calendar" });
