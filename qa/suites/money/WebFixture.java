@@ -21,9 +21,15 @@ class WebFixture {
      s.execute(ddl(schema,"V86__money_work_earnings_weeks.sql"));
      s.execute(ddl(schema,"V88__money_owner_loan_receipt.sql"));
      s.execute(ddl(schema,"V100__money_unified_bookkeeping.sql"));
+     s.execute(ddl(schema,"V109__money_balance_observations.sql"));
+     s.execute(ddl(schema,"R__money_provider_observation_routes.sql"));
+     s.execute(ddl(schema,"R__money_financial_evidence_engine.sql"));
     }else{
      try(PreparedStatement q=c.prepareStatement("select obj_description(oid,'pg_namespace') from pg_namespace where nspname=?")){q.setString(1,schema);try(ResultSet r=q.executeQuery()){if(!r.next()){System.out.println("QA_WEB_SCHEMA_ABSENT");return;}if(!"pos-central-qa-money-web-owned".equals(r.getString(1)))throw new IllegalStateException("Schema ownership mismatch");}}
      // Explicit schema and table allowlist; foreign dependencies stop RESTRICT cleanup.
+     for(String table:List.of("money_financial_rules","money_financial_shadow_runs","money_financial_batch_previews",
+             "money_provider_observation_routes","money_balance_observation_revisions","money_balance_observations","money_account_table_preferences"))
+      s.execute("drop table if exists "+schema+"."+table+" restrict");
      s.execute("drop table if exists "+schema+".money_work_pay_weeks restrict");
      s.execute("drop table if exists "+schema+".money_work_earnings_weeks restrict");
      for(String table:List.of("money_work_payments","money_coupang_work_records","money_work_templates","money_work_weeks","money_workbench_selections","money_classification_choices","money_account_fund_group_history","money_recommendation_decisions","money_recommendation_usage","money_recommendation_save_items","money_recommendation_saves","money_classification_draft_revisions","money_classification_drafts","money_recommendation_items","money_recommendation_runs","money_ai_history_items","money_ai_history_runs","money_ai_transaction_merchants","money_ai_rule_drafts","money_ai_conversations","money_classification_jobs","money_classification_state","money_classification_events","money_command_outcomes","money_overview_preferences","money_ai_events","money_ai_merchants","money_ai_lookups","money_ai_settings","money_mobile_settings","money_review_decisions","money_meaning_audit","money_rule_projections","money_tracking_accounts","money_tracking_settings","money_bookkeeping_overrides","money_corrections","money_category_rules","money_transaction_sources","money_parse_attempts","money_raw_notifications","money_transactions","money_balance_checkpoints","money_loans","money_categories","money_category_groups","money_accounts","money_bridge_enrollments","money_bridge_devices","qa_fixture_users"))s.execute("drop table if exists "+schema+"."+table+" restrict");
