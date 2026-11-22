@@ -101,7 +101,7 @@ export function AccountLedger(p:Props){
    <div><small>기준일 잔액 근거</small><strong>{member?.balance==null?"확인 필요":(member.status==="LEDGER_ESTIMATE"?"추정 ":"")+moneyAmount(member.balance)}</strong></div>
    <div className="al-summary-note"><span>{periodFrom} ~ {periodTo}</span>
     {evidence.data&&<span>기준 시각 {seoul(evidence.data.asOfCutoff)}</span>}
-    {member?.reason&&<span>{balanceEvidenceLabels[member.reason]}</span>}
+    {member&&balanceEvidenceLabels[member.reason??member.status]&&<span>{balanceEvidenceLabels[member.reason??member.status]}</span>}
     {member?.observedAt&&<span>최근 관측 {seoul(member.observedAt)}</span>}
     {evidence.error&&<span role="alert">{evidence.error}</span>}
    </div><Link href={"/money/reconciliation?account="+requestedAccount}>계좌 잔액 점검</Link>
