@@ -979,6 +979,8 @@ public class StudyEngine {
               .put("expected",control.path("expected").asString());
           if(StudyEducationPolicy.active(s)){item.set("referenceContext",control.path("referenceContext"));item.set("question",control.path("question"));item.set("referenceKey",control.path("key"));}
           var verdict=s.path("controlReview").path("items").path(index++);
+          if(StudyEducationPolicy.active(s) && verdict.isObject() && !"INVALID_STEP_OUTPUT".equals(s.path("status").asString()))
+            item.put("accepted",StudyCampaign.controlAccepted(control,verdict,s.path("controlBlind").path("items").path(index-1)));
           for(String field:List.of("issue","field","evidence","repair","grounded","hintsSafe","reasoning","uncertainty"))if(verdict.has(field))item.set(field,verdict.path(field));
         }
         var ledger=out.putArray("ledger");

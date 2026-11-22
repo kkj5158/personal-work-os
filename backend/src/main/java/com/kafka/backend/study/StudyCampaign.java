@@ -63,9 +63,13 @@ final class StudyCampaign {
     if(StudyEducationPolicy.active(s)) o.put("authoringPolicy",StudyEducationPolicy.VERSION);
     else o.put("tokenLimit",s.has("continuation")?StudyCampaignContinuation.TOKEN_LIMIT:TOKENS);
     var a=o.putArray("slots");
-    for(var r:s.path("slots"))a.addObject().put("kind",r.path("kind").asString()).put("order",r.path("order").asInt())
+    for(var r:s.path("slots")){
+      var row=a.addObject().put("kind",r.path("kind").asString()).put("order",r.path("order").asInt())
       .put("stage",r.path("stage").asString()).put("cycles",r.path("cycles").asInt()).put("replans",r.path("replans").asInt())
       .put("issue",r.path("issue").asString("")).put("objectiveTier",r.path("objectiveTier").asString(""));
+      if(StudyEducationPolicy.active(s))row.put("previouslyAccepted",s.path("policyContinuation").path("slots").valueStream()
+          .anyMatch(old->old.has("receiptDigest") && old.path("part").equals(r.path("part")) && old.path("order").equals(r.path("order"))));
+    }
     return o;
   }
   static JsonNode spans(JsonNode plan,JsonNode ids){
@@ -250,6 +254,12 @@ final class StudyCampaign {
     for(int n=0;n<ss.size();n++)require(ss.path(n).path("quality").asString().equals("usable") && all.indexOf(ss.path(n).path("id").asString())==start+n);
     for(int i=1;i<ss.size();i++)require(ss.path(i).path("pageIndex").asInt()-ss.path(i-1).path("pageIndex").asInt()>=0 && ss.path(i).path("pageIndex").asInt()-ss.path(i-1).path("pageIndex").asInt()<=1);
   }
+  static boolean controlAccepted(JsonNode control,JsonNode finding,JsonNode blind){
+    if(!"none".equals(finding.path("issue").asString("")) || !finding.path("grounded").asBoolean()
+        || !finding.path("hintsSafe").asBoolean() || !finding.path("reasoning").asBoolean() || !blind.path("solvable").asBoolean())return false;
+    return !"single_choice".equals(control.path("question").path("kind").asString())
+        || !control.path("key").has("answer") || blind.path("answer").equals(control.path("key").path("answer"));
+  }
   static void apply(ObjectNode s,JsonNode p,ObjectNode e,JsonNode out){
     int i=e.path("slot").asInt();String stage=e.path("stage").asString();
     if(i==-2){
@@ -266,9 +276,7 @@ final class StudyCampaign {
             var source=c.path("spanIds").isEmpty()?JSON.createArrayNode():spans(p,c.path("spanIds"));
             StudyEducationPolicy.requireReviewEvidence(f,c.path("key"),visible(c.path("question"),source));
           }
-          boolean accepted=f.path("issue").asString("").equals("none") && f.path("grounded").asBoolean() && f.path("hintsSafe").asBoolean() && f.path("reasoning").asBoolean() && b.path("solvable").asBoolean();
-          if(c.path("question").path("kind").asString().equals("single_choice") && c.path("key").has("answer"))
-            accepted &= b.path("answer").equals(c.path("key").path("answer"));
+          boolean accepted=controlAccepted(c,f,b);
           if(expected.equals("pass")){positives++;agreed &= accepted;}else if(expected.equals("reject")){negatives++;agreed &= !accepted;}else agreed=false;
         }
         s.put("calibrated",agreed && positives>=2 && negatives>=3);

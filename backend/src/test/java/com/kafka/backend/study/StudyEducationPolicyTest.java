@@ -54,6 +54,18 @@ class StudyEducationPolicyTest {
     r.put("cycles",1).put("preserveCandidate",true);StudyCampaign.repair(r,"SHORTCUT",JSON.createObjectNode());
     assertThat(r.path("stage").asString()).isEqualTo("UNRESOLVED");
   }
+  @Test void historicalAcceptanceStaysVisibleDuringANewReviewAndAnswerIdsMustMatch(){
+    var s=JSON.createObjectNode().put("authoringPolicy",StudyEducationPolicy.VERSION);
+    s.putArray("slots").addObject().put("part","required").put("order",5).put("kind","single_choice").put("stage","review").put("cycles",1).put("replans",0);
+    s.putObject("policyContinuation").putArray("slots").addObject().put("part","required").put("order",5).put("receiptDigest","original");
+    var row=StudyCampaign.summary(s).path("slots").path(0);
+    assertThat(row.path("previouslyAccepted").asBoolean()).isTrue();
+    assertThat(row.path("stage").asString()).isEqualTo("review");
+    var c=JSON.createObjectNode();c.putObject("question").put("kind","single_choice");c.putObject("key").put("answer","B");
+    var f=JSON.createObjectNode().put("issue","none").put("grounded",true).put("reasoning",true).put("hintsSafe",true);
+    var b=JSON.createObjectNode().put("solvable",true).put("answer","A");
+    assertThat(StudyCampaign.controlAccepted(c,f,b)).isFalse();b.put("answer","B");assertThat(StudyCampaign.controlAccepted(c,f,b)).isTrue();
+  }
   @Test void malformedControlReviewCannotCountAsCorrectRejection(){
     var out=JSON.createObjectNode();out.putArray("items").addObject().put("issue","AMBIGUOUS");
     assertThatThrownBy(()->StudyEducationPolicy.validateControlOutput("review",out)).isInstanceOf(StudyException.class);
