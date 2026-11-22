@@ -216,6 +216,20 @@ final class StudyEngineRules {
     require(output.path("keys").isArray() && output.path("keys").size() == total);
     Set<String> seen = new HashSet<>();
     for (JsonNode k : output.path("keys")) {
+      String key = part(k) + "/" + text(k, "questionId", 180);
+      require(seen.add(key) && qs.containsKey(key));
+      JsonNode q = qs.get(key);
+      validateItemKey(k,q,plan,quality,excerpts);
+    }
+    if (quality) {
+      if (StudyReasoning.enabled(plan)) StudyReasoning.check(plan, output);
+      var evaluation = StudyQuality.assess(output, plan, qs, recent);
+      receipt.set("quality", evaluation);
+    }
+    return receipt.put("questionCount", total).put("validatedAt", Instant.now().toString());
+  }
+
+  static void validateItemKey(JsonNode k, JsonNode q, JsonNode plan, boolean quality, Map<String,JsonNode> excerpts) {
       fields(
           k,
           "part",
@@ -229,9 +243,6 @@ final class StudyEngineRules {
           "citations",
           "reasoningMoves",
           "hints");
-      String key = part(k) + "/" + text(k, "questionId", 180);
-      require(seen.add(key) && qs.containsKey(key));
-      JsonNode q = qs.get(key);
       text(k, "model", 16000);
       text(k, "explanation", 16000);
       strings(k.path("rubric"), 30);
@@ -300,13 +311,6 @@ final class StudyEngineRules {
         }
         k.path("incorrectReasons").propertyNames().forEach(id -> require(optionIds.contains(id)));
       }
-    }
-    if (quality) {
-      if (StudyReasoning.enabled(plan)) StudyReasoning.check(plan, output);
-      var evaluation = StudyQuality.assess(output, plan, qs, recent);
-      receipt.set("quality", evaluation);
-    }
-    return receipt.put("questionCount", total).put("validatedAt", Instant.now().toString());
   }
 
   private StudyEngineRules() {}

@@ -160,17 +160,10 @@ final class StudyCampaign {
       safeText(c);
       require(q.path("order").equals(r.path("order")) && q.path("kind").equals(r.path("kind")) && q.path("version").asInt()==1 && k.path("questionId").equals(q.path("id")) && k.path("part").equals(r.path("part")));
       require(k.path("hints").size()==3 && k.path("rubric").size()>0 && k.path("citations").size()>0);
-      if(q.path("kind").asString().equals("single_choice")){
-        require(q.path("options").size()==p.path("choiceOptionCount").asInt(4) && q.path("options").valueStream().anyMatch(o->o.path("id").equals(k.path("answer"))));
-        for(var o:q.path("options"))if(!o.path("id").equals(k.path("answer")))text(k.path("incorrectReasons"),o.path("id").asString(),16000);
-      }
-      boolean bound=false;
-      for(var ref:k.path("citations")){
-        var span=source.valueStream().filter(v->v.path("id").equals(ref.path("excerptId"))).findFirst().orElseThrow();
-        String quote=text(ref,"quote",3000);if(quote.length()<12 || !span.path("text").asString().contains(quote))return "SOURCE_QUOTE_MISMATCH";
-        bound|=span.equals(primary);
-      }
-      if(!bound)return "SOURCE_QUOTE_MISMATCH";
+      if(k.path("citations").size()>4)return "CITATION_LIMIT";
+      var byId=new HashMap<String,JsonNode>();
+      source.forEach(v->byId.put(v.path("id").asString(),v));
+      validateItemKey(k,q,p,true,byId);
       var issues=StudyQuality.questionIssues(q,k);return issues.isEmpty()?"":issues.iterator().next();
     }catch(RuntimeException ex){return "SCHEMA";}
   }

@@ -19,6 +19,7 @@ function schema(stage,payload){
  if(stage==='assemble')return obj({followUps:arr(str,10,10)});
  if(stage!=='write')throw Error('UNKNOWN_CAMPAIGN_STEP');
  const key=structuredClone(generationSchema.properties.keys.items);
+ key.properties.citations=arr(key.properties.citations.items,1,4);
  key.properties.rubric=arr(str,payload.kind==='case_analysis'?3:2,12);
  delete key.properties.followUp;key.properties.hints=arr(str,3,3);key.properties.reasoningMoves=arr(str,2,3);key.required=Object.keys(key.properties);
  return obj({question:generationSchema.properties.required.items,key,contract:obj({given:str,unknown:str,alternatives:str,estimatedMinutes:{type:'number'}})});
