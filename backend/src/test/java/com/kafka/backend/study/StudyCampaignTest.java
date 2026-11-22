@@ -41,6 +41,18 @@ class StudyCampaignTest {
     assertThatThrownBy(()->StudyCampaign.manifest(p,manifest("outside"))).isInstanceOf(StudyException.class);
     assertThatThrownBy(()->StudyCampaign.manifest(p,manifest("a").put("principleQuote","The complete missing example."))).isInstanceOf(StudyException.class);
   }
+  @Test void indexMappingAllowsOnlyPlatformLineEndingsAndKeepsLearnerFields() {
+    var old=JSON.createObjectNode().put("sourceHash","same").put("materialVersion",1).put("parserVersion","v1")
+        .put("ordinal",0).put("quality","usable").put("pageIndex",26).put("text","first\r\nsecond");
+    var target=old.deepCopy().put("text","first\nsecond");
+    assertThat(StudyCampaignContinuation.sameExcerpt(old,target)).isTrue();
+    assertThat(StudyCampaignContinuation.sameExcerpt(old,target.deepCopy().put("text","first second"))).isFalse();
+    var item=JSON.createObjectNode().put("prompt","first\r\nsecond").put("quote","first\r\nsecond");
+    StudyCampaignContinuation.bindQuotedNewlines(item,JSON.createArrayNode().add(target));
+    assertThat(item.path("quote").asString()).isEqualTo("first\nsecond");
+    assertThat(item.path("prompt").asString()).isEqualTo("first\r\nsecond");
+  }
+
   @Test void totalBudgetSurvivesRoundTripAndPreventsReservation() {
     var job=new StudyEngineJob();job.workerId=UUID.randomUUID();job.leaseToken=UUID.randomUUID();
     for(boolean tokens:new boolean[]{true,false}){

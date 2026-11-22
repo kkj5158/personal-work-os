@@ -46,6 +46,12 @@ final class StudyCampaignContinuation {
         .put("previousCalls",OLD_CALLS).put("previousTokens",spent).put("authority","owner-once-20261122")
         .put("sourceDigest",archive.path("sourceDigest").asString());
     audit.set("sourceMapping",JSON.valueToTree(ids));
+    var textHashes=audit.putArray("textBindings");
+    for(var old:archive.path("passages")){
+      var mapped=plan.path("passages").valueStream().filter(v->v.path("id").asString().equals(ids.get(old.path("id").asString()))).findFirst().orElseThrow();
+      textHashes.addObject().put("from",hash(old.path("text").asString())).put("to",hash(mapped.path("text").asString()))
+          .put("normalized",hash(lineText(old.path("text").asString()))).put("page",mapped.path("pageIndex").asInt());
+    }
     audit.set("originalSlots",archive.path("slots"));
     audit.set("originalValidation",archive.path("validation"));
     audit.set("originalControlReview",archive.path("oldControlReview"));
@@ -53,6 +59,7 @@ final class StudyCampaignContinuation {
     var slots = state.putArray("slots");
     for (var original : archive.path("slots")) {
       var slot = remap(original,ids,"").asObject();
+      bindQuotedNewlines(slot,plan.path("passages"));
       StudyCampaign.manifest(plan,slot.path("manifest"));
       slot.put("manifestDigest",hash(plan.path("inputDigest")+"/"+slot.path("manifest")));
       if (slot.has("candidate")) {
@@ -76,6 +83,7 @@ final class StudyCampaignContinuation {
     if(historical.isPresent()){
       var control=remap(historical.get(),ids,"").asObject();
       var reading=StudyCampaign.spans(plan,control.path("spanIds"));
+      bindQuotedNewlines(control,reading);
       for(var citation:control.path("key").path("citations")){
         String quote=citation.path("quote").asString();
         var hits=reading.valueStream().filter(x->!quote.isBlank() && x.path("text").asString().contains(quote)).toList();
@@ -93,10 +101,33 @@ final class StudyCampaignContinuation {
     slot.remove("receiptDigest");
   }
 
-  private static boolean sameExcerpt(JsonNode a,JsonNode b) {
-    return List.of("materialVersion","sourceHash","parserVersion","pageIndex","ordinal","text","quality")
+  static boolean sameExcerpt(JsonNode a,JsonNode b) {
+    return List.of("materialVersion","sourceHash","parserVersion","pageIndex","ordinal","quality")
         .stream().allMatch(k->a.has(k)&&a.path(k).equals(b.path(k)))
+        && a.path("text").isString() && b.path("text").isString()
+        && lineText(a.path("text").asString()).equals(lineText(b.path("text").asString()))
         && b.path("pageIndex").asInt()>=26 && b.path("pageIndex").asInt()<=53;
+  }
+
+  private static String lineText(String s){return s.replace("\r\n","\n");}
+
+  // PDFBox uses platform line endings. Bind literal quotes to their exact target representation.
+  static void bindQuotedNewlines(JsonNode node,JsonNode reading){
+    if(node.isArray()){node.forEach(n->bindQuotedNewlines(n,reading));return;}
+    if(!node.isObject())return;
+    for(var entry:node.properties()){
+      var value=entry.getValue();
+      if(value.isArray()||value.isObject()){bindQuotedNewlines(value,reading);continue;}
+      if(!value.isString() || !Set.of("quote","principleQuote","anchor").contains(entry.getKey()))continue;
+      String original=value.asString();if(!original.contains("\n"))continue;
+      if(reading.valueStream().anyMatch(s->s.path("text").asString().contains(original)))continue;
+      String lf=lineText(original);
+      for(String candidate:List.of(lf,lf.replace("\n","\r\n"))){
+        if(reading.valueStream().anyMatch(s->s.path("text").asString().contains(candidate))){
+          node.asObject().put(entry.getKey(),candidate);break;
+        }
+      }
+    }
   }
 
   private static JsonNode remap(JsonNode node,Map<String,String> ids,String field) {

@@ -203,6 +203,12 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     var archive=JSON.readTree(raw);var pdf=Files.readAllBytes(Path.of(System.getenv("STUDY_PRIVATE_PILOT")));
     material();var ticket=upload(pdf,"material","chapter.pdf");complete(ticket);
     var idx=UUID.fromString(engine.index(UUID.fromString(ticket.path("id").asString())).path("id").asString());engine.run(idx);
+    // Simulate the actual Linux DEV index inside this disposable Windows QA database.
+    engine.tx(()->{
+      var inventory=StudySourceSelection.load(engine.excerpts,OWNER,idx,new StudySourceSelection.PageRange(26,53));
+      for(var excerpt:inventory.chapterSpans)excerpt.body=excerpt.body.replace("\r\n","\n");
+      return null;
+    });
     engine.pilotOwner=OWNER.toString();engine.closeoutArchiveDigest=hash(raw);engine.priorPilotCalls=16;engine.priorPilotTokens=398623;
     try{
       assertThatThrownBy(()->engine.continueCampaign("source",raw+" ")).isInstanceOf(StudyException.class);
