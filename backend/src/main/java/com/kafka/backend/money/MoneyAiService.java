@@ -87,7 +87,7 @@ public class MoneyAiService {
        (a.payload->'after'->>'overrideVersion')::bigint=q."overrideVersion" and
        (a.payload->'after'->>'projectionVersion')::bigint=q."projectionVersion" end)
      then case when a.kind='DEFER' then 'DEFERRED' else 'PENDING' end else q.state end as "aiState",
-     case when q."transferPartnerId" is not null then 'TRANSFER' when q.kind='RAW' and q.lane='FORMAT' then 'NOISE' else 'CLASSIFICATION' end as "reviewType"
+     case when q."transferPartnerId" is not null then 'TRANSFER' when q.kind='RAW' and q.lane='FORMAT' then 'FORMAT' else 'CLASSIFICATION' end as "reviewType"
      from queue q left join lateral(select active,kind,payload from money_ai_events a where a.user_id=? and a.subject_id=q.id order by created_at desc,id desc limit 1) a on true)
     """;
    var args=new ArrayList<Object>(List.of(owner(),owner(),state));String filter=" from ai_queue where \"aiState\"=?";
@@ -147,7 +147,7 @@ public class MoneyAiService {
   var admission=context.admissions().get(id);if(admission!=null){admission.enrich(row);if(admission.eligible())row.put("admissionFingerprint",new MoneyReviewAdmission(db,users,json,money).fingerprint(admission));}else{row.put("effectiveCurrency",row.get("currency"));row.put("moveToBookkeepingEligible",false);row.put("moveToBookkeepingBlockReason",kind.equals("TRANSACTION")?"이미 등록된 금융 거래는 이체·환불·대출 전용 확인으로 처리하세요.":"이미 처리된 알림입니다.");}
   String merchant=Objects.toString(row.get("merchant"),"");Map<String,Object> current=new LinkedHashMap<>();for(String k:List.of("title","memo","categoryId","amount","currency","type","accountId","effectiveCurrency"))current.put(k,row.get(k));current.put("merchant",merchant);
   if(!book.isEmpty()){row.put("transactionVersion",book.get("transactionVersion"));row.put("overrideVersion",book.get("version"));row.put("projectionVersion",book.get("projectionVersion"));for(String field:List.of("classificationVersion","classificationOrigin","classificationEventId","directProtected","futureReferenceExcluded","classificationJobStatus","classificationJobResult"))row.put(field,book.get(field));row.put("book",book);}
-  String reviewType=row.containsKey("reviewType")?Objects.toString(row.get("reviewType")):row.get("transferPartnerId")!=null||"POSSIBLE_INTERNAL_TRANSFER".equals(row.get("reason"))?"TRANSFER":Boolean.TRUE.equals(row.get("noiseSuspected"))||kind.equals("RAW")&&"FORMAT".equals(row.get("lane"))?"NOISE":"CLASSIFICATION";
+  String reviewType=row.containsKey("reviewType")?Objects.toString(row.get("reviewType")):row.get("transferPartnerId")!=null||"POSSIBLE_INTERNAL_TRANSFER".equals(row.get("reason"))?"TRANSFER":kind.equals("RAW")&&"FORMAT".equals(row.get("lane"))?"FORMAT":Boolean.TRUE.equals(row.get("noiseSuspected"))?"NOISE":"CLASSIFICATION";
   row.put("reviewType",reviewType);row.put("current",current);
   var identity=context.identities().stream().filter(r->book.isEmpty()?(merchant.equalsIgnoreCase(r.get("descriptor").toString())||((List<?>)r.get("aliases")).stream().anyMatch(a->merchant.equalsIgnoreCase(a.toString()))):Objects.equals(r.get("id"),book.get("merchantIdentityId"))).toList();
   String contextKey=null;if(!book.isEmpty())try{contextKey=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(MoneyClassificationContext.local(book))));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}String currentContextKey=contextKey;

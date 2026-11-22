@@ -17,10 +17,10 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
  const [candidateSearch,setCandidateSearch]=useState('');
  const [direction,setDirection]=useState<FinancialDirection|null>(null);
  const loans=useMoneyData<Loan[]>(open?'/loans':null);
- const choice=String(draft.transferIntent??draft.type??'');
+ const choice=String(draft.transferIntent??draft.type??(row?.type==='LOAN_PAYMENT'?row.type:''));
  const activeDirection=direction??(row ? financialDirections.find(option=>directionOptions(row,option.id).includes(choice))?.id : undefined);
  const details=row&&activeDirection?directionOptions(row,activeDirection):[];
- const type=details.includes(choice)?String(draft.type):'',linked=!!row?.from_account_id&&!!row?.to_account_id;
+ const type=details.includes(choice)?String(draft.type??choice):'',linked=!!row?.from_account_id&&!!row?.to_account_id;
  const candidates=useMoneyData<{items:{id:string;version:number;title:string|null;counterpartyText:string|null;amount:number;occurredAt:string;accountId:string;transferDisplayType?:string}[]}>(open&&row&&type==='TRANSFER'&&!linked?UNIFIED+'/candidates/'+id+'?'+new URLSearchParams({kind:type,search:candidateSearch}):null);
  const transferCandidates=candidates.data?.items.filter(c=>!draft.transferIntent||c.transferDisplayType===draft.transferIntent);
  const allocation=row?loanAllocation(row,draft):{unknown:true,valid:false,total:0};

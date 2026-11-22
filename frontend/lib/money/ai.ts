@@ -13,7 +13,7 @@ export type AiItem = ReviewItem & {
   transactionId?: string | null;
   moveToBookkeepingEligible?: boolean;
   moveToBookkeepingBlockReason?: string | null;
-  reviewType: "CLASSIFICATION" | "TRANSFER" | "NOISE";
+  reviewType: "CLASSIFICATION" | "TRANSFER" | "NOISE" | "FORMAT";
   transactionVersion: number;
   excluded?: boolean;
   current: { title: string | null; memo: string | null; categoryId: string | null; amount: number | null; currency?: string | null; type: string | null; merchant: string | null; accountId: string | null };

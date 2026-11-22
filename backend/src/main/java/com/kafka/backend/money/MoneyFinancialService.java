@@ -27,6 +27,24 @@ public class MoneyFinancialService {
             MoneyProductService product,MoneyWebService web,ObjectMapper json) {
         this.db=db;this.users=users;this.money=money;this.product=product;this.web=web;this.json=json;
     }
+    public record ReceiptInput(UUID accountId,Long accountVersion,UUID loanId,Long loanVersion,BigDecimal amount,Instant occurredAt,String note){}
+    public MoneyTransaction receipt(ReceiptInput input){
+        require(input!=null,"대출 입금 내역이 필요합니다.");lock();time(input.occurredAt());amount(input.amount());
+        MoneyService.text(input.note(),2000,false,"메모");
+        var account=money.account(input.accountId());version(account.version(),input.accountVersion());
+        require(!account.archived(),"활성 입금 계좌를 선택하세요.");
+        var loan=web.loan(input.loanId());version(loan.version(),input.loanVersion());
+        require("ACTIVE".equals(loan.status()),"진행 중인 대출을 선택하세요.");
+        require(loan.startDate()==null||!input.occurredAt().atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate().isBefore(loan.startDate()),"대출 시작일보다 앞선 입금입니다.");
+        require(loan.originalPrincipal()==null||loan.remainingPrincipal().add(input.amount()).compareTo(loan.originalPrincipal())<=0,"입금 원금이 약정 한도를 초과합니다.");
+        UUID id=UUID.randomUUID();
+        db.update("""
+            insert into money_transactions(id,user_id,type,to_account_id,amount,currency,occurred_at,memo,loan_id,principal,interest,fee,manual)
+            values(?,?,'LOAN_RECEIPT',?,?,'KRW',?,?,?,?,0,0,true)
+            """,id,owner(),account.id(),input.amount(),Timestamp.from(input.occurredAt()),input.note(),loan.id(),input.amount());
+        db.update("update money_loans set remaining_principal=remaining_principal+?,version=version+1,updated_at=now() where user_id=? and id=?",input.amount(),owner(),loan.id());
+        return money.transaction(id);
+    }
     public record BalanceInput(TransactionType type,BigDecimal amount,Instant asOf,String note,Long expectedVersion,BigDecimal expectedCalculatedBalance) {}
     public record PaymentInput(UUID loanId,UUID paymentAccountId,BigDecimal amount,BigDecimal principal,
             BigDecimal interest,BigDecimal fee,Instant occurredAt,String note,Long expectedVersion,Long expectedLoanVersion) {}

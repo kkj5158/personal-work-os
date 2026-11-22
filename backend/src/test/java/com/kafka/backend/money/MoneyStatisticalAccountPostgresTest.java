@@ -30,7 +30,7 @@ class MoneyStatisticalAccountPostgresTest {
             var installment = fixture.account(e,AccountRole.SPENDING);
             var unknown = fixture.account(e,AccountRole.SAVINGS);
             var owner = db.queryForObject("SELECT user_id FROM money_accounts WHERE id=?",UUID.class,savings.id());
-            var service = new MoneyStatisticalAccountService(db,()->owner,e.product());
+            var service = new MoneyStatisticalAccountService(db,()->owner,e.product(),new MoneyMeaningService(db,()->owner,tools.jackson.databind.json.JsonMapper.builder().build()));
             var day = LocalDate.parse("2026-10-31");
             var cutoff = Timestamp.from(Instant.parse("2026-10-31T14:59:59.999999Z"));
             var opening = Timestamp.from(Instant.parse("2026-10-01T00:00:00Z"));
@@ -41,9 +41,12 @@ class MoneyStatisticalAccountPostgresTest {
                 var id=members[i];
                 db.update("UPDATE money_accounts SET created_at=?,include_in_assets=false WHERE id=?",opening,id);
                 db.update("INSERT INTO money_statistical_membership_history VALUES (?,?,?,false,true)",owner,id,opening);
-                db.update("INSERT INTO money_statistical_account_purposes VALUES (?,?,?,?,0,'BASELINE')",
-                    owner,id,opening,i==1?"INSTALLMENT":"SAVINGS");
+                db.update("INSERT INTO money_account_fund_group_history(user_id,account_id,fund_group,savings_subtype,effective_at,account_version) VALUES (?,?,'SAVINGS',?,?,0)",
+                    owner,id,i==1?"INSTALLMENT":"SAVINGS_ACCOUNT",opening);
             }
+            db.update("insert into money_tracking_settings(user_id) values(?) on conflict do nothing",owner);
+            db.update("insert into money_tracking_selections(user_id,kind,effective_at,version,accounts) values(?,'SAVINGS',?,1,?), (?,'INSTALLMENT',?,1,?)",
+                owner,opening,new UUID[]{savings.id(),unknown.id()},owner,opening,new UUID[]{installment.id()});
             db.update("INSERT INTO money_statistical_membership_history VALUES (?,?,?,true,true)",owner,savings.id(),next);
             db.update("INSERT INTO money_statistical_account_purposes VALUES (?,?,?,'SAVINGS',1,'OWNER')",owner,installment.id(),next);
             var checkpoint = "INSERT INTO money_balance_checkpoints(id,user_id,account_id,amount,verified_at,created_at) VALUES (?,?,?,?,?,?)";

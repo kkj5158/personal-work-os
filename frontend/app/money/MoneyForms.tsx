@@ -4,6 +4,7 @@ import Image from "next/image";
 import { MoneyPanel as Dialog, PanelContext } from "./MoneyPanel";
 import { useState, useContext, useId, Children, isValidElement, cloneElement, type ReactNode, type ReactElement } from "react";
 import { Button } from "@/components/ui/Button";
+import {useMoneyData} from "./MoneyWebData";
 import { CategoryPicker } from "./MoneyCategoryPicker";
 import {
   Account,
@@ -342,6 +343,13 @@ export function AccountForm({
 export function categoryKind(type: Kind): "INCOME" | "EXPENSE" | null {
   return type === "INCOME" ? "INCOME" : type === "EXPENSE" || type === "REFUND" ? "EXPENSE" : null;
 }
+function SimilarEntries({account,at,amount}:{account:string;at:string;amount:number}){
+  const day=at.slice(0,10);
+  const query=new URLSearchParams({accountId:account,from:day,to:day,minAmount:String(amount),maxAmount:String(amount),limit:"5"});
+  const rows=useMoneyData<{items:Transaction[]}>(account&&day&&Number.isFinite(amount)&&amount>0?"/transactions?"+query:null);
+  return rows.data?.items.length?<details><summary>같은 날짜·계좌·금액의 기존 거래 {rows.data.items.length}건 확인</summary><ul>{rows.data.items.map(t=><li key={t.id}>{seoul(t.occurredAt)} · {t.title||t.counterpartyText||kinds[t.type]}</li>)}</ul><p>별도 등록하면 새 거래가 생성됩니다.</p></details>:null;
+}
+
 export function EntryForm({
   value,
   accounts,
@@ -350,6 +358,7 @@ export function EntryForm({
   onTypeChange,
   onSave,
   onClose,
+  onSpecialType,
   title = "거래 기록",
   children,
 }: {
@@ -357,6 +366,7 @@ export function EntryForm({
   accounts: Account[];
   categories: Category[];
   refunds: Transaction[];
+  onSpecialType?: (type:"LOAN_PAYMENT"|"LOAN_RECEIPT",draft:Partial<Transaction>)=>void;
   onTypeChange?: (type: Kind) => void;
   onSave: (input: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
@@ -411,24 +421,23 @@ export function EntryForm({
       >
         <div className="money-form-grid">
           <Field label="유형">
-            <select
-              value={type}
-              onChange={(e) => {
-                const next = e.target.value as Kind;
-                // Income and expense dictionaries never mix; an incompatible choice is cleared, not reinterpreted.
-                const current = categories.find((c) => c.id === cat);
-                if (current && current.kind !== categoryKind(next)) setCat("");
-                setType(next);
-                onTypeChange?.(next);
-              }}
-            >
-              {Object.entries(kinds).filter(([k]) => ["INCOME","EXPENSE","TRANSFER","REFUND"].includes(k)).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
+            <select value={type==="REFUND"?"INCOME":type} onChange={e=>{
+              const next=e.target.value as Kind;
+              if(categories.find(c=>c.id===cat)?.kind!==categoryKind(next))setCat("");
+              setType(next);setRefund("");onTypeChange?.(next);
+            }}>
+              <option value="INCOME">입금</option><option value="EXPENSE">출금</option><option value="TRANSFER">이체</option>
             </select>
           </Field>
+          {type!=="TRANSFER"&&<details open={type==="REFUND"||undefined}><summary>세부 금융 유형</summary>
+            {type!=="EXPENSE"&&<label><input type="checkbox" checked={type==="REFUND"} onChange={e=>{
+              const next=e.target.checked?"REFUND":"INCOME";setType(next);setCat("");setRefund("");onTypeChange?.(next);
+            }}/>환불 입금</label>}
+            {onSpecialType&&type!=="REFUND"&&<button type="button" onClick={()=>{
+              const special=type==="EXPENSE"?"LOAN_PAYMENT":"LOAN_RECEIPT";
+              onSpecialType(special,{type:special,fromAccountId:from||null,toAccountId:to||null,amount:Number(amount)||undefined,occurredAt:iso(at),memo:memo||null});
+            }}>{type==="EXPENSE"?"대출 상환":"대출금 수령"}</button>}
+          </details>}
           <Field label="금액 (KRW)">
             <input
               required
@@ -505,6 +514,7 @@ export function EntryForm({
             </select>
           </Field>
         )}
+        {onSpecialType&&<SimilarEntries account={type==="EXPENSE"||type==="TRANSFER"?from:to} at={at} amount={Number(amount)}/>}
         <Field label="제목">
           <input
             maxLength={240}

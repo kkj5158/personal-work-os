@@ -41,7 +41,16 @@ public class MoneyReconciliationReadService {
    if(c.parseStatus()==ParseStatus.PARSED&&c.direction()!=null&&hint!=null&&!hint.isBlank()){var resolved=new MoneyAccountResolver().resolve(money.accounts(),c.provider(),hint);if(resolved.resolved())resolvedId=resolved.account().id();}
    current.put("resolvedAccountId",resolvedId);current.put("supportedDomesticEvidence",c.parseStatus()==ParseStatus.PARSED&&MoneyOrdinaryAdmission.domestic(c));
   }else current.put("status","UNSUPPORTED_SOURCE");
+  var missing=new ArrayList<String>();
+  for(String key:List.of("direction","amount","occurredAt","resolvedAccountId","currency"))if(current.get(key)==null)missing.add(key);
+  out.put("missingFields",missing);out.put("reason",raw.processingReason());out.put("sourcePackage",raw.sourcePackage());
   out.put("currentParser",current);out.put("sourceHistoryWrites",0);out.put("financialWrites",0);out.put("executionSupported",false);out.put("bankCorroborationVerified",false);out.put("blocker","BANK_ATTESTED_BOUNDED_REPROCESS_NOT_IMPLEMENTED");out.put("fingerprint",hash(out));return out;
+ }
+ public Map<String,Object> ownerDiagnostic(UUID rawId){
+  var result=new LinkedHashMap<>(reparseDiagnostic(rawId));var raw=money.notification(rawId);
+  result.put("maskedTitle",MoneyOwnerReviewService.maskedText(raw.title()));
+  result.put("maskedBody",MoneyOwnerReviewService.maskedText(raw.bigText()==null||raw.bigText().isBlank()?raw.text():raw.bigText()));
+  return result;
  }
  /** Exact requested clock, distinct from snapshot()'s last-observation clock.
   * Bank seconds and Android arrival time remain explicitly unaligned until source matching proves them.

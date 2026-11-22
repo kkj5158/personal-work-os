@@ -45,8 +45,8 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   await render();await open();
   assert.ok(document.activeElement===button('금융 편집 닫기'),'Opening moves focus into the editor');
   assert.equal(document.querySelector<HTMLDetailsElement>('details')?.open,false);
-  assert.equal(button('변경 저장').disabled,false);
-  await choose('대출 상환원금·이자 납입');assert.equal(posts.length,0);
+  assert.equal(button('변경 저장').disabled,true);
+  await choose('↗출금');await change('세부 금융 유형','LOAN_PAYMENT');assert.equal(posts.length,0);
   assert.equal(button('변경 저장').disabled,true);
   await change('상환 대출','loan');assert.equal(button('변경 저장').disabled,false,'Unresolved allocation remains saveable');
   await change('원금','420000');assert.equal(button('변경 저장').disabled,true,'Partial split is rejected');
@@ -54,13 +54,13 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   await change('수수료','10000');assert.equal(button('변경 저장').disabled,false);
   await close();await open();assert.equal(control('원금').value,'420000');
   await evict();assert.equal(control('원금').value,'420000','Provider preserves the draft across row eviction');
-  await choose('소비일반 결제·지출');assert.equal(document.querySelector('[aria-label="원금"]'),null);
+  await change('세부 금융 유형','EXPENSE');assert.equal(document.querySelector('[aria-label="원금"]'),null);
   assert.equal(button('변경 저장').disabled,false,'Irrelevant split cannot disable expense save');
   await choose('변경 저장');assert.deepEqual(Object.keys(posts.at(-1)!.body).sort(),['action','expectedVersion','requestId','type']);
   assert.match(document.body.textContent??'',/서버에 저장했습니다/);
   await close();row={...initial,type:'LOAN_PAYMENT',loan_id:'loan',principal:420000,interest:70000,fee:10000,version:3};await open();
   assert.equal(control('원금').value,'420000');assert.equal(control('상환 대출').disabled,true);
-  await choose('대출 상환원금·이자 납입');assert.equal(control('원금').value,'420000');
+  await choose('↗출금');await change('세부 금융 유형','LOAN_PAYMENT');assert.equal(control('원금').value,'420000');
   await change('이자','60000');await change('수수료','20000');
   outcome='NOT_APPLIED';await choose('변경 저장');assert.equal(control('원금').value,'420000');assert.match(document.body.textContent??'',/합성 거절/);
   assert.equal(posts.at(-1)!.body.loanId,'loan');assert.equal(posts.at(-1)!.body.loanVersion,7);
@@ -73,7 +73,7 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   await choose('처리 결과 확인');assert.equal(posts.length,count);
   await choose('같은 요청 재시도');assert.deepEqual(posts.at(-1)!.body,frozen);assert.equal(frozen.expectedVersion,4);assert.equal(frozen.loanVersion,8);
   outcome='APPLIED';await choose('같은 요청 재시도');await close();
-  row={...initial,version:9};await open();await choose('이체내 계좌 간 이동');await close();row={...row,version:10};await open();
+  row={...initial,version:9};await open();await choose('⇄이체');await change('세부 금융 유형','TRANSFER');await close();row={...row,version:10};await open();
   assert.equal(button('변경 저장').disabled,true,'Reopening an externally changed draft requires comparison');
   await choose('최신 값과 비교 후 재적용 준비');await choose('변경 저장');await close();
   for(const type of ['INITIAL_BALANCE','BALANCE_ADJUSTMENT','LOAN_RECEIPT']){

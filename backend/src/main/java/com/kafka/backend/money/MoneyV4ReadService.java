@@ -25,7 +25,7 @@ import static com.kafka.backend.money.MoneyService.require;
 @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
 public class MoneyV4ReadService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final Set<String> BUCKETS = Set.of("I", "E", "L", "SI", "SO", "UNKNOWN_INCOME", "UNKNOWN_SAVINGS", "FAMILY_SUPPORT");
+    private static final Set<String> BUCKETS = Set.of("I", "E", "L", "SI", "SO", "UNKNOWN_INCOME", "UNKNOWN_SAVINGS", "UNKNOWN_TRACKING", "FAMILY_SUPPORT");
     private final NamedParameterJdbcTemplate db;
     private final CurrentUserProvider users;
     private static final String facts = loadProjection();
@@ -60,14 +60,14 @@ public class MoneyV4ReadService {
     public record Metrics(String currency, String timezone, BigDecimal actualIncome, BigDecimal consumption,
                           BigDecimal totalExpense, BigDecimal loanRepayment, BigDecimal savingsIn,
                           BigDecimal savingsOut, BigDecimal savingsNet, BigDecimal savingsMovement,
-                          long unqualifiedIncomeCount, long unknownSavingsCount, List<Slice> composition) {}
+                          long unqualifiedIncomeCount, long unknownSavingsCount, long unknownTrackingCount, List<Slice> composition) {}
 
     private String accountScope(String accounts, MapSqlParameterSource params) {
         var selected = parseAccountScope(accounts);
         if (selected == null) return "";
         if (selected.isEmpty()) return " AND false";
         params.addValue("accounts", selected);
-        return " AND (from_account_id IN (:accounts) OR to_account_id IN (:accounts))";
+        return " AND (CASE WHEN source_type='REFUND' THEN refund_tracking_account IN (:accounts) ELSE (from_account_id IN (:accounts) OR to_account_id IN (:accounts)) END)";
     }
 
     static Set<UUID> parseAccountScope(String accounts) {
@@ -163,7 +163,7 @@ public class MoneyV4ReadService {
         return new Metrics(currency, SEOUL.getId(), income, expense, expense.add(loan), loan,
                 unknownSavings == 0 ? in : null, unknownSavings == 0 ? out : null,
                 unknownSavings == 0 ? in.subtract(out) : null, unknownSavings == 0 ? in.add(out) : null,
-                unknownIncome, unknownSavings, slices);
+                unknownIncome, unknownSavings, slices.stream().filter(row->row.bucket().equals("UNKNOWN_TRACKING")).mapToLong(Slice::count).sum(), slices);
     }
 
     public record SavingsMember(UUID id, String name) {}

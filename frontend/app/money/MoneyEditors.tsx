@@ -350,6 +350,7 @@ export function RawEvidence({ id }: { id: string }) {
 }
 function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
   const t = p.value;
+  const coordinator=useMoneyRows();
   const [refundFlow, setRefundFlow] = useState(t?.type === "REFUND");
   const {
     data,
@@ -367,10 +368,13 @@ function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
       refunds={data?.items || []}
       onTypeChange={(type) => setRefundFlow(type === "REFUND")}
       onClose={p.onClose}
+      onSpecialType={t?.id?undefined:(_type,draft)=>p.select({kind:"transaction",value:draft})}
       title={t?.id ? "거래 수정" : "수동 거래 추가"}
       onSave={async (input) => {
         if (t?.id) await api.put("/transactions/" + t.id, input);
-        else await api.post("/transactions", input);
+        else await coordinator.execute("manual-entry-create","/manual-entries",{transaction:input,
+          fromVersion:p.accounts.find(a=>a.id===input.fromAccountId)?.version,toVersion:p.accounts.find(a=>a.id===input.toAccountId)?.version,
+          refundVersion:data?.items.find(r=>r.id===input.refundOf)?.version});
         p.onSaved();
       }}
     >

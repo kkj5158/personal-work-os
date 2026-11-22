@@ -4,7 +4,8 @@ export type RepaymentPart = "PRINCIPAL" | "INTEREST" | "FEE" | "UNALLOCATED";
 export type LoanFilter = {kind:"LOAN_PAYMENT";label:string} & ({loanId:string|null;part?:never} | {part:RepaymentPart;loanId?:never});
 export type BookCategoryFilter = {kind:MeaningKind;categoryId:string;label:string};
 export type SavingsFilter = {kind:"SAVINGS";bucket:"SI"|"SO";label:string};
-export type MonthlyFilter = BookCategoryFilter | SavingsFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | { kind:"FAMILY_SUPPORT";categoryId:string;label:string } | LoanFilter;
+export type StockFilter = {kind:"STOCK";accountId:string;label:string;asOf:string;member:StatisticalMember};
+export type MonthlyFilter = StockFilter | BookCategoryFilter | SavingsFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | { kind:"FAMILY_SUPPORT";categoryId:string;label:string } | LoanFilter;
 export type LoanRepaymentSummary = {
   currency:"KRW";
   loanRepayment:string;
@@ -37,7 +38,7 @@ export function donutSectors<T extends {id:string;amount:number}>(rows:T[]){cons
 export type V4Summary = {
  actualIncome:number; consumption:number; totalExpense:number; loanRepayment:number;
  savingsIn:number|null; savingsOut:number|null; savingsNet:number|null; savingsMovement:number|null;
- unqualifiedIncomeCount:number; unknownSavingsCount:number;
+ unqualifiedIncomeCount:number; unknownTrackingCount?:number;unknownSavingsCount:number;
  composition:{bucket:string;categoryId:string|null;loanId:string|null;amount:number;count:number}[];
 };
 export const compositionPreferencePath = "/v4/composition-preference";

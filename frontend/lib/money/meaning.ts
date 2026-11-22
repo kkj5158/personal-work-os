@@ -1,5 +1,5 @@
 export type MeaningKind = "EXPENSE" | "INCOME";
-export type Tracking = { version: number; expense: string[]; income: string[] };
+export type Tracking = { version: number; expense: string[]; income: string[]; savings?:string[]; installment?:string[] };
 export type RuleCondition = {
   field: "type" | "accountId" | "merchant" | "title";
   operator: "EXACT" | "CONTAINS" | "STARTS_WITH";

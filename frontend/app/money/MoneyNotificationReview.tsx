@@ -8,10 +8,11 @@ import {moneyAmount} from '@/lib/money/accounts';
 import {persistReviewCommand, storedReviewCommands, type StoredReviewCommand, type ReviewSubmission} from '@/lib/money/reviewRecovery';
 import {affectedBy} from '@/lib/money/cache';
 import {reviewReasons, ignoredReasons} from '@/lib/money/meaning';
-import {moneyApi as api, seoul, type Raw} from '@/lib/money/model';
+import {moneyApi as api, seoul} from '@/lib/money/model';
 import {REVIEW_BATCH_LIMIT, reviewActionLabel, reviewCurrency, reviewDirection, reviewKey, reviewLedgerHref, reviewMerchant, removeConfirmedReviewRows, type ReviewAction, type ReviewOutcome, type ReviewPage, type ReviewPreview, type ReviewPreviewRow} from '@/lib/money/reviewWorkflow';
 import {useMoneyCache, useMoneyViewState} from './MoneyDataProvider';
 import {MoneyNavigationTabs} from './MoneyNavigationTabs';
+import {ReviewFinancialInline} from './MoneyReviewFinancialInline';
 import {ReviewResults} from './MoneyReviewResults';
 import {useMoneyData, LoadState} from './MoneyWebData';
 import {Pagination, type Props} from './MoneyWebViews';
@@ -46,6 +47,7 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
   const [receipt, setReceipt] = useMoneyViewState<Receipt | null>('notice-review-receipt', () => null);
   const [preview, setPreview] = useState<ReviewPreview | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [manualId,setManualId]=useState<string|null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState(''), [rowErrors, setRowErrors] = useState<Record<string,string>>({});
   const [working, setWorking] = useState<string[]>([]);
@@ -218,8 +220,10 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
         <td className="notice-reason">{reasonLabel(row.reason)}{!history && state === 'PENDING' && blocked && <small>거래 근거 확인</small>}</td>
         <td className="notice-actions"><div className="money-notice-row-actions">{history ? <><span>{row.transactionId ? '거래장 등록' : historyLabels[row.reason] ?? '처리됨'}</span>{row.transactionId && <a href={reviewLedgerHref(row.transactionId)}>거래장에서 보기</a>}{row.canUndo && row.eventId && <button disabled={working.includes(row.eventId)} onClick={() => void undo(row.eventId!)}>실행 취소</button>}</> :
         actions.map(action => <button key={action} className={action === move && !blocked ? 'money-primary' : ''} disabled={locked || action === move && blocked} title={action === move && blocked ? row.moveToBookkeepingBlockReason || '거래 근거 확인 필요' : undefined} onClick={() => single(action,row)}>{action === move && blocked ? '등록 불가' : <>{action === move && <ArrowRight size={14} aria-hidden="true"/>}{reviewActionLabel(action)}</>}</button>)}
+        {state==='PENDING'&&row.kind==='RAW'&&row.lane==='FORMAT'&&<button disabled={locked} id={detailId+"-manual"} aria-expanded={manualId===row.id} onClick={()=>setManualId(manualId===row.id?null:row.id)}>직접 확인하여 등록</button>}
         <button className="notice-detail-button" aria-controls={detailId} aria-expanded={open} onClick={() => setExpanded(open ? null : key)}>{open ? '접기' : '상세'}</button></div>
         {rowErrors[key] && <p className="money-notice-inline-error" role="alert">{rowErrors[key]}</p>}</td></tr>
+        {manualId===row.id&&state==='PENDING'&&<tr><td colSpan={6}><ReviewFinancialInline row={row} accounts={p.accounts} categories={p.categories} disabled={locked} onCancel={()=>{setManualId(null);document.getElementById(detailId+"-manual")?.focus();}} onSaved={()=>{cache.mutate('transaction');cache.mutate('reviewItem');cache.invalidate(key=>key===path);}}/></td></tr>}
         {open && <tr id={detailId} className="notice-detail"><td colSpan={6}><RowEvidence row={row}/></td></tr>}</Fragment>;
     })}</tbody></table>
     {!rows.length && !list.loading && !list.error && page && <p className="money-notice-empty"><Inbox size={24} aria-hidden="true"/><b>표시할 항목이 없습니다</b>검색 조건을 바꾸거나 다른 상태 탭을 확인하세요.</p>}
@@ -229,10 +233,10 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
 }
 
 function RowEvidence({row}: {row: AiItem}) {
-  const raw = useMoneyData<Raw>('/notifications/' + row.id);
+  const raw = useMoneyData<{sourcePackage:string;maskedTitle:string;maskedBody:string;missingFields:string[];existingSourceLinks:number;previousAttempt:{id?:string};currentParser:{parserVersion?:string}}>('/review/owner/'+row.id+'/diagnostic');
   return <section aria-label="원문 알림 및 처리 근거"><h3>원문 알림 및 처리 근거</h3>
     <LoadState loading={raw.loading} error={raw.error} hideLastChecked/>
-    <dl>{raw.data && <><dt>원본 출처</dt><dd>{raw.data.sourcePackage}</dd><dt>원문 알림</dt><dd>{raw.data.title}<br/>{raw.data.bigText || raw.data.text || '본문 없음'}</dd></>}
+    <dl>{raw.data && <><dt>원본 출처</dt><dd>{raw.data.sourcePackage}</dd><dt>원문 알림</dt><dd>{raw.data.maskedTitle}<br/>{raw.data.maskedBody || '본문 없음'}</dd><dt>재파싱 미리보기</dt><dd>원본 {row.id} · 파서 {raw.data.currentParser.parserVersion??'미지원'} · 누락 {raw.data.missingFields.join(', ')||'없음'} · 기존 연결 {raw.data.existingSourceLinks}건 · 최근 시도 {raw.data.previousAttempt.id??'없음'}</dd></>}
     <dt>검토 사유</dt><dd>{reasonLabel(row.reason)}</dd><dt>거래 근거</dt><dd>{row.moveToBookkeepingBlockReason || row.evidence?.summary || '원문과 입출금 정보를 확인해 주세요.'}</dd></dl>
     {row.state === 'PENDING' && !eligible(row) && <a href="/money/reconciliation">잔액 점검에서 거래 근거 확인</a>}</section>;
 }

@@ -13,6 +13,7 @@ import {
 import { useMoneyData, LoadState, type Loan } from "./MoneyWebData";
 import { EditorForm, SystemInfo, type Props } from "./MoneyEditors";
 import { Field, AccountOptions } from "./MoneyForms";
+import {useMoneyRows} from "./MoneyDataProvider";
 import { MoneyPanel } from "./MoneyPanel";
 
 type FinancialDetail = {
@@ -212,6 +213,25 @@ export function ReconcileEditor(p: Props & { account: Account }) {
   );
 }
 
+function ReceiptForm(p:Props & {value:Partial<Transaction>;loans:Loan[]}){
+  const coordinator=useMoneyRows();
+  const [account,setAccount]=useState(p.value.toAccountId??""),[loanId,setLoan]=useState("");
+  const [amount,setAmount]=useState(String(p.value.amount??"")),[note,setNote]=useState(p.value.memo??"");
+  const [at,setAt]=useState(seoul(p.value.occurredAt??new Date().toISOString()));
+  return <EditorForm title="대출금 수령" onClose={p.onClose} onSave={async()=>{
+    await coordinator.execute("manual-loan-receipt","/manual-entries/loan-receipt",{receipt:{accountId:account,accountVersion:p.accounts.find(a=>a.id===account)?.version,
+      loanId,loanVersion:p.loans.find(l=>l.id===loanId)?.version,amount:Number(amount),occurredAt:iso(at),note}});
+    p.onSaved();
+  }}>
+    <Field label="대출"><select required value={loanId} onChange={e=>setLoan(e.target.value)}><option value="">대출 선택</option>{p.loans.filter(l=>l.status==="ACTIVE").map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></Field>
+    <Field label="입금 계좌"><select required value={account} onChange={e=>setAccount(e.target.value)}><AccountOptions accounts={p.accounts}/></select></Field>
+    <Field label="수령액 (KRW)"><input type="number" min="1" required value={amount} onChange={e=>setAmount(e.target.value)}/></Field>
+    <Field label="발생시각 (서울)"><input type="datetime-local" required value={at} onChange={e=>setAt(e.target.value)}/></Field>
+    <Field label="메모"><input value={note} onChange={e=>setNote(e.target.value)}/></Field>
+    <p>입금과 미상환 원금에 한 번 반영하며 실제 소득에서 제외합니다.</p>
+  </EditorForm>;
+}
+
 export function FinancialTransactionEditor(
   p: Props & { value: Partial<Transaction> },
 ) {
@@ -234,6 +254,7 @@ export function FinancialTransactionEditor(
   if (t.type === "LOAN_PAYMENT")
     return <PaymentForm {...p} loans={loans.data || []} detail={detail.data} />;
   const account = p.accounts.find((a) => a.id === t.toAccountId);
+  if (t.type === "LOAN_RECEIPT"&&!t.id) return <ReceiptForm {...p} loans={loans.data??[]}/>;
   if (t.type === "LOAN_RECEIPT")
     return (
       <MoneyPanel title="대출 입금" onClose={p.onClose}>

@@ -23,18 +23,41 @@ public class MoneyMeaningService {
  static void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("값이 변경되었습니다. 새로고침 후 다시 확인하세요.");}
  @SuppressWarnings("unchecked") Map<String,Object> object(Object value){return value==null?new LinkedHashMap<>():json.readValue(value.toString(),Map.class);}
  void audit(UUID id,String action,Object previous,Object next){db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,?,cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner(),id,action,json.writeValueAsString(previous),json.writeValueAsString(next));}
- public record TrackingInput(List<UUID> expense,List<UUID> income,Long expectedVersion){}
+ public record TrackingInput(List<UUID> expense,List<UUID> income,Long expectedVersion,List<UUID> savings,List<UUID> installment){
+  public TrackingInput(List<UUID> expense,List<UUID> income,Long expectedVersion){this(expense,income,expectedVersion,null,null);}
+ }
  @Transactional(readOnly=true) public Map<String,Object> tracking(){
-  var result=new LinkedHashMap<String,Object>();result.put("version",db.queryForObject("select coalesce((select version from money_tracking_settings where user_id=?),0)",Long.class,owner()));
+  var result=new LinkedHashMap<String,Object>();
+  result.put("version",db.queryForObject("select coalesce((select version from money_tracking_settings where user_id=?),0)",Long.class,owner()));
   var rows=db.queryForList("select kind,account_id from money_tracking_accounts where user_id=? order by kind,slot",owner());
-  for(var kind:List.of("EXPENSE","INCOME"))result.put(kind.toLowerCase(Locale.ROOT),rows.stream().filter(r->kind.equals(r.get("kind"))).map(r->r.get("account_id")).toList());return result;
+  for(var kind:List.of("EXPENSE","INCOME","SAVINGS","INSTALLMENT"))result.put(kind.toLowerCase(Locale.ROOT),rows.stream().filter(r->kind.equals(r.get("kind"))).map(r->r.get("account_id")).toList());
+  return result;
  }
  public Map<String,Object> saveTracking(TrackingInput input){
-  lock();require(input!=null,"Tracking required");var old=tracking();version(((Number)old.get("version")).longValue(),input.expectedVersion());
-  for(var ids:Arrays.asList(input.expense(),input.income())){require(ids!=null&&ids.size()<=5&&new HashSet<>(ids).size()==ids.size(),"유형별 추적 계좌는 중복 없이 최대 5개입니다.");for(var id:ids)ownedAccount(id);}
-  db.update("insert into money_tracking_settings(user_id,version) values(?,1) on conflict(user_id) do update set version=money_tracking_settings.version+1,updated_at=now()",owner());
-  db.update("delete from money_tracking_accounts where user_id=?",owner());
-  for(String kind:List.of("EXPENSE","INCOME")){var ids=kind.equals("EXPENSE")?input.expense():input.income();for(int i=0;i<ids.size();i++)db.update("insert into money_tracking_accounts(user_id,kind,slot,account_id) values(?,?,?,?)",owner(),kind,i+1,ids.get(i));}
+  lock();require(input!=null,"Tracking required");var old=tracking();
+  version(((Number)old.get("version")).longValue(),input.expectedVersion());
+  require(input.expense()!=null&&input.income()!=null,"수입·지출 추적 목록이 필요합니다.");
+  var changes=new LinkedHashMap<String,List<UUID>>();
+  changes.put("EXPENSE",input.expense());changes.put("INCOME",input.income());
+  if(input.savings()!=null)changes.put("SAVINGS",input.savings());
+  if(input.installment()!=null)changes.put("INSTALLMENT",input.installment());
+  for(var change:changes.entrySet()){
+   String kind=change.getKey();var ids=change.getValue();var array=ids.toArray(UUID[]::new);
+   require(ids.size()==new HashSet<>(ids).size(),"중복된 추적 계좌입니다.");
+   int valid=db.queryForObject("""
+     select count(*) from money_accounts where user_id=? and not archived and id=any(?)
+       and (cast(? as text) in ('INCOME','EXPENSE') or (fund_group='SAVINGS' and savings_subtype=?))
+     """,Integer.class,owner(),array,kind,kind.equals("SAVINGS")?"SAVINGS_ACCOUNT":kind);
+   require(valid==ids.size(),"자금 구분에 맞는 활성 소유 계좌를 선택하세요.");
+  }
+  var at=db.queryForObject("select clock_timestamp()",Timestamp.class);
+  db.update("insert into money_tracking_settings(user_id,version) values(?,1) on conflict(user_id) do update set version=money_tracking_settings.version+1,updated_at=excluded.updated_at",owner());
+  for(var change:changes.entrySet()){
+   String kind=change.getKey();var array=change.getValue().toArray(UUID[]::new);
+   db.update("delete from money_tracking_accounts where user_id=? and kind=?",owner(),kind);
+   db.update("insert into money_tracking_accounts(user_id,kind,slot,account_id) select ?,?,n,id from unnest(cast(? as uuid[])) with ordinality a(id,n)",owner(),kind,array);
+   db.update("insert into money_tracking_selections(user_id,kind,effective_at,version,accounts) values(?,?,?,?,?)",owner(),kind,at,input.expectedVersion()+1,array);
+  }
   var next=tracking();audit(owner(),"TRACKING",old,next);return next;
  }
  void ownedAccount(UUID id){require(id!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_accounts where user_id=? and id=? and not archived)",Boolean.class,owner(),id)),"활성 소유 계좌를 선택하세요.");}
