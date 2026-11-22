@@ -101,7 +101,7 @@ const incoming={...refund,id:'credit',title:'Credit',type:'INCOME',meaning_state
 async function withDecisions(run:(tools:{
  choose:(id:string,type:string)=>Promise<void>;calls:{id:string;command:DecisionRequest}[];reads:string[];
  intercept:(fn:((id:string,command:DecisionRequest)=>Promise<void>)|null)=>void;
- dom:JSDOM;records:Map<string,LedgerRow>;reload:()=>Promise<void>;
+ dom:JSDOM;records:Map<string,LedgerRow>;reload:()=>Promise<void>;showPeriod:(period:Props['period'])=>Promise<void>;
 })=>Promise<void>){
  const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount();
  const get=api.get,patch=api.patch,post=api.post,records=new Map([outgoing,incoming,expense].map(row=>[row.id,row]));
@@ -142,7 +142,10 @@ async function withDecisions(run:(tools:{
    await act(()=>root.render(null));
    await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
   }
-  await run({choose,calls,reads,records,dom,reload,intercept:fn=>{before=fn;}});
+  async function showPeriod(period:Props['period']){
+   await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props} period={period}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  }
+  await run({choose,calls,reads,records,dom,reload,showPeriod,intercept:fn=>{before=fn;}});
  }finally{await act(()=>root.unmount());api.get=get;api.patch=patch;api.post=post;dom.window.close();}
 }
 test('ordinary outgoing and incoming decisions each send one versioned PATCH, enable categories and support durable undo',async()=>{
@@ -213,6 +216,26 @@ test('explicit bulk carries checkbox-time versions and retries only failed selec
   assert.match(document.querySelector('.al-batch-result')!.textContent!,/연결 대기 2건.*확인 필요 1건/);
   intercept(null);await act(()=>apply().click());await tick();
   assert.equal(calls.length,4);assert.equal(calls[3].id,'credit');assert.equal(records.get('credit')?.declaredFinancialType,'TRANSFER');
+ });
+});
+test('period changes clear selection and a late bulk failure cannot restore it after switching back',async()=>{
+ await withDecisions(async({calls,dom,intercept,showPeriod})=>{
+  const checkbox=(id:string)=>document.querySelector<HTMLInputElement>('[data-transaction-id="'+id+'"] input[type=checkbox]')!;
+  await act(()=>checkbox('debit').click());
+  await showPeriod({...props.period});assert.equal(checkbox('debit').checked,true);
+  const type=document.querySelector<HTMLSelectElement>('[aria-label="일괄 금융유형"]')!;
+  await act(()=>{type.value='TRANSFER';type.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+  let finish!:()=>void;
+  const delayed=new Promise<void>(resolve=>{finish=resolve;});
+  intercept(async()=>{await delayed;throw new ApiError(422,'보류');});
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='선택 거래에 적용')!.click());
+  assert.equal(calls.length,1);
+  await showPeriod({...props.period,from:'2026-12-01',to:'2026-12-31'});assert.equal(checkbox('debit').checked,false);
+  await showPeriod(props.period);assert.equal(checkbox('debit').checked,false);
+  await act(()=>checkbox('credit').click());
+  await act(async()=>{finish();await delayed;});await tick();
+  assert.equal(checkbox('debit').checked,false);assert.equal(checkbox('credit').checked,true);
+  assert.equal(document.querySelector('.al-batch-result'),null);
  });
 });
 test('same-row conflict keeps desired type, refreshes latest row and requires explicit reapply',async()=>{
