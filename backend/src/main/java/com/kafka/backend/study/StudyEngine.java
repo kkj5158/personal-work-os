@@ -30,6 +30,10 @@ public class StudyEngine {
   final boolean testAdapterAllowed;
   @org.springframework.beans.factory.annotation.Value("${STUDY_V320_PILOT_OWNER:}")
   String pilotOwner = "";
+  @org.springframework.beans.factory.annotation.Value("${STUDY_V320_PRIOR_TOKENS:0}")
+  int priorPilotTokens;
+  @org.springframework.beans.factory.annotation.Value("${STUDY_V320_PRIOR_CALLS:0}")
+  int priorPilotCalls;
   // Saved V3.1.3 fixtures replay their original policy in the isolated regression suite.
   boolean historicalFixturePolicy() { return false; }
   boolean pilot(UUID owner) { return owner.toString().equalsIgnoreCase(pilotOwner); }
@@ -547,7 +551,11 @@ public class StudyEngine {
       if (!historicalFixturePolicy() || campaign) {
         for (String marker : List.of("decisionAudit","reasoningContract","answerGrounding")) p.remove(marker);
       }
-      if (campaign) StudyCampaign.freeze(p, owner, chapter, controls);
+      if (campaign) {
+        require(priorPilotCalls>=0 && priorPilotCalls<=StudyCampaign.CALLS && priorPilotTokens>=0);
+        p.put("priorCalls",priorPilotCalls).put("priorTokens",priorPilotTokens);
+        StudyCampaign.freeze(p, owner, chapter, controls);
+      }
       p.put("inputDigest", hash(p.toString()));
       result.add(publicJob(enqueue(owner, "GENERATE", key + "/" + i, p)));
     }
@@ -873,7 +881,7 @@ public class StudyEngine {
       book.withArrayProperty(r.path("part").asString()).add(r.path("question"));
       if(answers){var k=r.path("key").deepCopy().asObject();k.putObject("binding").put("part",r.path("part").asString()).set("questionId",r.path("question").path("id"));keys.add(k);}
     }
-    try(var font=io.font();var pdf=new StudyPdfRenderer(font)){pdf.rendererVersion="비공개 검토 초안";return pdf.build(book,keys,answers?"answer":"question");}
+    try(var font=io.font();var pdf=new StudyPdfRenderer(font)){pdf.privateDraft=true;pdf.rendererVersion="비공개 검토 초안";return pdf.build(book,keys,answers?"answer":"question");}
   }
 
   public ObjectNode complete(StudyEngineWorker worker, UUID id, UUID token, JsonNode output) {

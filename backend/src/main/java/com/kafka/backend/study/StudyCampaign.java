@@ -41,7 +41,7 @@ final class StudyCampaign {
     }else require(controls.isMissingNode());
   }
   static ObjectNode summary(ObjectNode s){
-    var o=JSON.createObjectNode().put("calls",s.path("calls").size()).put("tokens",s.path("spent").asLong())
+    var o=JSON.createObjectNode().put("calls",s.path("priorCalls").asInt()+s.path("calls").size()).put("tokens",s.path("spent").asLong())
       .put("status",s.path("status").asString("DRAFT")).put("calibrated",s.path("calibrated").asBoolean());
     var a=o.putArray("slots");
     for(var r:s.path("slots"))a.addObject().put("kind",r.path("kind").asString()).put("order",r.path("order").asInt())
@@ -56,7 +56,7 @@ final class StudyCampaign {
     return out;
   }
   static void init(ObjectNode s,JsonNode p){
-    s.put("status","DRAFT");s.putArray("calls");var slots=s.putArray("slots");
+    s.put("status","DRAFT").put("priorCalls",p.path("priorCalls").asInt()).put("spent",p.path("priorTokens").asInt());s.putArray("calls");var slots=s.putArray("slots");
     for(String part:List.of("required","extension"))for(var row:p.path("blueprint").path("slots").path(part)){
       var r=slots.addObject().put("part",part).put("kind",row.path("kind").asString()).put("order",row.path("order").asInt()).put("stage","PLANNED").put("cycles",0).put("replans",0);
       r.put("heldOut",(part.equals("extension")&&row.path("order").asInt()==2)||(r.path("kind").asString().equals("single_choice")&&row.path("order").asInt()==4));
@@ -120,7 +120,7 @@ final class StudyCampaign {
   static ObjectNode reserve(StudyEngineJob j,JsonNode p,ObjectNode s){
     if(s.has("pending"))return JSON.createObjectNode().put("action","RECONCILE").put("callId",s.path("pending").asString());
     var t=next(s,p);
-    if(t==null || s.path("calls").size()>=CALLS || s.path("spent").asLong()+18000+(t==null?0:t.toString().length()/2)>TOKENS){
+    if(t==null || s.path("calls").size()+s.path("priorCalls").asInt()>=CALLS || s.path("spent").asLong()+18000+(t==null?0:t.toString().length()/2)>TOKENS){
       s.put("status",t==null?"SLOTS_UNRESOLVED":"BUDGET_PAUSED");j.state="BLOCKED";j.result=s.toString();
       return JSON.createObjectNode().put("action","STOP").put("reason",s.path("status").asString());
     }

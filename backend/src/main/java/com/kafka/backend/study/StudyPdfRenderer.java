@@ -18,6 +18,7 @@ final class StudyPdfRenderer implements AutoCloseable {
   PDPageContentStream stream;
   float y;
   int pages;
+  boolean privateDraft;
   String rendererVersion = StudyEngineRules.VERSION;
   static final float LEFT = 46, WIDTH = 503, BOTTOM = 50, SIZE = 10, LINE = 16;
 
@@ -69,7 +70,10 @@ final class StudyPdfRenderer implements AutoCloseable {
           // Compatibility glyphs such as circled list numbers retain their text meaning.
           // A genuinely missing character still fails the pair instead of becoming a blank box.
           String plain = java.text.Normalizer.normalize(ch, java.text.Normalizer.Form.NFKC);
-          if (plain.equals(ch)) throw unsupported;
+          if (plain.equals(ch)) {
+            if (!privateDraft) throw unsupported;
+            plain = "[U+" + Integer.toHexString(point).toUpperCase(Locale.ROOT) + "]";
+          }
           ch = plain;
           w = font.getStringWidth(ch) / 1000 * SIZE;
         }
@@ -131,6 +135,7 @@ final class StudyPdfRenderer implements AutoCloseable {
     doc.getDocument().setDocumentID(ids);
     page();
     text("STUDY · " + book.path("date").asString() + " · v" + book.path("version").asInt());
+    if (privateDraft) text("소유자 검토 초안 · 글꼴에 없는 문자는 유니코드 번호로 표시합니다. 원문은 자료 보기에서 확인하세요.");
     text(kind.equals("question") ? "학습 문제집 · 이름: __________________" : "정답·해설 · 소유자 명시적 검토용");
     text(book.path("topic").asString());
     space(1);
