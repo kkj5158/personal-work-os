@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type MouseEvent } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-export type NavigationOption = { id: string; label: string; href: string; active?: boolean; description?: string };
+export type NavigationOption = { id: string; label: string; href?: string; active?: boolean; navigateWhenActive?: boolean; description?: string };
 /** Shared pointer, touch and keyboard behavior for both Space and system menus. */
 export function NavigationMenu({ label, children, options, onNavigate, className = "" }: {
   label: string; children: ReactNode; options: readonly NavigationOption[];
@@ -25,7 +25,9 @@ export function NavigationMenu({ label, children, options, onNavigate, className
     // Shift-click and middle click retain the browser's ordinary new-window/tab semantics.
     if (event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault(); close(true);
-    if (!option.active || event.ctrlKey || event.metaKey) onNavigate(option.href, event.ctrlKey || event.metaKey);
+    if (option.href && (!option.active || option.navigateWhenActive || event.ctrlKey || event.metaKey)) {
+      onNavigate(option.href, event.ctrlKey || event.metaKey);
+    }
   }
   return <div ref={host} className={`pos-navigation-menu ${className}`} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
     <button ref={trigger} type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
@@ -46,7 +48,7 @@ export function NavigationMenu({ label, children, options, onNavigate, className
         ordered.find(item => item.textContent?.trim().toLowerCase().startsWith(event.key.toLowerCase()))?.focus();
       }
     }}>
-      {options.map(option => <a key={option.id} role="menuitemradio" aria-checked={!!option.active} href={option.href} tabIndex={-1} onClick={event => select(event, option)} onKeyDown={event => { if (event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}>
+      {options.map(option => <a key={option.id} role="menuitemradio" aria-checked={!!option.active} aria-disabled={!option.href || undefined} href={option.href} tabIndex={-1} onClick={event => select(event, option)} onKeyDown={event => { if (event.key === " " || (!option.href && event.key === "Enter")) { event.preventDefault(); event.currentTarget.click(); } }}>
         <span><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</span>{option.active && <Check size={15} aria-hidden="true" />}
       </a>)}
     </div>}

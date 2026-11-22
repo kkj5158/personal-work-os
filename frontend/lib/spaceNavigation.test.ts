@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { emptySpaceHistory, rememberSpace, restoreSpaceHistory, routeNavigation, SPACES, spaceDestination, SYSTEMS, systemDestination, WORK_GROUPS } from "./spaceNavigation";
+import { emptySpaceHistory, INITIAL_SPACE_DEFAULTS, normalizeSpaceDefaults, rememberSpace, resolveSpaceEntry, restoreSpaceHistory, routeNavigation, SPACES, spaceDestination, SYSTEMS, systemDestination, WORK_GROUPS } from "./spaceNavigation";
+
+test("explicit Space entry selects the configured system before consulting route history", () => {
+  const history = ["/notes?workspace=one&module=GRAPH&token=omit", "/blog", "/calendar?view=week&date=2026-11-22", "/workflow/projects", "/checklist?archived=1&area=two", "/diet", "/money/loans"]
+    .reduce(rememberSpace, emptySpaceHistory());
+  assert.deepEqual(SPACES.map(space => resolveSpaceEntry(history, space.id, INITIAL_SPACE_DEFAULTS)), [
+    "/workflow/projects", "/notes?module=GRAPH&workspace=one", "/study", "/life/categories", "/money/loans",
+  ]);
+  const choices = normalizeSpaceDefaults({ work: "Calendar", knowledge: "NAVER ARCHIVE", growth: "AUTHORING", life: "CHECKLIST SYS", finance: "BLOG" });
+  assert.deepEqual(SPACES.map(space => resolveSpaceEntry(history, space.id, choices)), [
+    "/calendar?date=2026-11-22&view=week", "/naver-archive", "/authoring", "/checklist?archived=1&area=two", "/money/loans",
+  ]);
+  assert.deepEqual(normalizeSpaceDefaults({ work: "STUDY", knowledge: null, growth: [], life: false, finance: "MONEY SYS", future: "FUTURE" }), INITIAL_SPACE_DEFAULTS);
+  assert.equal(resolveSpaceEntry({ ...history, systems: { Calendar: "/workflow/projects" } }, "work", choices), "/calendar");
+  assert.equal(resolveSpaceEntry({ ...history, systems: { "NAVER ARCHIVE": "/naver-archive/deleted" } }, "knowledge", choices), "/naver-archive");
+  assert.equal(resolveSpaceEntry({ ...history, systems: { "NOTE SYS": "/notes/fixture" } }, "knowledge", INITIAL_SPACE_DEFAULTS), "/notes");
+});
 import { tabTarget } from "./globalTabs";
 
 const matrix = {
