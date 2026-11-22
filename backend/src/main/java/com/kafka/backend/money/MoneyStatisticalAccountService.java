@@ -17,12 +17,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import static com.kafka.backend.money.MoneyService.require;
-import static com.kafka.backend.money.MoneyTypes.MoneyAccount;
 
 @Service
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class MoneyStatisticalAccountService {
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Set<String> PURPOSES = Set.of("INCOME", "CONSUMPTION", "SAVINGS", "INSTALLMENT", "UNASSIGNED");
     private static final List<String> ACCOUNT_COLORS = List.of("#7FAAA4", "#92A6BF", "#A29DB9", "#B2A17F", "#93AB8E", "#B38F9D", "#8FAFB5");
     private static final String PURPOSE_JOIN = """
@@ -36,7 +35,10 @@ public class MoneyStatisticalAccountService {
           ORDER BY h.effective_at DESC LIMIT 1
         ) fund ON true
         CROSS JOIN LATERAL (
-          SELECT CASE WHEN fund.fund_group IS NULL THEN 'UNASSIGNED'
+          SELECT fund.fund_group, fund.subtype,
+            money_tracked_at(a.user_id,a.id,'SAVINGS',cutoff.at_time) AS savings_tracked,
+            money_tracked_at(a.user_id,a.id,'INSTALLMENT',cutoff.at_time) AS installment_tracked,
+            CASE WHEN fund.fund_group IS NULL THEN 'UNASSIGNED'
             WHEN fund.fund_group='SAVINGS' THEN CASE
               WHEN money_tracked_at(a.user_id,a.id,CASE fund.subtype WHEN 'INSTALLMENT' THEN 'INSTALLMENT' ELSE 'SAVINGS' END,cutoff.at_time)
                 THEN CASE fund.subtype WHEN 'INSTALLMENT' THEN 'INSTALLMENT' ELSE 'SAVINGS' END
@@ -62,15 +64,23 @@ public class MoneyStatisticalAccountService {
 
     public record Setting(UUID accountId, String purpose, long version) {}
     public record Change(String purpose, Long expectedVersion) {}
+    public enum Confidence { VERIFIED, ESTIMATED, UNKNOWN, CONFLICT }
+
     public record Member(UUID accountId, String displayName, String color, String purposeAtCutoff, String currency,
                          Instant asOfCutoff, BigDecimal balance, Instant basisAt, String source, String status,
-                         Instant observedAt, BigDecimal difference, boolean known, String reason) {}
+                         Instant observedAt, BigDecimal difference, boolean known, String reason,
+                         Confidence confidence, boolean displayable, String displayBalance, Instant bankObservedAt, String displayDifference) {}
     public record Group(String purpose, BigDecimal total, BigDecimal confirmedPartialSum, int memberCount, int knownCount,
-                        int unknownCount, long conflicts, String currency, List<Member> members) {}
-    public record Unresolved(UUID accountId, String displayName, String reason) {}
+                        int unknownCount, long conflicts, String currency, List<Member> members,
+                        Confidence confidence, String displayTotal, String verifiedSubtotal, String estimatedSubtotal,
+                        int estimatedCount, int membershipUnknownCount) {}
+    public record Unresolved(UUID accountId, String displayName, String reason, List<String> possibleGroups) {}
     public record Snapshot(Instant asOfCutoff, String currency, Group savings, Group installment, List<Unresolved> unresolved) {}
-    private record Account(UUID id, String name, String color, String purpose, boolean membershipUnknown) {}
-    private record Evidence(Instant at, BigDecimal amount, String source) {}
+    private record Account(UUID id, String name, String color, String purpose, boolean membershipUnknown,
+                           List<String> possibleGroups) {}
+    private record Evidence(Instant at, BigDecimal amount, String source, boolean exact) {
+        Evidence(Instant at, BigDecimal amount, String source) { this(at,amount,source,true); }
+    }
 
     public List<Setting> settings() {
         return db.query("""
@@ -130,7 +140,8 @@ public class MoneyStatisticalAccountService {
         Instant cutoff = cutoff(to, asOf == null ? now : asOf);
         Timestamp at = Timestamp.from(cutoff);
         var accounts = db.query("""
-            SELECT a.id,a.display_name,coalesce(purpose.purpose,'UNASSIGNED'),membership.archived IS NULL
+            SELECT a.id,a.display_name,purpose.purpose,membership.archived IS NULL,
+              purpose.fund_group,purpose.subtype,purpose.savings_tracked,purpose.installment_tracked
             FROM money_accounts a
             """ + PURPOSE_JOIN + """
             LEFT JOIN LATERAL (
@@ -144,104 +155,147 @@ public class MoneyStatisticalAccountService {
             """, (r,n) -> {
                 var id = r.getObject(1,UUID.class);
                 var color = ACCOUNT_COLORS.get((id.toString().hashCode() & Integer.MAX_VALUE) % ACCOUNT_COLORS.size());
-                return new Account(id,r.getString(2),color,r.getString(3),r.getBoolean(4));
+                String purpose = r.getString(3);
+                boolean missingMembership = r.getBoolean(4);
+                String fund = r.getString(5);
+                var possible = new ArrayList<String>();
+                if ("SAVINGS".equals(fund) && purpose.equals("UNASSIGNED")) {
+                    possible.add("INSTALLMENT".equals(r.getString(6)) ? "INSTALLMENT" : "SAVINGS");
+                } else if (fund == null) {
+                    // A missing fund history is relevant where an effective tracking selection includes the account.
+                    if (r.getBoolean(7)) possible.add("SAVINGS");
+                    if (r.getBoolean(8)) possible.add("INSTALLMENT");
+                }
+                return new Account(id,r.getString(2),color,purpose,missingMembership,List.copyOf(possible));
             },
             at, at, owner, at).stream().filter(a -> selected == null || selected.contains(a.id())).toList();
         var unresolved = accounts.stream().filter(a -> a.membershipUnknown() || a.purpose().equals("UNASSIGNED"))
-            .map(a -> new Unresolved(a.id(),a.name(),a.membershipUnknown() ? "MEMBERSHIP_HISTORY_MISSING" : "PURPOSE_UNASSIGNED"))
+            .map(a -> new Unresolved(a.id(),a.name(),a.membershipUnknown() ? "MEMBERSHIP_HISTORY_MISSING"
+                : a.possibleGroups().isEmpty() ? "PURPOSE_UNASSIGNED" : "TRACKING_OR_FUND_HISTORY_MISSING",a.possibleGroups()))
             .toList();
-        var balances = new HashMap<UUID,MoneyProductService.Balance>();
-        if (currency.equals("KRW")) {
-            product.accountBalances(cutoff).forEach(row ->
-                balances.put(((MoneyAccount)row.get("account")).id(),(MoneyProductService.Balance)row.get("balance")));
-        }
         var members = accounts.stream().filter(a -> a.purpose().equals("SAVINGS") || a.purpose().equals("INSTALLMENT"))
-            .map(a -> member(owner,a,currency,cutoff,balances.get(a.id()))).toList();
-        boolean unassigned = accounts.stream().anyMatch(a -> a.purpose().equals("UNASSIGNED"));
-        return new Snapshot(cutoff,currency,group("SAVINGS",currency,members,unassigned),
-            group("INSTALLMENT",currency,members,unassigned),unresolved);
+            .map(a -> member(owner,a,currency,cutoff)).toList();
+        return new Snapshot(cutoff,currency,group("SAVINGS",currency,members,unresolved),
+            group("INSTALLMENT",currency,members,unresolved),unresolved);
     }
 
-    private Member member(UUID owner, Account account, String currency, Instant cutoff, MoneyProductService.Balance ledger) {
+    private Member member(UUID owner, Account account, String currency, Instant cutoff) {
         if (account.membershipUnknown()) {
-            return result(account,currency,cutoff,null,null,null,"UNKNOWN",null,null,false,"MEMBERSHIP_HISTORY_MISSING");
+            return result(account,currency,cutoff,null,null,Confidence.UNKNOWN,null,null,null,"MEMBERSHIP_HISTORY_MISSING");
         }
+        if (!currency.equals("KRW") || MoneyStatisticalLedgerCoverage.unsupportedCurrency(db,owner,account.id(),cutoff)) {
+            return result(account,currency,cutoff,null,null,Confidence.UNKNOWN,null,null,null,"CURRENCY_SCOPE_UNVERIFIED");
+        }
+
+        var statements = MoneyStatisticalLedgerCoverage.statements(db,owner,account.id(),currency);
+        Timestamp at = Timestamp.from(cutoff);
         var evidence = db.query("""
-            SELECT observed_at,amount,source FROM (
-              SELECT ((date_to+1)::timestamp AT TIME ZONE 'Asia/Seoul')-interval '1 microsecond' AS observed_at,
-                     final_balance AS amount, 'BANK_STATEMENT' AS source
-              FROM money_bank_statements WHERE user_id=? AND account_id=? AND currency=?
-                AND verification IN ('BANK_PDF_TABLE','OWNER_ATTESTED_NATIVE_REPLAY')
-              UNION ALL
-              SELECT observed_at,amount,'OWNER_OBSERVATION' FROM money_balance_observations
-              WHERE user_id=? AND account_id=? AND status='ACTIVE' AND ?='KRW' AND updated_at<=?
-              UNION ALL
-              SELECT verified_at,amount,'OWNER_CHECKPOINT' FROM money_balance_checkpoints
-              WHERE user_id=? AND account_id=? AND ?='KRW' AND created_at<=?
-            ) observations WHERE observed_at<=? ORDER BY observed_at DESC, source
+            SELECT observed_at,amount,'OWNER_OBSERVATION' FROM money_balance_observations
+            WHERE user_id=? AND account_id=? AND status='ACTIVE' AND updated_at<=? AND observed_at<=?
+            UNION ALL
+            SELECT verified_at,amount,'OWNER_CHECKPOINT' FROM money_balance_checkpoints
+            WHERE user_id=? AND account_id=? AND created_at<=? AND verified_at<=?
             """, (r,n) -> new Evidence(r.getTimestamp(1).toInstant(),r.getBigDecimal(2),r.getString(3)),
-            owner,account.id(),currency,owner,account.id(),currency,Timestamp.from(cutoff),
-            owner,account.id(),currency,Timestamp.from(cutoff),Timestamp.from(cutoff));
-        Evidence latest = evidence.isEmpty() ? null : evidence.getFirst();
-        Instant observedAt = latest == null ? null : latest.at();
-        if (latest != null && evidence.stream().anyMatch(other ->
-            other.at().equals(latest.at()) && other.amount().compareTo(latest.amount()) != 0)) {
-            return result(account,currency,cutoff,null,observedAt,latest.source(),"CONFLICT",observedAt,null,false,"OBSERVATIONS_DISAGREE");
+            owner,account.id(),at,at,owner,account.id(),at,at);
+        statements.stream().filter(s -> !s.end().isAfter(cutoff))
+            .forEach(s -> evidence.add(new Evidence(s.end(),s.closing(),s.source())));
+        product.statisticalNotificationObservations(account.id(),cutoff).forEach(observation ->
+            evidence.add(new Evidence(observation.at(),observation.amount(),"BANK_NOTIFICATION",observation.exact())));
+        evidence.sort(Comparator.comparing(Evidence::at).reversed().thenComparingInt(e -> switch (e.source()) {
+            case "BANK_STATEMENT" -> 0;
+            case "OWNER_ATTESTED_STATEMENT" -> 1;
+            case "BANK_NOTIFICATION" -> 2;
+            case "OWNER_OBSERVATION" -> 3;
+            default -> 4;
+        }));
+        if (evidence.isEmpty()) {
+            return result(account,currency,cutoff,null,null,Confidence.UNKNOWN,null,null,null,"NO_ANCHOR");
         }
-        boolean foreign = db.queryForObject("""
-            SELECT EXISTS (SELECT 1 FROM money_transactions WHERE user_id=? AND currency<>? AND occurred_at<=?
-              AND NOT excluded AND merged_into IS NULL AND (from_account_id=? OR to_account_id=?))
-            """, Boolean.class,owner,currency,Timestamp.from(cutoff),account.id(),account.id());
-        if (foreign) {
-            return result(account,currency,cutoff,null,null,null,"UNKNOWN",observedAt,null,false,"CURRENCY_SCOPE_UNVERIFIED");
+        Evidence latest = evidence.getFirst();
+        Instant bankObservedAt = evidence.stream().filter(e -> e.source().startsWith("BANK_"))
+            .findFirst().map(Evidence::at).orElse(null);
+        // A checkpoint can deliberately establish a new baseline. Compare independent observations with the
+        // previous statement or checkpoint first, then a previous eligible bank push when there is no such base.
+        var prior = evidence.stream().filter(e -> e.at().isBefore(latest.at())
+            && !e.source().equals("OWNER_OBSERVATION")).toList();
+        Evidence previous = prior.stream().filter(e -> !e.source().equals("BANK_NOTIFICATION"))
+            .findFirst().orElse(prior.isEmpty() ? null : prior.getFirst());
+        BigDecimal difference = disagreement(evidence,latest);
+        if (difference==null && previous!=null && !latest.source().equals("OWNER_CHECKPOINT")) {
+            difference = disagreement(evidence,previous);
         }
-        if (latest != null && currency.equals("KRW")) {
-            var previous = evidence.stream().filter(entry -> entry.at().isBefore(latest.at())
-                && !entry.source().equals("OWNER_OBSERVATION")).findFirst();
-            if (previous.isPresent() && !latest.source().equals("OWNER_CHECKPOINT")) {
-                var anchor = previous.get();
-                BigDecimal difference = latest.amount().subtract(anchor.amount().add(
-                    product.ledgerDelta(account.id(),anchor.at(),latest.at())));
-                if (difference.signum() != 0) {
-                    return result(account,currency,cutoff,null,anchor.at(),latest.source(),
-                        "CONFLICT",observedAt,difference,false,"OBSERVATION_LEDGER_MISMATCH");
-                }
+        if (difference!=null) {
+            return result(account,currency,cutoff,null,latest,Confidence.CONFLICT,latest.at(),bankObservedAt,
+                difference,"OBSERVATIONS_DISAGREE");
+        }
+        if (previous!=null && !latest.source().equals("OWNER_CHECKPOINT")) {
+            difference = latest.amount().subtract(previous.amount().add(product.ledgerDelta(account.id(),previous.at(),latest.at())));
+            if (difference.signum()!=0) {
+                return result(account,currency,cutoff,null,previous,Confidence.CONFLICT,latest.at(),bankObservedAt,
+                    difference,"OBSERVATION_LEDGER_MISMATCH");
             }
         }
-        if (latest != null && latest.at().equals(cutoff)) {
-            return result(account,currency,cutoff,latest.amount(),latest.at(),latest.source(),
-                latest.source().equals("BANK_STATEMENT") ? "BANK_OBSERVED" : "OWNER_CHECKED",observedAt,null,true,null);
+        if (latest.at().equals(cutoff)) {
+            var exact = evidence.stream().filter(e -> e.at().equals(cutoff) && e.exact()).findFirst();
+            return exact.map(e -> result(account,currency,cutoff,e.amount(),e,Confidence.VERIFIED,latest.at(),bankObservedAt,null,null))
+                .orElseGet(() -> result(account,currency,cutoff,null,latest,Confidence.UNKNOWN,latest.at(),bankObservedAt,
+                    null,"NO_OBSERVATION_AT_CUTOFF"));
         }
-        if (ledger != null && ledger.asOf() != null && (!ledger.provenance().contains("MANUALLY_VERIFIED")
-                || evidence.stream().anyMatch(entry -> entry.source().equals("OWNER_CHECKPOINT") && entry.at().equals(ledger.asOf())))) {
-            Instant basis = ledger.asOf();
-            if (latest != null && latest.at().isAfter(basis) && latest.source().equals("BANK_STATEMENT")) {
-                return result(account,currency,cutoff,latest.amount().add(product.ledgerDelta(account.id(),latest.at(),cutoff)),
-                    latest.at(),latest.source(),"LEDGER_ESTIMATE",observedAt,null,false,"NO_OBSERVATION_AT_CUTOFF");
-            }
-            return result(account,currency,cutoff,ledger.amount(),basis,ledger.provenance(),"LEDGER_ESTIMATE",
-                observedAt == null || basis.isAfter(observedAt) ? basis : observedAt,null,false,"NO_OBSERVATION_AT_CUTOFF");
+        var calculation = MoneyStatisticalLedgerCoverage.calculate(db,owner,account.id(),latest.at(),latest.amount(),cutoff,statements);
+        if (calculation.reason()!=null) {
+            return result(account,currency,cutoff,null,latest,calculation.difference()==null ? Confidence.UNKNOWN : Confidence.CONFLICT,
+                latest.at(),bankObservedAt,calculation.difference(),calculation.reason());
         }
-        if (latest != null && latest.source().equals("BANK_STATEMENT") && currency.equals("KRW")) {
-            return result(account,currency,cutoff,latest.amount().add(product.ledgerDelta(account.id(),latest.at(),cutoff)),
-                latest.at(),latest.source(),"LEDGER_ESTIMATE",observedAt,null,false,"NO_OBSERVATION_AT_CUTOFF");
+        if (product.hasPendingStatisticalEvidence(account.id(),latest.at(),cutoff)) {
+            return result(account,currency,cutoff,null,latest,Confidence.UNKNOWN,latest.at(),bankObservedAt,null,"PENDING_SOURCE_EVIDENCE");
         }
-        return result(account,currency,cutoff,null,null,latest == null ? null : latest.source(),
-            "UNKNOWN",observedAt,null,false,latest == null ? "NO_ANCHOR" : "NO_OBSERVATION_AT_CUTOFF");
+        return result(account,currency,cutoff,calculation.amount(),latest,Confidence.ESTIMATED,latest.at(),bankObservedAt,null,null);
     }
 
-    private static Member result(Account a, String currency, Instant cutoff, BigDecimal balance, Instant basis,
-                                 String source, String status, Instant observed, BigDecimal difference,
-                                 boolean known, String reason) {
-        return new Member(a.id(),a.name(),a.color(),a.purpose(),currency,cutoff,balance,basis,source,status,observed,difference,known,reason);
+    private static BigDecimal disagreement(List<Evidence> evidence, Evidence chosen) {
+        return evidence.stream().filter(entry -> entry.at().equals(chosen.at()))
+            .map(entry -> entry.amount().subtract(chosen.amount())).filter(amount -> amount.signum()!=0)
+            .sorted().findFirst().orElse(null);
     }
 
-    private static Group group(String purpose, String currency, List<Member> rows, boolean unresolved) {
+    private static Member result(Account a, String currency, Instant cutoff, BigDecimal balance, Evidence anchor,
+                                 Confidence confidence, Instant observed, Instant bankObserved, BigDecimal difference, String reason) {
+        String source = anchor==null ? null : anchor.source();
+        String status = switch (confidence) {
+            case VERIFIED -> source.startsWith("BANK_") ? "BANK_OBSERVED" : "OWNER_CHECKED";
+            case ESTIMATED -> "LEDGER_ESTIMATE";
+            case UNKNOWN -> "UNKNOWN";
+            case CONFLICT -> "CONFLICT";
+        };
+        return new Member(a.id(),a.name(),a.color(),a.purpose(),currency,cutoff,balance,
+            anchor==null ? null : anchor.at(),source,status,observed,difference,confidence==Confidence.VERIFIED,
+            reason,confidence,balance!=null,decimal(balance),bankObserved,decimal(difference));
+    }
+
+    private static String decimal(BigDecimal amount) {
+        return amount==null ? null : amount.stripTrailingZeros().toPlainString();
+    }
+
+    private static BigDecimal subtotal(List<Member> members) {
+        return members.isEmpty() ? null : members.stream().map(Member::balance).reduce(BigDecimal.ZERO,BigDecimal::add);
+    }
+
+    private static Group group(String purpose, String currency, List<Member> rows, List<Unresolved> unresolved) {
         var members = rows.stream().filter(m -> m.purposeAtCutoff().equals(purpose)).toList();
-        var known = members.stream().filter(Member::known).toList();
-        BigDecimal partial = known.stream().map(Member::balance).reduce(BigDecimal.ZERO,BigDecimal::add);
-        int unknown = members.size()-known.size();
-        return new Group(purpose,!members.isEmpty() && unknown == 0 && !unresolved ? partial : null,known.isEmpty() ? null : partial,
-            members.size(),known.size(),unknown,members.stream().filter(m -> m.status().equals("CONFLICT")).count(),currency,members);
+        var verified = members.stream().filter(Member::known).toList();
+        var estimates = members.stream().filter(m -> m.confidence()==Confidence.ESTIMATED).toList();
+        BigDecimal confirmed = subtotal(verified);
+        BigDecimal estimated = subtotal(estimates);
+        int unknown = members.size()-verified.size()-estimates.size();
+        long conflicts = members.stream().filter(m -> m.confidence()==Confidence.CONFLICT).count();
+        int missingMembership = (int) unresolved.stream().filter(a -> a.possibleGroups().contains(purpose)).count();
+        boolean complete = !members.isEmpty() && unknown==0 && missingMembership==0;
+        Confidence confidence = conflicts>0 ? Confidence.CONFLICT : !complete ? Confidence.UNKNOWN
+            : estimates.isEmpty() ? Confidence.VERIFIED : Confidence.ESTIMATED;
+        BigDecimal displayTotal = complete ? subtotal(members) : null;
+        // Legacy consumers continue to see a total only for a complete verified group.
+        return new Group(purpose,confidence==Confidence.VERIFIED ? displayTotal : null,confirmed,members.size(),
+            verified.size(),unknown,conflicts,currency,members,confidence,decimal(displayTotal),decimal(confirmed),
+            decimal(estimated),estimates.size(),missingMembership);
     }
 }

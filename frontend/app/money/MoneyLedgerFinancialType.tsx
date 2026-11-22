@@ -5,6 +5,7 @@ import {ApiError} from '@/lib/api/client';
 import {moneyApi} from '@/lib/money/model';
 import {ACCOUNT_LEDGER,ledgerDisplayType,ledgerTypes,type LedgerRow} from '@/lib/money/accountLedger';
 import {baseDirection,baseDirectionLabel,protectedMeaning,type BaseDirection} from '@/lib/money/categorySemantics';
+import {UNIFIED,type UnifiedOutcome} from '@/lib/money/unified';
 import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
 
 const labels:Record<string,string>={
@@ -62,13 +63,28 @@ export function useFinancialDecisions(){
   });
  },[owner,setEntries]);
  function put(entry:Decision){setEntries(old=>({...old,[entry.id]:entry}));}
- async function send(entry:Decision,refresh=true){
+ async function send(entry:Decision,refresh=true,recover=false){
   if(!owner||cache.preferenceOwner!==owner||active.current.has(entry.id))return 'busy';
   active.current.add(entry.id);
   remember(owner,entry.id,entry);
   put({...entry,phase:'saving'});
+  const lookup=async()=>{
+   const outcome=await moneyApi.get<UnifiedOutcome>(UNIFIED+'/outcomes/'+entry.command.requestId,owner);
+   if(outcome.status==='NOT_APPLIED'){
+    throw new ApiError(outcome.result?.reason==='VERSION_CONFLICT'?409:422,
+     outcome.result?.message??'금융 유형을 저장하지 못했습니다.');
+   }
+   return outcome.status==='APPLIED'?outcome.result as Receipt:undefined;
+  };
   try{
-   const receipt=await moneyApi.patch<Receipt>(ACCOUNT_LEDGER+'/rows/'+entry.id+'/financial-type',entry.command,owner);
+   let receipt=recover?await lookup():undefined;
+   if(!receipt){
+    try{receipt=await moneyApi.patch<Receipt>(ACCOUNT_LEDGER+'/rows/'+entry.id+'/financial-type',entry.command,owner);}
+    catch(error){
+     if(error instanceof ApiError&&error.status>=400&&error.status<500&&error.status!==408)throw error;
+     receipt=await lookup();
+    }
+   }
    if(!receipt?.intentSaved||receipt.requestId!==entry.command.requestId||receipt.transactionId!==entry.id||receipt.row?.id!==entry.id)throw Error('저장 응답을 확인할 수 없습니다.');
    remember(owner,entry.id);
    put({...entry,phase:'saved',receipt});
@@ -90,7 +106,7 @@ export function useFinancialDecisions(){
   return send({id:row.id,title:row.title??'거래',before:ledgerDisplayType(row),phase:'saving',command:{requestId:crypto.randomUUID(),expectedVersion:row.version,financialType:type,...(type==='REFUND'?{v4:true}:{})}},refresh);
  }
  function retry(entry:Decision,row?:LedgerRow){
-  if(entry.phase==='unknown')return send(entry);
+  if(entry.phase==='unknown')return send(entry,true,true);
   if(!row)return;
   return save(row,entry.command.financialType);
  }
@@ -106,6 +122,12 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
  const [open,setOpen]=useState(false);
  const [position,setPosition]=useState({top:8,left:8,maxHeight:220});
  const restoreAfterSave=useRef(false);
+ const protectedRelation=protectedMeaning(row)||!!row.transfer_destination_status||!!(row.from_account_id&&row.to_account_id);
+ const needsEvidence=row.meaning_state==='UNRESOLVED'&&row.quickConfirmAvailable===false;
+ function unavailable(type:BaseDirection){
+  return protectedRelation?'연결된 금융 관계는 상세 편집에서 확인하세요.'
+   :directionHint(row,type)||(type!=='TRANSFER'&&needsEvidence?'원본과 입출금 방향을 상세 편집에서 확인하세요.':'');
+ }
  useEffect(()=>{if(!disabled&&restoreAfterSave.current){restoreAfterSave.current=false;if(document.activeElement===document.body)trigger.current?.focus();}},[disabled]);
  function close(){setOpen(false);trigger.current?.focus();}
  function choose(next:BaseDirection){
@@ -141,8 +163,9 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
   else if(e.key==='Enter'){e.preventDefault();buttons[index].click();}
  }}>
  <div role="group" aria-label="거래 방향">{(['INCOME','EXPENSE','TRANSFER'] as const).map(type=><button type="button" key={type} aria-pressed={current===type}
- disabled={!!directionHint(row,type)||!!(row.from_account_id&&row.to_account_id)||protectedMeaning(row)} onClick={()=>choose(type)}>{baseDirectionLabel({type})}</button>)}</div>
- {protectedMeaning(row)&&<small>연결된 금융 관계는 상세 편집에서 정정 근거와 영향을 확인하세요.</small>}
+ disabled={!!unavailable(type)} title={unavailable(type)||undefined} onClick={()=>choose(type)}>{baseDirectionLabel({type})}</button>)}</div>
+ {protectedRelation?<small>연결된 금융 관계는 상세 편집에서 확인하세요.</small>:
+  needsEvidence&&<small>원본과 입출금 방향을 상세 편집에서 확인하세요.</small>}
  </div>,document.body)}</>;
 }
 
