@@ -58,6 +58,8 @@ class AttentionManagementPostgresTest {
   assertThat(((Source)data(console.item(item.id())).get("source")).capture()).isEqualTo(capture);
   var memo=service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"keep")).item();
   service.group(item.id(),new Group(UUID.randomUUID(),memo.revision(),source.generation(),"COMPLETED"));
+  // Legacy cards inherit their group from the lane. Undo must preserve that inheritance.
+  db.update("update attention_items set active_group=null where id=?",item.id());
   var ui=new CompletedCardController(console);
   var plan=data(ui.preview(new CompletedCardController.Preview(UUID.randomUUID(),List.of(item.id()),null)));
   var hidden=execute(plan,UUID.randomUUID().toString());
@@ -74,6 +76,7 @@ class AttentionManagementPostgresTest {
   service.revokeBrowser(scope);
   SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,device,"paired","DEVICE"));
   assertThatThrownBy(()->service.create(input)).hasMessage("BROWSER_CONSENT_REQUIRED");
+  assertThat(db.queryForObject("select active_group is null from attention_items where id=?",Boolean.class,item.id())).isTrue();
  }
  @Test void completedHideRestoresOriginalLifecycleAndDoesNotMutateSurvivingOrders(){
   Item a=create("completed"),b=create("survives");a=service.group(a.id(),new Group(UUID.randomUUID(),a.revision(),a.source().generation(),"COMPLETED")).item();var completed=a.completedAt();String before=db.queryForObject("select row_to_json(a)::text from attention_items a where id=?",String.class,b.id());
