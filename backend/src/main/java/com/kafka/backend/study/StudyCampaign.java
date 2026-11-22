@@ -195,6 +195,8 @@ final class StudyCampaign {
       return task(stage,i,JSON.createArrayNode().add(item));
     }
     if(slots.valueStream().allMatch(r->"ACCEPTED".equals(r.path("stage").asString())) && !s.has("assembly")){
+      // A malformed-language assembly gets at most one retry before STOP.
+      if(StudyEducationPolicy.active(p) && s.path("assemblyLanguageFailures").asInt()>=2)return null;
       var qs=JSON.createArrayNode();slots.forEach(r->qs.add(r.path("candidate").path("question")));return task("assemble",-1,qs);
     }
     return null;
@@ -204,7 +206,7 @@ final class StudyCampaign {
     if(s.has("pending"))return JSON.createObjectNode().put("action","RECONCILE").put("callId",s.path("pending").asString());
     var t=next(s,p);
     if(t==null || !StudyEducationPolicy.active(p) && (s.path("calls").size()+s.path("priorCalls").asInt()>=CALLS || s.path("spent").asLong()+reservation(t)>(s.has("continuation")?StudyCampaignContinuation.TOKEN_LIMIT:TOKENS))){
-      s.put("status",t==null?(s.has("controlReview") && !s.path("calibrated").asBoolean() && StudyEducationPolicy.active(s)?"GOLDEN_SEMANTIC_DISPUTE":"SLOTS_UNRESOLVED"):"BUDGET_PAUSED");j.state="BLOCKED";j.result=s.toString();
+      s.put("status",t==null?(StudyEducationPolicy.active(s) && s.path("assemblyLanguageFailures").asInt()>=2?"LANGUAGE_KO_UNRESOLVED":s.has("controlReview") && !s.path("calibrated").asBoolean() && StudyEducationPolicy.active(s)?"GOLDEN_SEMANTIC_DISPUTE":"SLOTS_UNRESOLVED"):"BUDGET_PAUSED");j.state="BLOCKED";j.result=s.toString();
       return JSON.createObjectNode().put("action","STOP").put("reason",s.path("status").asString());
     }
     int slot=t.path("slot").asInt();String stage=t.path("stage").asString();
@@ -236,6 +238,8 @@ final class StudyCampaign {
       var byId=new HashMap<String,JsonNode>();
       source.forEach(v->byId.put(v.path("id").asString(),v));
       validateItemKey(k,q,p,true,byId);
+      // English Golden controls are not learner drafts and bypass this gate.
+      if(StudyEducationPolicy.active(p) && StudyKoreanLanguage.hasEnglishLearnerProse(q,k))return "LANGUAGE_KO";
       var issues=StudyQuality.questionIssues(q,k,StudyEducationPolicy.active(p));return issues.isEmpty()?"":issues.iterator().next();
     }catch(RuntimeException ex){return "SCHEMA";}
   }
@@ -297,7 +301,13 @@ final class StudyCampaign {
       }
       s.put("planned",true);return;
     }
-    if(stage.equals("assemble")){s.set("assembly",out);return;}
+    if(stage.equals("assemble")){
+      if(StudyEducationPolicy.active(p) && StudyKoreanLanguage.hasEnglishFollowUps(out)){
+        s.put("assemblyLanguageFailures",s.path("assemblyLanguageFailures").asInt()+1);
+        return;
+      }
+      s.set("assembly",out);return;
+    }
     var r=s.path("slots").path(i).asObject();
     if(stage.equals("write")){
       var prior=r.path("candidate");String component=r.path("repairComponent").asString("");
