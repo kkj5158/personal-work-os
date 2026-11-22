@@ -73,6 +73,14 @@ test('failed preflight stops drafting and reuses only independently accepted slo
  assert.deepEqual(out.preflight.slots[1].design,rejected.preflight.slots[1].design);
  assert.equal(out.preflight.inputDigest,'frozen');
  assert.equal(rejected.preflight.slots[1].questionId,undefined);
+ // A candidate-key grounding error must not discard either accepted design.
+ const repairJob={...job,previousPreflight:undefined,previousCandidate:out,
+   input:{...job.input,repairFeedback:{questions:[{part:'extension',order:1,issues:['REVIEW_UNGROUNDED']}]}}};
+ adapter.run=async (_schema,_prompt,phase)=>{
+   assert.equal(phase,'repair');
+   throw Error('reached scoped candidate repair');
+ };
+ await assert.rejects(()=>adapter.reasoningGeneration(repairJob),/reached scoped candidate repair/);
  job.previousPreflight.inputDigest='another plan';
  await assert.rejects(()=>adapter.reasoningGeneration(job),/INVALID_PREFLIGHT_CHECKPOINT/);
 });

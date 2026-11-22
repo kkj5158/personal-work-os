@@ -55,7 +55,12 @@ export class CodexAdapter {
   const checkpoint=job.previousPreflight??prior?.preflight;
   if(checkpoint && (checkpoint.version!==CONTRACT || checkpoint.inputDigest!==job.input.inputDigest ||
       checkpoint.reviewVersion!==REVIEW))throw Error('INVALID_PREFLIGHT_CHECKPOINT');
-  const retained=checkpoint?.slots.filter(s=>job.previousPreflight || !targets.some(t=>matches(t,s)))??[];
+  const retained=checkpoint?.slots.filter(s=>{
+   const target=targets.find(t=>matches(t,s));
+   if(job.previousPreflight || !target)return true;
+   // A grounding correction to an essay's key or citations can reuse its accepted task.
+   return s.kind==='essay' && target.issues.every(code=>['SOURCE_QUOTE_MISMATCH','REVIEW_UNGROUNDED'].includes(code));
+  })??[];
   const proof=await preflight(job,this.run.bind(this),retained);
   const provenance={provider:'codex_cli',model:'codex-cli-authenticated-default',promptVersion:versionFor(job)};
   if(proof.slots.some(s=>s.issue))return {preflight:proof,provenance};
