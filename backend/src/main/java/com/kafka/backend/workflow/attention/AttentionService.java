@@ -403,7 +403,7 @@ public class AttentionService {
         Map<?,?> state=states.isEmpty()?Map.of("status","OPEN","activeGroup",Objects.requireNonNullElse(old.previousOpenGroup(),"ACTIVE")):decode(states.getFirst(),Map.class);
         String previous=Objects.toString(state.get("status"),"OPEN");if(previous.equals("OPEN"))capacity();
         Object completed=state.get("completedAt");
-        db.update("update attention_items set status=?,active_group=?,completed_at=?,dismissed_at=null,human_reopen_count=human_reopen_count+1,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",previous,state.get("activeGroup"),completed==null?null:Timestamp.from(Instant.parse(completed.toString())),id,owner());
+        db.update("update attention_items set status=?,completed_at=?,dismissed_at=null,human_reopen_count=human_reopen_count+1,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",previous,completed==null?null:Timestamp.from(Instant.parse(completed.toString())),id,owner());
         bump();return mutation(in.operationId(),ownedItem(id),false);
     }
     public Mutation seen(UUID id,Action in){human();return apply(in.operationId(),"seen:"+id,in,()->{var old=ownedItem(id);if(in.expectedGeneration()==null||!in.expectedGeneration().equals(old.source().generation()))throw new AttentionException(409,"GENERATION_CHANGED",old,revision());if(old.seenAt()==null){db.update("update attention_items set seen_at=current_timestamp,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",id,owner());bump();}return mutation(in.operationId(),ownedItem(id),false);});}
