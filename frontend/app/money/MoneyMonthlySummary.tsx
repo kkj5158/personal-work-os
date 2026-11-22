@@ -76,12 +76,18 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
   if(next===loanMode||(loanFilter&&!onFilter(null)))return;
   setLoanMode(next);
  }
+ function balanceNote(group:StatisticalGroup|undefined){
+  if(!group)return "선택 기간 기준일";
+  const evidence=[...new Set(group.members.map(member=>balanceEvidenceLabels[member.reason??member.status]).filter(Boolean))];
+  const partial=group.total==null&&group.confirmedPartialSum!=null?"확인된 부분 합계 "+won(group.confirmedPartialSum):"";
+  return [balance.data&&new Date(balance.data.asOfCutoff).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"}),`확인 ${group.knownCount}/${group.memberCount}계좌`,partial,...evidence].filter(Boolean).join(" · ");
+ }
  const kpis=[
   {label:"실제 소득",value:data?.actualIncome},
   {label:"전체 지출",value:data?.totalExpense,note:"일반 소비와 대출상환"},
   {label:"대출상환",formatted:loanTotal==null?"—":won(loanTotal),className:"money-month-loan",note:"추적 지출 계좌의 확정 상환액"},
-  {label:"저축 잔액",value:balance.data?.savings.total,unavailable:!!balance.data&&balance.data.savings.total==null,className:"money-month-net",note:"선택 기간 기준일"},
-  {label:"적금 잔액",value:balance.data?.installment.total,unavailable:!!balance.data&&balance.data.installment.total==null,note:"선택 기간 기준일"},
+  {label:"저축 잔액",value:balance.data?.savings.total,unavailable:!!balance.data&&balance.data.savings.total==null,className:"money-month-net",note:balanceNote(balance.data?.savings)},
+  {label:"적금 잔액",value:balance.data?.installment.total,unavailable:!!balance.data&&balance.data.installment.total==null,note:balanceNote(balance.data?.installment)},
  ];
  return <div className="money-month-summary"><LoadState error={metrics.error} loading={metrics.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.unavailable?"확인 필요":kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
  <div className="money-month-donuts">{([["INCOME","I"],["EXPENSE","E"]] as const).map(([kind,bucket])=>{

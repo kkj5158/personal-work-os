@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {moneyApi as api,type Account,type Category,seoul} from '@/lib/money/model';
 import {moneyAmount} from '@/lib/money/accounts';
 import {categoryIndex} from '@/lib/money/categories';
@@ -7,18 +7,84 @@ import {useMoneyCache,useMoneyRows,useMoneyViewState} from './MoneyDataProvider'
 import {useMoneyData,LoadState} from './MoneyWebData';
 type Context={version:number;loanId:string|null;loanVersion:number|null};
 type Cancelled={id:string;cancellationId:string;version:number;title:string;memo:string|null;type:string;amount:number;currency:string;occurredAt:string;cancelledAt:string;categoryId:string|null;fromAccountId:string|null;toAccountId:string|null;evidence:{transaction:{sources:unknown[]}}};
+type Impact={canDelete:boolean;reason:string|null;amount:number;currency:string;version:number;sourceCount:number};
+type RegistrationCommand={requestId:string;expectedVersion:number;cancellationId:string|null;expectedLoanVersion:number|null;simpleDelete?:boolean};
+type RegistrationResult={transaction:{version:number};cancellationId:string;message?:string};
+type RegistrationOutcome={status:'APPLIED'|'NOT_APPLIED'|'UNKNOWN';result?:RegistrationResult};
+type Requests=Record<string,{id:string;command:RegistrationCommand}>;
+function useRegistrationRequests(){
+ const owner=useMoneyCache().preferenceOwner,storageKey='registration-requests:'+owner;
+ const [requests,setRequests]=useMoneyViewState<Requests>('registration-requests',()=>{
+  try{return JSON.parse(window.sessionStorage.getItem(storageKey)??'{}') as Requests;}catch{return {};}
+ });
+ function update(key:string,id:string,command:RegistrationCommand|null){
+  let stored:Requests={};
+  try{stored=JSON.parse(window.sessionStorage.getItem(storageKey)??'{}');}catch{/* Storage can be unavailable. */}
+  const change=(old:Requests)=>{const next={...old};if(command)next[key]={id,command};else delete next[key];return next;};
+  const next=change(stored);
+  try{if(Object.keys(next).length)window.sessionStorage.setItem(storageKey,JSON.stringify(next));else window.sessionStorage.removeItem(storageKey);}catch{/* Keep recovery available for this open session. */}
+  setRequests(change);
+ }
+ return {requests,update};
+}
 export function RegistrationAction({id,version,cancellationId,onApplied}:{id:string;version:number;cancellationId?:string;onApplied?:()=>void}){
  const [,setRecent]=useMoneyViewState<{id:string;version:number;cancellationId:string}|null>('registration-undo',()=>null);
- const cache=useMoneyCache(),coordinator=useMoneyRows(),[busy,setBusy]=useState(false),[error,setError]=useState('');
- async function act(){if(busy)return;setBusy(true);setError('');try{
-  await coordinator.flush([id]);const context=await api.get<Context>('/registration/'+id+'/context');
-  const saved=await coordinator.execute<{transaction:{version:number};cancellationId:string}>('registration:'+id,'/registration/'+id+(cancellationId?'/restore':'/cancel'),{expectedVersion:version,cancellationId:cancellationId??null,expectedLoanVersion:context.loanVersion});
-  if(cancellationId)setRecent(null);else setRecent({id,version:saved.transaction.version,cancellationId:saved.cancellationId});
-  cache.mutate('transaction');cache.invalidate(key=>key.startsWith('/registration/'));onApplied?.();
- }catch(e){setError(e instanceof Error?e.message:'원래 등록 변경 결과를 확인해 주세요.');}finally{setBusy(false);}}
- return <><button disabled={busy} onClick={()=>void act()}>{busy?'원래 요청 확인 중…':error?'원래 요청 확인·재시도':cancellationId?'복원':'등록 취소'}</button>{error&&<small role="alert">{error}</small>}</>;
+ const {requests,update}=useRegistrationRequests(),key=id+':'+(cancellationId??'cancel');
+ const pending=requests[key]?.command??null;
+ const setPending=(command:RegistrationCommand|null)=>update(key,id,command);
+ const [impact,setImpact]=useState<Impact|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const cache=useMoneyCache(),coordinator=useMoneyRows(),guard=useRef(false);
+ async function act(){
+  if(guard.current)return;
+  guard.current=true;setBusy(true);setError('');
+  try{
+   const path='/registration/'+id+(cancellationId?'/restore':'/cancel');
+   let command=pending;
+   let outcome:RegistrationOutcome|undefined;
+   if(command)outcome=await api.get<RegistrationOutcome>('/ai/classification/outcomes/'+command.requestId);
+   else{
+    await coordinator.flush([id]);
+    if(!cancellationId&&!impact){
+     const preview=await api.get<Impact>('/registration/'+id+'/impact');
+     setImpact(preview);return;
+    }
+    if(!cancellationId&&(!impact?.canDelete||impact.version!==version)){
+     setImpact(null);cache.mutate('transaction');throw Error('거래가 변경되었습니다. 최신 거래의 삭제 영향을 다시 확인하세요.');
+    }
+    const context=cancellationId?await api.get<Context>('/registration/'+id+'/context'):null;
+    command={requestId:crypto.randomUUID(),expectedVersion:impact?.version??version,cancellationId:cancellationId??null,expectedLoanVersion:context?.loanVersion??null,...(!cancellationId&&{simpleDelete:true})};
+    setPending(command);
+   }
+   if(!outcome||outcome.status==='UNKNOWN'){
+    try{outcome=await api.post<RegistrationOutcome>(path,command);}
+    catch{outcome=await api.get<RegistrationOutcome>('/ai/classification/outcomes/'+command.requestId);}
+   }
+   if(outcome.status==='UNKNOWN')throw Error('처리 결과 확인 필요 · 같은 요청으로 다시 확인하세요.');
+   setPending(null);setImpact(null);
+   if(outcome.status!=='APPLIED'||!outcome.result?.transaction){cache.mutate('transaction');throw Error(outcome.result?.message??'거래 상태가 바뀌어 적용되지 않았습니다.');}
+   if(cancellationId)setRecent(null);
+   else setRecent({id,version:outcome.result.transaction.version,cancellationId:outcome.result.cancellationId});
+   cache.mutate('transaction');cache.invalidate(key=>key.startsWith('/registration/'));onApplied?.();
+  }catch(e){setError(e instanceof Error?e.message:'원래 등록 변경 결과를 확인해 주세요.');}
+  finally{guard.current=false;setBusy(false);}
+ }
+ return <div className="money-registration-action">
+  {(!impact||pending)&&<button type="button" disabled={busy} onClick={()=>void act()}>{busy?'확인 중…':pending?'원래 요청 확인·재시도':cancellationId?'복원':'삭제'}</button>}
+  {impact&&!pending&&<div role="region" aria-label="거래 삭제 영향"><strong>{moneyAmount(impact.amount,impact.currency)}</strong>
+   <p>{impact.canDelete?'거래 집계에서 제외됩니다. 취소 내역에서 같은 거래를 복원할 수 있습니다.':impact.reason}</p>
+   <small>원본 {impact.sourceCount}건과 감사 이력을 보존합니다.</small>
+   {impact.canDelete&&<button type="button" disabled={busy} onClick={()=>void act()}>삭제 확인</button>}
+   <button type="button" disabled={busy} onClick={()=>setImpact(null)}>닫기</button></div>}
+  {error&&<small role="alert">{error}</small>}
+ </div>;
 }
-export function RegistrationUndoNotice(){const [recent,setRecent]=useMoneyViewState<{id:string;version:number;cancellationId:string}|null>('registration-undo',()=>null);return recent?<div role="status" className="money-toolbar">등록을 취소했습니다. 원본과 이력은 보존되었습니다. <RegistrationAction {...recent}/><button onClick={()=>setRecent(null)}>닫기</button></div>:null;}
+export function RegistrationUndoNotice(){
+ const [recent,setRecent]=useMoneyViewState<{id:string;version:number;cancellationId:string}|null>('registration-undo',()=>null);
+ const {requests}=useRegistrationRequests();
+ return <>{Object.entries(requests).map(([key,{id,command}])=><div key={key} role="status" className="money-toolbar">
+  {command.cancellationId?'복원':'삭제'} 요청 결과 확인 <RegistrationAction id={id} version={command.expectedVersion} cancellationId={command.cancellationId??undefined}/>
+ </div>)}{recent&&<div role="status" className="money-toolbar">거래를 삭제했습니다. 원본과 이력을 보존했습니다. <RegistrationAction {...recent}/><button onClick={()=>setRecent(null)}>닫기</button></div>}</>;
+}
 function OriginalNotification({id}:{id:string}){const raw=useMoneyData<{title:string|null;text:string|null;bigText:string|null;postedAt:string}>('/notifications/'+id);return <><LoadState error={raw.error} loading={raw.loading}/>{raw.data&&<p>{raw.data.title}<small>{seoul(raw.data.postedAt)}</small>{raw.data.bigText||raw.data.text}</p>}</>;}
 function RegistrationHistory({id,categories}:{id:string;categories:Category[]}){
  const source=useMoneyData<{amount:number;currency:string;memo:string|null;sources:{rawEventId:string;evidence?:{rule?:string}}[]}>('/transactions/'+id),classification=useMoneyData<{items:{id:string;categoryId:string|null;createdAt:string;reason:string;active:boolean;sourceKind:string;status:string}[]}>('/ai/classification/history?transactionId='+id),operations=useMoneyData<{items:{id:string;kind:string;createdAt:string}[]}>('/registration/'+id+'/history'),[original,setOriginal]=useState('');
