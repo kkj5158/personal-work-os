@@ -11,6 +11,7 @@ import {useMoneyCache} from "./MoneyDataProvider";
 import { LoadState,useMoneyData } from "./MoneyWebData";
 
 const COLORS=["#5b8def","#45ae99","#9771d7","#e1a34a","#e9788d","#57abc3","#718096"];
+const SUPPORT_COLORS=["#9771d7","#b95c8c","#a16d36"];
 const LOAN_COLORS=["#7865cb","#5383bf","#ba728e","#35887c","#a16d36"];
 const REPAYMENT_PARTS=[
  {id:"PRINCIPAL",key:"principal",label:"원금",color:LOAN_COLORS[0]},
@@ -85,11 +86,10 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
   const root=groups.find(g=>g.id===roots[kind]);
   const rows:Segment[]=(root?root.children:groups).map((row,index)=>({...row,color:categoryChartColor(row.id,categories,COLORS[index%COLORS.length])}));
   const support=kind==="INCOME"&&income.data?.includeFamilySupport;
-  if(support&&!root)for(const row of income.data?.composition??[]){
-   if(row.bucket!=="FAMILY_SUPPORT"||!row.categoryId)continue;
+  if(support&&!root)income.data?.composition.filter(row=>row.bucket==="FAMILY_SUPPORT"&&row.categoryId).forEach((row,index)=>{
    const category=categories.find(value=>value.id===row.categoryId);
-   rows.push({id:"family:"+row.categoryId,label:category?.name??"부모님 지원",amount:row.amount,color:categoryChartColor(row.categoryId,categories,"#9771d7")});
-  }
+   rows.push({id:"family:"+row.categoryId,label:category?.name??"부모님 지원",amount:row.amount,color:SUPPORT_COLORS[index%SUPPORT_COLORS.length]});
+  });
   return <Donut key={kind} title={`${kind==="INCOME"?"소득":"일반 소비"} 구성${root?" · "+root.label:""}${support?" · 지원금 포함 표시":""}`}
    total={kind==="INCOME"?income.data?.chartIncome??data?.actualIncome:data?.consumption} rows={rows}
    controls={kind==="INCOME"?<label><input type="checkbox" checked={!!preference.data?.includeFamilySupport} disabled={!preference.data||preference.loading||income.loading||savingPreference}
