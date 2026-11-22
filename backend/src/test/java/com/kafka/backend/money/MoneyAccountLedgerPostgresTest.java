@@ -35,6 +35,7 @@ class MoneyAccountLedgerPostgresTest {
   var account=base.account(e,AccountRole.SPENDING);
   new MoneyMeaningService(e.db(),()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build())
       .saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()),List.of(account.id()),0L));
+  e.db().update("update money_tracking_selections set effective_at=? where user_id=? and version=1",java.sql.Timestamp.from(MoneyUnifiedBookkeepingPostgresTest.AT.minusSeconds(1)),MoneyPostgresIntegrationTest.OWNER);
   var ledger=ledger(e);
   for(boolean out:List.of(true,false)){
    var row=base.tx(e,account.id(),out,320,true);
@@ -85,6 +86,7 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(total.unallocatedAmount()).isEqualTo("100");
   var tracking=new MoneyMeaningService(e.db(),()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build());
   tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(excluded.id()),List.of(account.id()),0L));
+  e.db().update("update money_tracking_selections set effective_at=? where user_id=? and version=1",java.sql.Timestamp.from(MoneyUnifiedBookkeepingPostgresTest.AT.minusSeconds(1)),MoneyPostgresIntegrationTest.OWNER);
   var scoped=e.unified().loanRepayments(from,to,null,true);
   assertThat(scoped.loanRepayment()).isEqualTo("200");
   assertThat(scoped.unallocatedAmount()).isEqualTo("200");
@@ -200,6 +202,7 @@ class MoneyAccountLedgerPostgresTest {
   var owner=MoneyPostgresIntegrationTest.OWNER;
   var tracking=new MoneyMeaningService(e.db(),()->owner,JsonMapper.builder().build());
   var settings=tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));
+  e.db().update("update money_tracking_selections set effective_at=? where user_id=? and version=1",java.sql.Timestamp.from(MoneyUnifiedBookkeepingPostgresTest.AT.minusSeconds(1)),MoneyPostgresIntegrationTest.OWNER);
   var l=ledger(e);var loan=e.web().saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","은행","PERSONAL",new BigDecimal("1000000"),new BigDecimal("1000000"),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));
   String from="2026-09-01",to="2026-09-30";
   assertThat(e.web().bookkeeping(from,to,"EXPENSE",null,50,0,false).get("total")).isEqualTo(1L);

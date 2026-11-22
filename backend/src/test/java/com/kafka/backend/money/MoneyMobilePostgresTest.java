@@ -63,7 +63,7 @@ class MoneyMobilePostgresTest {
     @Test void fundChangeIsVersionedAndLeavesRoleAndTrackingUntouched()throws Exception{isolated((db,m,p,w,mobile)->{
         var a=account(m,AccountRole.SPENDING);
         var meaning=new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build());
-        meaning.saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));
+        meaning.saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));MoneyWebPostgresTest.seedSeptemberTracking(db);
         assertThatThrownBy(()->mobile.saveFund(a.id(),new FundInput("SAVINGS",null,a.version()))).isInstanceOf(InvalidRequestException.class);
         var moved=mobile.saveFund(a.id(),new FundInput("SAVINGS","INSTALLMENT",a.version()));
         assertThat(moved.fund()).extracting(Fund::fundGroup,Fund::savingsSubtype).containsExactly("SAVINGS","INSTALLMENT");

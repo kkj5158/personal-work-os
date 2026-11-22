@@ -16,6 +16,21 @@ class MoneyOwnerReviewPostgresTest{
   f.money.process(r.id(),new IbkNotificationParserV1());f.money.finishProcessing(r.id(),ProcessingState.REVIEW_REQUIRED,"ACCOUNT_RESOLUTION_REQUIRED");return r.id();});}
  MoneyOwnerReviewService.Decision choice(UUID id,String action,UUID account,UUID other,UUID existing){return new MoneyOwnerReviewService.Decision(UUID.randomUUID(),service.context(id).get("fingerprint").toString(),action,account,other,existing,account.equals(f.account)?f.money.account(account).version():0L,other==null?null:f.money.account(other).version(),existing==null?null:f.money.transaction(existing).version());}
  UUID transaction(Map<String,Object> outcome){return UUID.fromString(((Map<?,?>)outcome.get("result")).get("transactionId").toString());}
+ @Test void simultaneousPartialRefundsCannotBothSpendTheSameResidual() throws Exception {
+  var at=Instant.parse("2026-09-16T01:00:00Z");var tx=new org.springframework.transaction.support.TransactionTemplate(f.manager);
+  var original=tx.execute(st->f.product.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,f.account,null,new BigDecimal("100"),at,"합성 구매",null,null,false,null,null)));
+  var both=new java.util.concurrent.CyclicBarrier(2);
+  java.util.concurrent.Callable<Boolean> attempt=()->{
+   both.await(10,java.util.concurrent.TimeUnit.SECONDS);
+   try{return tx.execute(st->{f.product.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,f.account,new BigDecimal("60"),at,null,null,null,false,original.id(),null));return true;});}
+   catch(com.kafka.backend.common.InvalidRequestException rejected){return false;}
+  };
+  try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+   var a=pool.submit(attempt);var b=pool.submit(attempt);
+   assertThat(List.of(a.get(30,java.util.concurrent.TimeUnit.SECONDS),b.get(30,java.util.concurrent.TimeUnit.SECONDS))).containsExactlyInAnyOrder(true,false);
+  }
+  assertThat(f.db.queryForObject("select sum(amount) from money_transactions where refund_of=?",BigDecimal.class,original.id())).isEqualByComparingTo("60");
+ }
  @Test void unparsedRefundHasMaskedEvidenceAcceptsOwnerAssertionAndReplaysOnce(){
   var at=Instant.parse("2026-09-16T01:00:00Z");
   var raw=f.money.ingest(Map.of("sourcePackage","com.ibk.android.ionebank","title","합성 알림","text","합성 123-456-789 확인 필요","postedAt",at.toString(),"currency","KRW")).notification();

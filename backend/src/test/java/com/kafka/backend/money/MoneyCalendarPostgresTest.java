@@ -78,7 +78,7 @@ class MoneyCalendarPostgresTest {
   assertThatThrownBy(()->s.saveTemplate(template,template(2,"cannot remove presets",1))).isInstanceOf(InvalidRequestException.class);
  });}
  @Test void ledgerSameProjectionFiltersRefundLoanKstAndForeignBoundary()throws Exception{scenario((db,s,w,m,p)->{
-  var account=fixture.account(m,AccountRole.SPENDING);var hub=fixture.account(m,AccountRole.INCOME_HUB);new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()),List.of(hub.id()),0L));
+  var account=fixture.account(m,AccountRole.SPENDING);var hub=fixture.account(m,AccountRole.INCOME_HUB);new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()),List.of(hub.id()),0L));MoneyWebPostgresTest.seedSeptemberTracking(db);
   var root=p.saveCategory(null,new MoneyProductService.CategoryInput("Root","#123456",false,null));var child=p.saveCategory(null,new MoneyProductService.CategoryInput("Child","#123456",false,null,"EXPENSE",null,0,root.id(),false));
   var tx=p.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,account.id(),null,new BigDecimal("10000"),Instant.parse("2026-09-30T15:00:00Z"),"KST Oct1",child.id(),null,false,null,null));
   p.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,account.id(),new BigDecimal("2000"),Instant.parse("2026-10-01T15:00:00Z"),"Refund Oct2",null,null,false,tx.id(),null));
