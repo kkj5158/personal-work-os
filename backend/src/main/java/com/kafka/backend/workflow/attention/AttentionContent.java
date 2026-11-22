@@ -152,7 +152,7 @@ public class AttentionContent {
         var input = read(body,DesktopSubmission.class);
         if (!SCHEMA.equals(input.schemaVersion()) || input.scopeId()==null || input.operationId()==null
                 || input.sessionId()==null || input.turnId()==null || !input.turnId().matches("[a-zA-Z0-9_-]{1,100}")
-                || input.observation()==null || !Set.of("STOP","WAIT","INTERRUPT").contains(input.observation())
+                || input.observation()==null || !Set.of("STOP","WAIT","INTERRUPT","ANSWERED").contains(input.observation())
                 || input.producedAt()==null || input.expectedContentRevision()<0 || input.expectedContentRevision()>=10)
             throw rejected(400,"INVALID_DESKTOP_REPORT");
         AttentionService.checkExcerpt(input.requestExcerpt(),2048,"LOCAL_EXTRACTIVE");
@@ -174,6 +174,9 @@ public class AttentionContent {
                 || !("WAIT".equals(input.observation()) ? "BLOCKED" : "UNKNOWN").equals(outcome)) {
             throw rejected(400,"INVALID_DESKTOP_OUTCOME");
         }
+        if ("ANSWERED".equals(input.observation()) && (input.expectedContentRevision() == 0
+                || report.remaining().stream().anyMatch(entry -> "OPEN".equals(entry.state()))))
+            throw rejected(409,"DESKTOP_OBSERVATION_CONFLICT");
         UUID owner = queue.owner(), session = input.sessionId();
         String turn = input.turnId(), hash = digest(body);
         UUID logical = desktopId("task",session,turn);

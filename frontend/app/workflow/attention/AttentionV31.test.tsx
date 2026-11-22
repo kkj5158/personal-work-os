@@ -41,4 +41,10 @@ test('a limited Desktop wait report shows the input-needed badge on an open card
   assert.equal(badge?.textContent, '입력 필요');
   assert.ok(badge?.classList.contains('aq-event-needs_user_input'));
   card.window.close();
+  const received: AttentionItem = {...item, content: {...item.content!, eventId: 'desktop.answered', contentRevision: 2}};
+  const resolved = new JSDOM(renderToStaticMarkup(<AttentionCard item={received} lanes={[]} disabled={false}
+    onComplete={()=>{}} onSource={()=>{}} onEdit={()=>{}} onMemo={()=>{}} onHold={()=>{}}/>));
+  assert.equal(resolved.window.document.querySelector('.aq-badge')?.textContent, '입력 받음');
+  assert.equal(resolved.window.document.querySelector('input')?.checked, false);
+  resolved.window.close();
 });

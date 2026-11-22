@@ -267,7 +267,7 @@ class AttentionManagementPostgresTest {
  }
  private byte[] desktopBody(UUID scope,UUID session,String turn,UUID operation,int revision,String observation,boolean captured) {
   String state=observation.equals("WAIT")?"BLOCKED":captured?"PARTIAL":"UNKNOWN";
-  var remaining=List.of(Map.of("id","R1","kind",state.equals("BLOCKED")?"APPROVAL":"NEXT_ACTION","state","OPEN","fact","남은 확인"));
+  var remaining=List.of(Map.of("id","R1","kind",state.equals("BLOCKED")?"APPROVAL":"NEXT_ACTION","state",observation.equals("ANSWERED")?"RESOLVED":"OPEN","fact","남은 확인"));
   var report=Map.of("sourceTitle","요청 발췌 제목","request","요청 내용","performed",captured?List.of("샘플 결과 비교"):List.of(),
       "outcome",Map.of("state",state,"fact",captured?"한 항목 확인":"결과 미확인"),"remaining",remaining,"limitations",List.of(),
       "evidence",captured?List.of(Map.of("id","E1","kind","OTHER","label","Codex가 비교를 보고함")):List.of());
@@ -312,6 +312,25 @@ class AttentionManagementPostgresTest {
   var preview=(Map<?,?>)((Map<?,?>)((List<?>)data(console.list(Map.of(),false)).get("items")).getFirst()).get("content");
   assertThat(preview).isNotNull();
   assertThat(preview.get("requestProvenance")).isEqualTo("LOCAL_EXTRACTIVE");
+ }
+
+ @Test void desktopQuestionResolutionAdvancesOnlyTheWaitingCard() {
+  var content=desktopContent();
+  UUID scope=UUID.randomUUID(),session=UUID.randomUUID(),credential=desktopDevice(owner);
+  content.authorizeDesktop(new AttentionContentTypes.DesktopConsent(scope,credential));
+  device(owner,credential);
+  assertThatThrownBy(()->content.submitDesktop(desktopBody(scope,session,"parent",UUID.randomUUID(),0,"ANSWERED",false)))
+      .hasMessage("DESKTOP_OBSERVATION_CONFLICT");
+  var waiting=content.submitDesktop(desktopBody(scope,session,"parent",UUID.randomUUID(),0,"WAIT",false));
+  var reply=desktopBody(scope,session,"parent",UUID.randomUUID(),1,"ANSWERED",false);
+  var resolved=content.submitDesktop(reply);
+  assertThat(resolved.itemId()).isEqualTo(waiting.itemId());
+  assertThat(content.submitDesktop(reply)).isEqualTo(resolved);
+  assertThat(resolved.contentRevision()).isEqualTo(2);
+  var followup=content.submitDesktop(desktopBody(scope,session,"child",UUID.randomUUID(),0,"STOP",true));
+  assertThat(followup.itemId()).isNotEqualTo(resolved.itemId());
+  assertThat(db.queryForObject("select event_id from attention_content_reports where item_id=? and content_revision=2",
+      String.class,waiting.itemId())).isEqualTo("desktop.answered");
  }
 
  @Test void desktopConsentSeparatesOwnersDevicesAndTurnRevisions() {
