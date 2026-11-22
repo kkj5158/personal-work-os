@@ -7,6 +7,7 @@ import "./shell.css";
 import "./space-navigation.css";
 import "@/components/checklist-core/checklist-core.css";
 import { SystemOrderProvider } from "@/components/SystemOrder";
+import { SpaceDefaultsProvider } from "@/components/SpaceDefaults";
 import { RouteContent, RouteStateProvider } from "@/components/RouteState";
 
 const inter = Inter({
@@ -34,12 +35,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SystemOrderProvider><RouteStateProvider><GlobalTabsProvider>
+        <SystemOrderProvider><SpaceDefaultsProvider><RouteStateProvider><GlobalTabsProvider>
         <div className="pos-route-frame flex flex-1 overflow-hidden">
           <Sidebar />
           <RouteContent>{children}</RouteContent>
         </div>
-        </GlobalTabsProvider></RouteStateProvider></SystemOrderProvider>
+        </GlobalTabsProvider></RouteStateProvider></SpaceDefaultsProvider></SystemOrderProvider>
       </body>
     </html>
   );
