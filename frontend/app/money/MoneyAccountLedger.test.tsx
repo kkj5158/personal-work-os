@@ -232,9 +232,9 @@ test('period changes clear selection and a late bulk failure cannot restore it a
   assert.equal(calls.length,1);
   await showPeriod({...props.period,from:'2026-12-01',to:'2026-12-31'});assert.equal(checkbox('debit').checked,false);
   await showPeriod(props.period);assert.equal(checkbox('debit').checked,false);
-  await act(()=>checkbox('credit').click());
+  assert.equal(checkbox('credit').disabled,true);
   await act(async()=>{finish();await delayed;});await tick();
-  assert.equal(checkbox('debit').checked,false);assert.equal(checkbox('credit').checked,true);
+  assert.equal(checkbox('debit').checked,false);assert.equal(checkbox('credit').disabled,false);
   assert.equal(document.querySelector('.al-batch-result'),null);
  });
 });
