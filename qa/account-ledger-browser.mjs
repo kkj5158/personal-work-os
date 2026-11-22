@@ -51,19 +51,29 @@ async (page) => {
   await all.click();await find('합성 의미 미확정');row=page.locator('tr[data-transaction-id]').first();await row.waitFor();
   const unresolvedId=await row.getAttribute('data-transaction-id'),before=await get('/transactions/'+unresolvedId);
   const writesBefore=requests.filter(r=>r.method!=='GET').length;
-  await row.locator('select[aria-label$="금융 유형"]').selectOption('EXPENSE');
-  await page.getByRole('region',{name:'행 아래 금융 편집'}).waitFor();await settled();
-  check('financial type selection opens draft without writes',requests.filter(r=>r.method!=='GET').length===writesBefore);
-  await page.getByRole('textbox',{name:'금융 판단 정정 근거'}).fill('합성 브라우저 검증: 원문과 실제 출금 확인');
-  await page.getByRole('button',{name:'금융 유형 영향 확인',exact:true}).click();
-  await page.getByRole('region',{name:'확정 전 금융 영향'}).waitFor();
-  check('validated preview leaves canonical fact unchanged',JSON.stringify(await get('/transactions/'+unresolvedId))===JSON.stringify(before));
-  await page.getByRole('button',{name:'금융 변경 확정',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('.al-editor')?.textContent?.includes('금융 변경이 확정되었습니다.'));
+  const patchFor=()=>page.waitForResponse(response=>response.url().endsWith('/rows/'+unresolvedId+'/financial-type')&&response.request().method()==='PATCH');
+  async function chooseFinancialType(label){
+   await row.getByRole('button',{name:/금융 유형$/}).click();
+   const saved=patchFor();
+   await page.getByRole('option',{name:label,exact:true}).click();
+   const response=await saved;check('financial selection accepted '+label,response.ok());
+   return response.json();
+  }
+  await chooseFinancialType('소비');await settled();
+  check('type choice sends a single PATCH',requests.filter(r=>r.method!=='GET').length===writesBefore+1);
+  check('ordinary type choice stays inline',await page.getByRole('region',{name:'행 아래 금융 편집'}).count()===0);
   const after=await get('/transactions/'+unresolvedId);
-  check('explicit confirmation updates same canonical identity once',after.id===before.id&&after.version===before.version+1&&after.amount===before.amount);
-  const resolved=await get('/account-ledger/rows/'+unresolvedId);check('unresolved confirmation becomes confirmed expense',resolved.meaning_state==='CONFIRMED'&&resolved.display_type==='EXPENSE');
-  await page.getByRole('button',{name:'닫기',exact:true}).click();
+  check('same cash identity, amount, and direction',after.id===before.id&&after.amount===before.amount&&after.fromAccountId===before.fromAccountId&&after.toAccountId===before.toAccountId&&after.version===before.version+1);
+  await row.getByRole('combobox',{name:/생활 카테고리/}).waitFor();
+  const transferIntent=await chooseFinancialType('계좌 이체');await settled();
+  check('unmatched transfer intent records pending relationship',transferIntent.intentSaved&&transferIntent.relationStatus==='TRANSFER_PAIR_PENDING');
+  check('pending transfer has no category selector',!await row.getByRole('combobox',{name:/생활 카테고리/}).count());
+  await page.getByRole('button',{name:'후속 연결 대기',exact:true}).click();await row.waitFor();
+  const undone=patchFor();await row.getByRole('button',{name:'실행 취소'}).click();check('undo uses durable command',(await undone).ok());
+  await page.getByRole('button',{name:'전체 거래',exact:true}).click();await row.waitFor();
+  await chooseFinancialType('의미 미확정');await settled();
+  const restored=await get('/account-ledger/rows/'+unresolvedId);
+  check('fixture returned to unresolved with its cash and source',restored.declaredFinancialType==='UNRESOLVED'&&restored.amount===before.amount);
   await page.getByRole('button',{name:'미처리 알림',exact:true}).click();await settled();
   check('pending RAW view explicitly excluded from money totals',(await page.locator('.al-raw').innerText()).includes('포함하지 않습니다'));
   const pending=await get('/account-ledger/pending?from=2026-11-01&to=2026-11-30&limit=50&offset=0');
@@ -74,7 +84,12 @@ async (page) => {
   await page.setViewportSize({width:390,height:844});await settled();
   const sizing=await page.evaluate(()=>({body:document.body.scrollWidth,viewport:innerWidth,scroll:document.querySelector('.al-table-scroll')?.scrollWidth,client:document.querySelector('.al-table-scroll')?.clientWidth}));
   check('mobile has no horizontal body overflow',sizing.body<=sizing.viewport+1,sizing);
-  check('mobile table has usable horizontal scroll',sizing.scroll>sizing.client);
+  check('mobile card controls fit without horizontal scroll',sizing.scroll<=sizing.client+1);
+  const mobileRow=page.locator('.al-row').first();
+  await mobileRow.locator('.al-type-trigger').click();
+  await page.getByRole('combobox',{name:'금융유형 검색'}).waitFor();
+  check('mobile type options provide 44px tap targets',(await page.getByRole('option').first().boundingBox()).height>=44);
+  await page.keyboard.press('Escape');
   check('no uncaught page errors',errors.length===0,errors);
   return {status:'PASS',observedAt:new Date().toISOString(),provider:'team_kafka_playwright',environment:'OWNED_LOOPBACK_SYNTHETIC',checks,writeRequests:requests.filter(r=>r.method!=='GET'),errors};
  }catch(error){return {status:'FAIL',observedAt:new Date().toISOString(),checks,error:error.message,errors};}

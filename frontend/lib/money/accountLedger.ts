@@ -3,7 +3,7 @@ import type {UnifiedRow, UnifiedCommand, UnifiedOutcome} from './unified';
 export const ACCOUNT_LEDGER='/account-ledger';
 export const ledgerTypes:Record<string,string>={EXPENSE:'소비',INCOME:'수입',TRANSFER:'계좌 이체',SAVINGS:'저축 / 적립',SAVINGS_WITHDRAWAL:'저축 회수',LOAN_PAYMENT:'대출 상환',LOAN_RECEIPT:'대출금 수령',REFUND:'환불',UNRESOLVED:'의미 미확정'};
 export type LedgerRow=UnifiedRow&{declaredFinancialType?:string|null;canonicalType?:string;relationStatus?:string;meaningApplied?:boolean;fingerprint?:string;categoryEligible:boolean;classificationInScope?:boolean;signedAmount:number|null;direction:'OUT'|'IN'|'TRANSFER'|'UNKNOWN';audit?:unknown[];meaningOrigin?:'AUTO'|'OWNER'|null;quickConfirmAvailable?:boolean};
-export type LedgerPage={items:LedgerRow[];total:number;accountCounts:{accountId:string;count:number}[];summary:{total:number;unresolved:number;incoming:number|null;outgoing:number|null;currencies:string[]}};
+export type LedgerPage={items:LedgerRow[];total:number;accountCounts:{accountId:string;count:number}[];summary:{total:number;unresolved:number;relationPending?:number;incoming:number|null;outgoing:number|null;currencies:string[]}};
 export type PendingRaw={id:string;kind:string;accountId:string|null;occurredAt:string;title:string|null;merchant:string|null;amount:number|null;version:number;reason:string;lane:string;state:string;candidate?:{direction?:string;occurredAt?:string;amount?:number}};
 export type PendingPage=Omit<LedgerPage,'items'>&{items:PendingRaw[]};
 export type LedgerOperation={fingerprint:string;edit:UnifiedCommand;previewToken?:string};

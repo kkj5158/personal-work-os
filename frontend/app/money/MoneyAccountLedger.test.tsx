@@ -101,7 +101,7 @@ const incoming={...refund,id:'credit',title:'Credit',type:'INCOME',meaning_state
 async function withDecisions(run:(tools:{
  choose:(id:string,type:string)=>Promise<void>;calls:{id:string;command:DecisionRequest}[];reads:string[];
  intercept:(fn:((id:string,command:DecisionRequest)=>Promise<void>)|null)=>void;
- dom:JSDOM;records:Map<string,LedgerRow>;
+ dom:JSDOM;records:Map<string,LedgerRow>;reload:()=>Promise<void>;
 })=>Promise<void>){
  const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount();
  const get=api.get,patch=api.patch,post=api.post,records=new Map([outgoing,incoming,expense].map(row=>[row.id,row]));
@@ -134,7 +134,11 @@ async function withDecisions(run:(tools:{
  }
  try{
   await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
-  await run({choose,calls,reads,records,dom,intercept:fn=>{before=fn;}});
+  async function reload(){
+   await act(()=>root.render(null));
+   await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  }
+  await run({choose,calls,reads,records,dom,reload,intercept:fn=>{before=fn;}});
  }finally{await act(()=>root.unmount());api.get=get;api.patch=patch;api.post=post;dom.window.close();}
 }
 test('ordinary outgoing and incoming decisions each send one versioned PATCH, enable categories and support durable undo',async()=>{
@@ -163,14 +167,18 @@ test('unmatched relationship persists on confirmed row and is discoverable under
  });
 });
 test('unknown outcome locks only its row and replays exactly the original request',async()=>{
- await withDecisions(async({choose,calls,intercept})=>{
+ await withDecisions(async({choose,calls,intercept,reload,dom})=>{
   intercept(async(id)=>{if(id==='debit')throw Error('Lost response');});
   await choose('debit','EXPENSE');
   assert.equal(document.querySelector<HTMLButtonElement>('[aria-label="Debit 금융 유형"]')!.disabled,true);
   assert.equal(document.querySelector<HTMLSelectElement>('[aria-label="Expense 생활 카테고리"]')!.disabled,false);
   await choose('credit','INCOME');
+  const stored=dom.window.sessionStorage.getItem('ledger-type-requests:dev-fixed-owner');
+  assert.ok(stored);assert.ok(!stored.includes('Debit')&&!stored.includes('KRW'));
+  await reload();assert.equal(document.querySelector<HTMLButtonElement>('[aria-label="Debit 금융 유형"]')!.disabled,true);
   intercept(null);
   await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id=debit] .al-decision-result button')!.click());await tick();
+  assert.equal(dom.window.sessionStorage.getItem('ledger-type-requests:dev-fixed-owner'),null);
   assert.deepEqual(calls[0],calls[2]);assert.ok(document.querySelector('[aria-label="Debit 생활 카테고리"]'));
  });
 });

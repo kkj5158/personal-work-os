@@ -86,3 +86,5 @@
  .al-summary{flex-wrap:wrap}
 }
 @media(max-width:700px),(pointer:coarse){.al-type-menu button,.al-type-menu input{min-height:44px}}
+
+.al-linked-decision{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0}.al-linked-decision .al-type-trigger{width:auto;min-width:110px}

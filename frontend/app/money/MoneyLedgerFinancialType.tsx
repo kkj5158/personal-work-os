@@ -26,18 +26,50 @@ type TypeCommand={requestId:string;expectedVersion:number;financialType:string};
 type Receipt={intentSaved:boolean;meaningApplied:boolean;currentVersion:number;requestId:string;transactionId:string;row:LedgerRow};
 type Phase='saving'|'saved'|'unknown'|'conflict'|'failed';
 type Decision={id:string;title:string;before:string;command:TypeCommand;phase:Phase;receipt?:Receipt;message?:string};
+type Recovery=Pick<Decision,'id'|'before'|'command'>;
+function stored(owner:string):Recovery[]{
+ try{
+  const values:unknown=JSON.parse(window.sessionStorage.getItem('ledger-type-requests:'+owner)??'[]');
+  if(!Array.isArray(values))return [];
+  return values.filter(({id,before,command})=>typeof id==='string'&&/^[a-zA-Z0-9-]+$/.test(id)
+   &&Object.hasOwn(ledgerTypes,before)&&Object.hasOwn(ledgerTypes,command?.financialType)
+   &&typeof command.requestId==='string'&&Number.isSafeInteger(command.expectedVersion));
+ }catch{return [];}
+}
+// Retain only the replayable command and prior type. Titles, amounts and receipts stay in memory.
+function remember(owner:string,id:string,request?:Recovery){
+ try{
+  const commands=stored(owner).filter(item=>item.id!==id);
+  if(request)commands.push({id,before:request.before,command:request.command});
+  const key='ledger-type-requests:'+owner;
+  if(commands.length)window.sessionStorage.setItem(key,JSON.stringify(commands));
+  else window.sessionStorage.removeItem(key);
+ }catch{/* In private storage modes the same request is still available in session view state. */}
+}
 export function useFinancialDecisions(){
- const cache=useMoneyCache();
+ const cache=useMoneyCache(),owner=cache.preferenceOwner;
  const [entries,setEntries]=useMoneyViewState<Record<string,Decision>>('ledger-financial-decisions',()=>({}));
- const active=useRef(new Set<string>());
+ const active=useRef(new Set<string>()),restored=useRef(false);
+ useEffect(()=>{
+  if(restored.current||!owner)return;
+  restored.current=true;
+  const commands=stored(owner);
+  if(commands.length)setEntries(current=>{
+   const next={...current};
+   for(const request of commands)next[request.id]??={...request,phase:'unknown',title:'거래',message:'원래 요청 결과를 확인하세요.'};
+   return next;
+  });
+ },[owner,setEntries]);
  function put(entry:Decision){setEntries(old=>({...old,[entry.id]:entry}));}
  async function send(entry:Decision,refresh=true){
-  if(active.current.has(entry.id))return 'busy';
+  if(!owner||cache.preferenceOwner!==owner||active.current.has(entry.id))return 'busy';
   active.current.add(entry.id);
+  remember(owner,entry.id,entry);
   put({...entry,phase:'saving'});
   try{
-   const receipt=await moneyApi.patch<Receipt>(ACCOUNT_LEDGER+'/rows/'+entry.id+'/financial-type',entry.command);
+   const receipt=await moneyApi.patch<Receipt>(ACCOUNT_LEDGER+'/rows/'+entry.id+'/financial-type',entry.command,owner);
    if(!receipt?.intentSaved||receipt.requestId!==entry.command.requestId||receipt.transactionId!==entry.id||receipt.row?.id!==entry.id)throw Error('저장 응답을 확인할 수 없습니다.');
+   remember(owner,entry.id);
    put({...entry,phase:'saved',receipt});
    if(refresh)cache.mutate('transaction');
    return relationLabel(receipt.row)?'pending':'saved';
@@ -45,6 +77,7 @@ export function useFinancialDecisions(){
    const rejected=error instanceof ApiError && error.status>=400 && error.status<500 && error.status!==408;
    const phase=error instanceof ApiError&&error.status===409?'conflict':rejected?'failed':'unknown';
    const message=phase==='conflict'?'거래가 변경되었습니다. 최신 값과 선택을 비교하세요.':rejected?error.message:'응답을 확인하지 못했습니다.';
+   if(phase!=='unknown')remember(owner,entry.id);
    put({...entry,phase,message});
    if(refresh&&phase==='conflict')cache.mutate('transaction');
    return phase;
