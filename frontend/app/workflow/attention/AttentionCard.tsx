@@ -18,7 +18,8 @@ export default memo(function AttentionCard({item,lanes,disabled,history,preview,
  // The ordinary Desktop source identity stays stable while its latest report changes.
  const waitingForInput = item.source.kind === 'CODEX_DESKTOP' && item.content?.eventId === 'desktop.wait';
  const badgeIntent = waitingForInput ? 'NEEDS_USER_INPUT' : item.source.intent;
- const badge=waitingForInput ? eventBadge(badgeIntent) : item.content?.eventId==='turn.completed'?'응답 종료':item.content?.quality==='LIMITED'?'실행 중단':
+ const answered = item.source.kind === 'CODEX_DESKTOP' && item.content?.eventId === 'desktop.answered';
+ const badge=answered ? '입력 받음' : waitingForInput ? eventBadge(badgeIntent) : item.content?.eventId==='turn.completed'?'응답 종료':item.content?.quality==='LIMITED'?'실행 중단':
    item.source.kind==='CODEX_DESKTOP'&&item.source.intent==='COMPLETED'?'응답 종료 · 결과 미검증':eventBadge(item.source.intent);
  const detailContent=detail?.id===item.id&&detail.content?.contentRevision===revision&&detail.content?.verificationRevision===proofRevision?detail.content:null;
  useEffect(()=>{
