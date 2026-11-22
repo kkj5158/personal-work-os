@@ -29,7 +29,7 @@ public class MoneyRegistrationService {
   require(row.get("merged_into")==null,"연결된 이체의 원래 행은 개별 취소·복원할 수 없습니다. 대표 이체를 선택하세요.");
   require(!Set.of("INITIAL_BALANCE","BALANCE_ADJUSTMENT").contains(row.get("type")),"잔액 기준 거래는 전용 잔액 정정에서 처리하세요.");
   UUID id=(UUID)row.get("id");
-  if(!restore)require(MoneyStatementProtection.sources(db,owner(),id).isEmpty(),"명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.");
+  if(!restore)require(!MoneyStatementProtection.hasSource(db,owner(),id),"명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.");
   if(!restore)require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=? and not excluded)",Boolean.class,owner(),id)),"연결된 활성 환불을 먼저 취소하세요.");
   if(restore&&row.get("refund_of")!=null){
    var original=fact((UUID)row.get("refund_of"));require("EXPENSE".equals(original.get("type"))&&!Boolean.TRUE.equals(original.get("excluded")),"원래 지출을 먼저 복원하세요.");
@@ -77,7 +77,7 @@ public class MoneyRegistrationService {
   var fact=money.transaction(id);
   String reason=null;
   if(fact.excluded() || fact.mergedInto()!=null)reason="이미 취소되었거나 병합된 거래입니다. 취소 이력 또는 대표 거래를 확인하세요.";
-  else if(!MoneyStatementProtection.sources(db,owner(),id).isEmpty())reason="명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.";
+  else if(MoneyStatementProtection.hasSource(db,owner(),id))reason="명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.";
   else if(!Set.of("EXPENSE","INCOME").contains(fact.type().name()))reason=switch(fact.type().name()){
    case "TRANSFER" -> "이체 연결을 전용 이체 정정에서 확인하세요.";
    case "REFUND" -> "환불 정정에서 원소비와 환불 한도를 확인하세요.";
