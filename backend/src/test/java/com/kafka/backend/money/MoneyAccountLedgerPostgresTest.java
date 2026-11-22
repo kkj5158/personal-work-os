@@ -109,6 +109,13 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("920");
   var correction=decision(ledger,e.money().transaction(a.id()),"EXPENSE");
   assertThat(correction).containsEntry("relationStatus","RELATION_CORRECTION_REQUIRED").containsEntry("meaningApplied",false);
+  var pendingCash=e.product().balance(excluded.id());
+  assertThat(decision(ledger,e.money().transaction(b.id()),"EXPENSE")).containsEntry("relationStatus","NONE").containsEntry("meaningApplied",true);
+  assertThat(e.unified().loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("0");
+  var monthly=e.web().bookkeeping(from,to,"EXPENSE",null,50,0,false,null,null,null,null,"ALL",null,null,true,true);
+  assertThat(items(monthly)).singleElement().satisfies(row->assertThat(row).containsEntry("id",b.id()));
+  assertThat((BigDecimal)((Map<?,?>)monthly.get("summary")).get("total")).isEqualByComparingTo("200");
+  assertThat(e.product().balance(excluded.id())).isEqualTo(pendingCash);
   assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("920");
   assertThat(e.product().balance(account.id())).isEqualTo(balance);
  });}
