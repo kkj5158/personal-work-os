@@ -201,6 +201,11 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
   void privateCloseoutReplaysOriginalReceiptsAndBindsHostedSources() throws Exception {
     var raw=Files.readString(Path.of(System.getenv("STUDY_PRIVATE_CLOSEOUT")));
     var archive=JSON.readTree(raw);var pdf=Files.readAllBytes(Path.of(System.getenv("STUDY_PRIVATE_PILOT")));
+    // The archived campaign predates the current week in a fresh test workspace.
+    var archiveWeek=LocalDate.parse(archive.path("date").asString()).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+    var initialPolicy=study.records().findByOwnerIdAndKind(OWNER,"POLICY").getFirst();
+    initialPolicy.payload=object(initialPolicy.payload).put("effectiveWeek",archiveWeek.toString()).toString();
+    study.records().save(initialPolicy);
     material();var ticket=upload(pdf,"material","chapter.pdf");complete(ticket);
     var idx=UUID.fromString(engine.index(UUID.fromString(ticket.path("id").asString())).path("id").asString());engine.run(idx);
     // Simulate the actual Linux DEV index inside this disposable Windows QA database.
