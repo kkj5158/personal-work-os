@@ -287,13 +287,23 @@ public class MoneyAccountLedgerService {
    var before=decisions.fact(id,true);
    var fact=money.transaction(id);
    String direction=fact.fromAccountId()!=null?"EXPENSE":"INCOME";
-   if(input.baseDirection()!=null)require(input.baseDirection().equals(direction) && (fact.fromAccountId()==null || fact.toAccountId()==null),"선택한 계좌의 실제 방향과 다릅니다.");
+   if(input.baseDirection()!=null){
+    require(input.baseDirection().equals(direction) && (fact.fromAccountId()==null ^ fact.toAccountId()==null),"선택한 계좌의 실제 방향과 다릅니다.");
+    if(before.get("loan_id")!=null||fact.refundOf()!=null||Set.of(TransactionType.LOAN_PAYMENT,TransactionType.LOAN_RECEIPT,TransactionType.REFUND).contains(fact.type())){
+     require(input.semanticPolicyVersion()!=null && new MoneyCategoryFinancialPolicy(db,owner())
+       .resolve(input.categoryId(),input.semanticPolicyVersion()).equals(fact.type().name()),
+       "대출·환불 분류는 상세 편집에서 정정하세요.");
+    }
+   }
    if("UNRESOLVED".equals(fact.meaningState()) && (input.baseDirection()!=null||input.semanticPolicyVersion()!=null)){
     require(Set.of(TransactionType.INCOME,TransactionType.EXPENSE).contains(fact.type()) &&
       (before.get("declaredFinancialType")==null || Set.of("UNRESOLVED",direction).contains(before.get("declaredFinancialType")) ||
        (input.semanticPolicyVersion()!=null && new MoneyCategoryFinancialPolicy(db,owner()).resolve(input.categoryId(),input.semanticPolicyVersion()).equals(before.get("declaredFinancialType")))),
       "기존 금융 의도나 연결 관계를 먼저 정정하세요.");
+    if(input.baseDirection()!=null)MoneyFinancialEvidence.requireQuick(db,owner(),money,fact,direction);
     decisions.apply(id,new FinancialType(input.requestId(),fact.version(),direction,true),before);
+    if(input.baseDirection()!=null)
+     audit(id,"ACCOUNT_LEDGER_FINANCIAL_TYPE",decisionSnapshot(before),decisionSnapshot(decisions.fact(id,false)));
     fact=money.transaction(id);
    }
    require(MoneyOwnerFinancialDecision.meaningApplied(decisions.fact(id,false))&&"CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME,TransactionType.REFUND,TransactionType.LOAN_PAYMENT,TransactionType.LOAN_RECEIPT).contains(fact.type()),"거래의 금융 관계를 먼저 확인하세요.");

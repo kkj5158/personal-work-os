@@ -61,7 +61,11 @@ test('ledger assignment uses searchable category tree, filters by direction and 
   if(path.endsWith('/activity'))return {recommendations:[],saves:[]} as T;
   return {items:[]} as T;
  };
- api.post=async<T,>(path:string,body:unknown)=>{assert.equal(path,'/account-ledger/rows/tx/category');writes.push(body as Record<string,unknown>);return {status:'APPLIED'} as T;};
+ api.post=async<T,>(path:string,body:unknown)=>{
+  assert.equal(path,'/account-ledger/rows/tx/category');
+  writes.push(body as Record<string,unknown>);
+  return {status:'APPLIED',result:{row:{...row,classificationVersion:8,book:{...row.book,categoryId:'food',classificationVersion:8}}}} as T;
+ };
  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));
  const trigger=document.querySelector<HTMLButtonElement>('button[aria-label="Sample 생활 카테고리"]');assert.ok(trigger);
  await act(()=>trigger.click());assert.ok(document.querySelector('[aria-label="카테고리 검색"]'));assert.equal(document.querySelector('[aria-label="급여 직접 지정"]'),null);
@@ -76,6 +80,7 @@ test('ledger assignment uses searchable category tree, filters by direction and 
  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="식비 직접 지정"]')!.click());
  assert.equal(writes.length,1);assert.equal(writes[0].categoryId,'food');assert.equal(writes[0].expectedVersion,2);assert.equal(writes[0].expectedClassificationVersion,7);assert.equal(writes[0].fingerprint,'evidence-v2');assert.equal(writes[0].thisTransactionOnly,true);assert.ok(writes[0].requestId);
  assert.equal(document.activeElement,trigger);
+ assert.match(trigger.textContent!,/식비/);
  await act(()=>trigger.click());
  assert.match(document.querySelector('.category-recents')!.textContent!,/식비/);
 }));
