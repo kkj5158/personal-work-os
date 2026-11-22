@@ -247,4 +247,20 @@ class MoneyAccountLedgerPostgresTest {
   e.db().update("update money_loans set version=version+1 where id=?",loan.id());assertThat(l.execute(t.id(),request).get("status")).isEqualTo("NOT_APPLIED");assertThat(e.web().loan(loan.id()).remainingPrincipal()).isZero();assertThat(e.money().transaction(t.id()).type()).isEqualTo(TransactionType.INCOME);
   var expense=base.tx(e,a.id(),true,20,true);var original=draft(l,expense,"EXPENSE");var confirmed=approved(l,expense.id(),original);var changed=new MoneyUnifiedBookkeepingService.Edit(original.edit().requestId(),expense.version(),"TYPE","TRANSFER",null,null,null,null,null,null,null,null,null,null,null,"다른 변경",null);assertThat(l.execute(expense.id(),new EditRequest(original.fingerprint(),changed,confirmed.previewToken())).get("status")).isEqualTo("NOT_APPLIED");assertThat(e.money().transaction(expense.id()).meaningState()).isEqualTo("UNRESOLVED");
  });}
+ @Test void confirmingAnExistingTransferSupersedesPendingIntentAtANewVersion(){base.check(e->{
+  var debit=base.account(e,AccountRole.SPENDING);var credit=base.account(e,AccountRole.INCOME_HUB);
+  var transfer=e.product().save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,debit.id(),credit.id(),
+      BigDecimal.TEN,MoneyUnifiedBookkeepingPostgresTest.AT,null,null,null,false,null,null));
+  var l=ledger(e);
+  var intent=l.financialType(transfer.id(),new FinancialType(UUID.randomUUID(),transfer.version(),"EXPENSE"));
+  assertThat(intent.get("relationStatus")).isEqualTo("RELATION_CORRECTION_REQUIRED");
+  var current=e.money().transaction(transfer.id());
+  var request=approved(l,transfer.id(),draft(l,current,"TRANSFER"));
+  assertThat(l.execute(transfer.id(),request).get("status")).isEqualTo("APPLIED");
+  var row=l.row(transfer.id());assertThat(row.get("declaredFinancialType")).isEqualTo("TRANSFER");
+  assertThat(row.get("version")).isEqualTo(current.version()+1);
+  assertThat(row.get("from_account_id")).isEqualTo(debit.id());assertThat(row.get("to_account_id")).isEqualTo(credit.id());
+  assertThatThrownBy(()->l.financialType(transfer.id(),new FinancialType(UUID.randomUUID(),current.version(),"UNRESOLVED")))
+      .isInstanceOf(OptimisticLockConflictException.class);
+ });}
 }
