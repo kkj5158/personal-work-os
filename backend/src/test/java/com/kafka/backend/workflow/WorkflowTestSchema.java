@@ -10,9 +10,13 @@ final class WorkflowTestSchema {
     static void apply(JdbcTemplate db, String... files) throws Exception {
         for (String file : files) {
             if (file.startsWith("V61")) nameChecksLikePostgres(db);
-            String sql = Files.readString(Path.of("src/main/resources/db/migration", file)).replaceAll("(?m)--.*$", "").replace("TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE");
-            for (String statement : sql.split(";")) if (!statement.isBlank() && !statement.contains("ENABLE ROW LEVEL SECURITY")) db.execute(statement);
+            execute(db,file);
         }
+        if (Arrays.asList(files).contains("V61__work_flow_v1_core.sql")) execute(db,"V133__workflow_task_event_order.sql");
+    }
+    private static void execute(JdbcTemplate db,String file) throws Exception {
+        String sql = Files.readString(Path.of("src/main/resources/db/migration", file)).replaceAll("(?m)--.*$", "").replace("TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE");
+        for (String statement : sql.split(";")) if (!statement.isBlank() && !statement.contains("ENABLE ROW LEVEL SECURITY")) db.execute(statement);
     }
     /** H2 auto-names inline CHECKs differently; give them PostgreSQL's generated names (verified by a PG replay) so V61 runs verbatim. */
     private static void nameChecksLikePostgres(JdbcTemplate db) {

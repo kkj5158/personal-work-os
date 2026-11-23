@@ -103,10 +103,31 @@ class WorkflowV1DomainTest {
         assertThat(view.waiting()).extracting(Task::id).containsExactlyInAnyOrder(other.id(), flagged.id());
         var resumed = service.changeStatus(t.id(), new StatusChange("TODO", waiting.revision(), null, null, null, null));
         assertThat(resumed.status()).isEqualTo("TODO"); assertThat(resumed.waitingReason()).isNull();
+        // Force a timestamp tie with UUIDs that sort in the opposite order.
+        db.update("update work_task_events set created_at=current_timestamp where task_id=?",t.id());
+        db.update("update work_task_events set id=? where task_id=? and kind='REOPENED'",new UUID(0,2),t.id());
+        db.update("update work_task_events set id=? where task_id=? and kind='WAITING'",new UUID(0,1),t.id());
         assertThat(events(t.id())).containsExactly("COMPLETED", "REOPENED", "WAITING", "RESUMED");
         assertThat(service.events(t.id()).getLast().payload()).containsEntry("waitingReason", "Waiting for QA");
         assertThatThrownBy(() -> service.changeStatus(t.id(), new StatusChange("DONE", 0L, null, null, null, null))).isInstanceOf(OptimisticLockConflictException.class);
         assertThatThrownBy(() -> service.changeStatus(t.id(), new StatusChange("CHECK_REQUIRED", resumed.revision(), null, null, null, null))).isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test void legacyEventsKeepTheirOrderAndOneRevisionCanAppendTwoEvents() {
+        var t = task(null);
+        var first = new UUID(0,1);
+        var second = new UUID(0,2);
+        db.update("""
+            insert into work_task_events(id,user_id,task_id,kind,created_at,event_order)
+            values (?,?,?,'DEADLINE_CHANGED',timestamp '2026-10-01 00:00:00',null),
+                   (?,?,?,'DEADLINE_CHANGED',timestamp '2026-10-01 00:00:00',null)
+            """,second,user,t.id(),first,user,t.id());
+        var waiting = service.changeStatus(t.id(),new StatusChange("WAITING",t.revision(),"QA",null,today,false));
+        var completed = service.changeStatus(t.id(),new StatusChange("DONE",waiting.revision(),null,null,null,null));
+
+        assertThat(completed.revision()).isEqualTo(waiting.revision()+1);
+        assertThat(service.events(t.id()).subList(0,2)).extracting(WorkflowService.TaskEvent::id).containsExactly(first,second);
+        assertThat(events(t.id())).containsExactly("DEADLINE_CHANGED","DEADLINE_CHANGED","WAITING","RESUMED","COMPLETED");
     }
 
     @Test void waitingRevisionKeepsAgentCompletedHistoryAndReactivatesTheSameTask() {

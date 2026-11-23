@@ -254,7 +254,10 @@ public class WorkflowService {
     public record TaskEvent(UUID id,String kind,String fromStatus,String toStatus,Map<String,Object> payload,Instant createdAt) {}
     public List<TaskEvent> events(UUID taskId) {
         task(taskId);
-        return db.query("select * from work_task_events where user_id=? and task_id=? order by created_at,id",(r,n)->new TaskEvent(id(r,"id"),r.getString("kind"),r.getString("from_status"),r.getString("to_status"),metadata(r.getString("payload")),WorkflowRows.instant(r,"created_at")),owner(),taskId);
+        return db.query("""
+            select * from work_task_events where user_id=? and task_id=?
+            order by event_order nulls first, created_at, id
+            """,(r,n)->new TaskEvent(id(r,"id"),r.getString("kind"),r.getString("from_status"),r.getString("to_status"),metadata(r.getString("payload")),WorkflowRows.instant(r,"created_at")),owner(),taskId);
     }
 
     /** Archive is independent of completion: it hides the Task from active views without changing status. */
