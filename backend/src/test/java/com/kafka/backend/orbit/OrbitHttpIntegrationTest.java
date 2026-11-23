@@ -152,9 +152,30 @@ class OrbitHttpIntegrationTest {
         var orbit=json.readTree(get("get_money_overview_context?from="+today+"&to="+today,other).body()).get("data");
         var canonical=http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/money/overview?from="+today+"&to="+today)).header("Authorization","Bearer "+token(other,Instant.now().plusSeconds(300),ISSUER,"authenticated")).build(),HttpResponse.BodyHandlers.ofString());
         assertThat(canonical.statusCode()).isEqualTo(200);
-        assertThat(orbit.get("kpis")).isEqualTo(json.readTree(canonical.body()).get("kpis"));
-        assertThat(orbit.get("kpis").get("consumption").asInt()).isEqualTo(8100);
-        assertThat(orbit.get("kpis").get("income").asInt()).isEqualTo(20000);
+        var kpis=orbit.get("kpis");
+        assertThat(kpis).isEqualTo(json.readTree(canonical.body()).get("kpis"));
+        // Linked refunds reduce general consumption. The 100 KRW of loan interest belongs to loan repayment.
+        assertThat(kpis.get("consumption").asInt()).isEqualTo(10000-2000);
+        assertThat(kpis.get("income").asInt()).isEqualTo(20000);
+        assertThat(kpis.get("loanPrincipal").asInt()).isEqualTo(1000);
+
+        UUID account=db.queryForObject("select id from money_accounts where user_id=?",UUID.class,other);
+        try {
+            db.update("insert into money_tracking_settings(user_id) values(?)",other);
+            db.update("insert into money_tracking_selections(user_id,kind,effective_at,version,accounts) values(?,'EXPENSE',?,0,?)",
+                other,LocalDate.parse(today).atStartOfDay(ZoneId.of("Asia/Seoul")).toOffsetDateTime(),new UUID[]{account});
+            var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/money/v4/summary?from="+today+"&to="+today+"&currency=KRW&accountIds="+account))
+                .header("Authorization","Bearer "+token(other,Instant.now().plusSeconds(300),ISSUER,"authenticated")).build();
+            var summary=http.send(request,HttpResponse.BodyHandlers.ofString());
+            assertThat(summary.statusCode()).isEqualTo(200);
+            var flows=json.readTree(summary.body());
+            assertThat(flows.get("consumption").asInt()).isEqualTo(8000);
+            assertThat(flows.get("loanRepayment").asInt()).isEqualTo(1100);
+            assertThat(flows.get("totalExpense").asInt()).isEqualTo(9100);
+        } finally {
+            db.update("delete from money_tracking_selections where user_id=?",other);
+            db.update("delete from money_tracking_settings where user_id=?",other);
+        }
     }
     @Test void missingMeasurementsStayUnknownAndSeoulMidnightAttributionIsPreserved()throws Exception{
         var missing=json.readTree(get("get_diet_context",empty).body());
