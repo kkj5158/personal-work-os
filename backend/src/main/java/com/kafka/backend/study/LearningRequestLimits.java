@@ -25,15 +25,20 @@ class LearningRequestLimits extends OncePerRequestFilter {
         if(count>=240)return false;
         counts.put(remote,count+1);return true;
     }
+    private static void reject(HttpServletResponse response,int status,String code)throws IOException{
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.getWriter().write(StudyValidation.JSON.writeValueAsString(Map.of("code",code)));
+    }
     @Override protected void doFilterInternal(HttpServletRequest r,HttpServletResponse s,FilterChain chain)throws IOException,ServletException{
         s.setHeader("Cache-Control","private, no-store");
         if(!admit(r.getRemoteAddr(),System.currentTimeMillis()/60000)){
-            s.setHeader("Retry-After","60");s.sendError(429);return;
+            s.setHeader("Retry-After","60");reject(s,429,"RATE_LIMIT");return;
         }
         if(!Set.of("POST","PATCH","DELETE").contains(r.getMethod())){chain.doFilter(r,s);return;}
-        if(r.getContentLengthLong()>LIMIT){s.sendError(413);return;}
+        if(r.getContentLengthLong()>LIMIT){reject(s,413,"PAYLOAD_LIMIT");return;}
         byte[] bytes=r.getInputStream().readNBytes(LIMIT+1);
-        if(bytes.length>LIMIT){s.sendError(413);return;}
+        if(bytes.length>LIMIT){reject(s,413,"PAYLOAD_LIMIT");return;}
         chain.doFilter(new HttpServletRequestWrapper(r){
             @Override public ServletInputStream getInputStream(){
                 var stream=new ByteArrayInputStream(bytes);
