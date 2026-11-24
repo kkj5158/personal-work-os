@@ -2,6 +2,8 @@ package com.kafka.backend.money;
 
 import com.kafka.backend.common.CurrentUserProvider;
 import java.util.*;
+import java.math.BigDecimal;
+import java.time.ZoneId;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -45,20 +47,62 @@ public class MoneyObservedDirectionService {
         else if (row.get("observed_direction")!=null) status="ALREADY_REGISTERED";
         else if (direction==null || t.manual() || t.refundOf()!=null || t.transferDestinationStatus()!=null || row.get("loan_id")!=null) status="REVIEW_RELATION";
         else {
-            var attempt=MoneyFinancialEvidence.primaryAttempt(money,t);
-            status="SOURCE_NOT_VERIFIED";
-            if(attempt!=null && attempt.candidate().direction()==direction) {
-                var c=attempt.candidate();
+            var statements=statementEvidence(owner,t);
+            var notification=MoneyFinancialEvidence.primaryAttempt(money,t);
+            boolean pushVerified=false;
+            if(notification!=null && notification.candidate().direction()==direction) {
+                var c=notification.candidate();
                 var leg=direction==Direction.OUT?t.fromAccountId():t.toAccountId();
                 var hint=direction==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint();
                 var account=new MoneyAccountResolver().resolve(accounts,c.provider(),hint);
-                source=List.of(attempt.id(),attempt.parserVersion(),t.sources().getFirst().rawEventId());
-                if(account.resolved() && account.account().id().equals(leg)) status="REGISTER_OBSERVED_DIRECTION";
+                pushVerified=account.resolved() && account.account().id().equals(leg);
             }
+            boolean bankVerified=statements.size()==1 && statementMatches(statements.getFirst(),t,direction,pushVerified);
+            boolean conflict=!statements.isEmpty() && !bankVerified;
+            if(bankVerified && !t.sources().stream().allMatch(evidence -> linkedMatches(evidence,t,direction))) conflict=true;
+            if(conflict) status="SOURCE_CONFLICT";
+            else status=bankVerified || pushVerified?"REGISTER_OBSERVED_DIRECTION":"SOURCE_NOT_VERIFIED";
+            source=Arrays.asList(statements,t.sources().stream().map(TransactionSource::parseAttemptId).sorted(Comparator.nullsFirst(Comparator.naturalOrder())).toList(),notification==null?null:notification.id());
         }
         String type=direction==null?null:t.type().name();
         return new Candidate(t.id(),t.version(),type,status,commands.fingerprint(Arrays.asList(t.id(),t.version(),type,status,
             t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),row.get("decisionVersion"),source)));
+    }
+
+    private boolean linkedMatches(TransactionSource source,MoneyTransaction t,Direction direction) {
+        var attempts=money.attempts(source.rawEventId());
+        if(attempts.isEmpty() || !attempts.getLast().id().equals(source.parseAttemptId())) return false;
+        var attempt=attempts.getLast();
+        var c=attempt.candidate();
+        return "PARSED".equals(attempt.status()) && c!=null && c.direction()==direction
+            && c.amount()!=null && c.amount().compareTo(t.amount())==0
+            && t.currency().equals(MoneyOrdinaryAdmission.currency(c)) && c.occurredAt()!=null
+            && MoneyStatementReconciliationService.near(c.occurredAt(),t.occurredAt());
+    }
+
+    private List<Map<String,Object>> statementEvidence(UUID owner,MoneyTransaction t) {
+        if(!MoneyStatementProtection.installed(db))return List.of();
+        return db.queryForList("""
+            select r.id,r.account_id,r.direction,r.amount,extract(epoch from r.occurred_at) as occurred_epoch,s.currency,s.fingerprint,
+              coalesce(to_jsonb(r)->>'time_precision','SECOND') as precision,
+              (e.cash_key=r.cash_key and e.account_id=r.account_id and s.account_id=r.account_id) as same_identity
+            from money_statement_effects e join money_statement_rows r on r.user_id=e.user_id and r.id=e.row_id
+            join money_bank_statements s on s.user_id=r.user_id and s.id=r.statement_id
+            where e.user_id=? and e.transaction_id=? order by r.id
+            """,owner,t.id());
+    }
+
+    private static boolean statementMatches(Map<String,Object> row,MoneyTransaction t,Direction direction,boolean exactPrimary) {
+        var epoch=(BigDecimal)row.get("occurred_epoch");
+        var observed=java.time.Instant.ofEpochSecond(epoch.longValue(),epoch.remainder(BigDecimal.ONE).movePointRight(9).longValueExact());
+        var zone=ZoneId.of("Asia/Seoul");
+        boolean sameDay=observed.atZone(zone).toLocalDate().equals(t.occurredAt().atZone(zone).toLocalDate());
+        boolean sameTime="DAY".equals(row.get("precision")) || "DAY".equals(t.occurrencePrecision())
+            ? sameDay
+            : observed.equals(t.occurredAt()) || exactPrimary && sameDay && MoneyStatementReconciliationService.near(observed,t.occurredAt());
+        return Boolean.TRUE.equals(row.get("same_identity")) && direction.name().equals(row.get("direction"))
+            && Objects.equals(row.get("account_id"),direction==Direction.OUT?t.fromAccountId():t.toAccountId())
+            && t.currency().equals(row.get("currency")) && t.amount().compareTo((BigDecimal)row.get("amount"))==0 && sameTime;
     }
 
     public Map<String,Object> reverse(UUID id,Reverse input) {

@@ -53,7 +53,7 @@ public class MoneyStatementReconciliationService {
  private boolean sourceProvider(String provider,String pkg,String key,String version){return switch(Objects.toString(provider,"")){case "IBK"->pkg.equals("com.ibk.android.ionebank")&&key.equals("ibk-push")&&MoneyOrdinaryAdmission.supportedParserVersion(provider,version);case "KAKAO"->pkg.equals("com.kakaobank.channel")&&key.equals("kakao-push")&&MoneyOrdinaryAdmission.supportedParserVersion(provider,version);case "SHINHAN"->pkg.equals("com.shinhan.sbanking")&&key.equals("shinhan-push")&&MoneyOrdinaryAdmission.supportedParserVersion(provider,version);default->false;};}
  private String compact(String s){return MoneyStatementParser.mask(Objects.toString(s,"")).replaceAll("\\[REDACTED\\]","").replaceAll("[^\\p{L}\\p{N}]","").toLowerCase(Locale.ROOT);}
  private boolean merchant(Object a,Object b){String x=compact(Objects.toString(a,"")),y=compact(Objects.toString(b,""));return x.length()>=2&&y.length()>=2&&(x.startsWith(y)||y.startsWith(x)||x.substring(0,Math.min(5,x.length())).equals(y.substring(0,Math.min(5,y.length()))));}
- private boolean near(Instant a,Instant b){return Duration.between(a,b).abs().compareTo(Duration.ofSeconds(90))<=0;}
+ static boolean near(Instant a,Instant b){return Duration.between(a,b).abs().compareTo(Duration.ofSeconds(90))<=0;}
  private boolean rawTimeMatches(Map<String,Object> r,MoneyTypes.ParsedCandidate c){
   if(c.postedAt()==null||c.occurredAt()==null)return false;
   if("DAY".equals(r.get("time_precision")))return rowNear(r,c.occurredAt());
