@@ -1,13 +1,13 @@
 "use client";
 import { useRef, useState, useEffect, type MouseEvent } from "react";
-import { BriefcaseBusiness, BookOpen, GraduationCap, Heart, Wallet, Home, LayoutGrid, PanelsTopLeft, X, Settings2 } from "lucide-react";
+import { BriefcaseBusiness, BookOpen, GraduationCap, Heart, Wallet, Utensils, Home, LayoutGrid, PanelsTopLeft, X, Settings2 } from "lucide-react";
 import { INITIAL_SPACE_DEFAULTS, SPACES, SYSTEMS, resolveSpaceEntry, routeNavigation, systemDestination, type SpaceDefaults, type SpaceHistory } from "@/lib/spaceNavigation";
 import type { TabSystem } from "@/lib/globalTabs";
 import { useGlobalTabs } from "./GlobalTabs";
 import { NavigationMenu } from "./NavigationMenu";
 import { useSpaceDefaults } from "./SpaceDefaults";
 
-export const spaceIcons = { work: BriefcaseBusiness, knowledge: BookOpen, growth: GraduationCap, life: Heart, finance: Wallet };
+export const spaceIcons = { work: BriefcaseBusiness, knowledge: BookOpen, growth: GraduationCap, life: Heart, finance: Wallet, diet: Utensils };
 
 function SpaceDefaultsSettings({ onBack, onClose }: { onBack: () => void; onClose: () => void }) {
   const preferences = useSpaceDefaults();
@@ -54,7 +54,7 @@ function SpaceDefaultsSettings({ onBack, onClose }: { onBack: () => void; onClos
       })}
     </div>
     <div className="pos-space-defaults-actions">
-      <p>FINANCE는 MONEY SYS로 고정됩니다.</p>
+      <p>FINANCE는 MONEY SYS, DIET는 DIET SYS로 고정됩니다.</p>
       <button type="button" disabled={!canSave || saving} onClick={() => setChanges(INITIAL_SPACE_DEFAULTS)}>기본값으로 초기화</button>
       <button type="button" className="pos-space-defaults-save" disabled={!canSave || saving || !changed} onClick={async () => {
         if (await preferences.save(draft)) setChanges({});
@@ -129,7 +129,7 @@ export function SpaceNavigation({ pathname, history, tabsVisible, onToggleTabs }
     </nav>}
     {dialogOpen && <dialog ref={dialog} className={`pos-space-home${view === "settings" ? " pos-space-defaults" : ""}`} aria-labelledby={view === "settings" ? "pos-space-defaults-title" : "pos-space-home-title"} onCancel={close} onClick={event => { if (event.target === event.currentTarget) close(); }}>
       {view === "settings" ? <SpaceDefaultsSettings key={preferences.scope} onClose={close} onBack={() => { returnToSettings.current = true; setView("home"); }}/>
-        : <div><header><div><small>PERSONAL OS / 5 SPACES</small><h1 id="pos-space-home-title">Space 홈</h1></div><button type="button" aria-label="Space 홈 닫기" onClick={close}><X size={20}/></button></header>
+        : <div><header><div><small>PERSONAL OS / {SPACES.length} SPACES</small><h1 id="pos-space-home-title">Space 홈</h1></div><button type="button" aria-label="Space 홈 닫기" onClick={close}><X size={20}/></button></header>
           <nav aria-label="전체 Space">{spaceOptions.map(space => { const Icon = spaceIcons[space.id]; return <a key={space.id} href={space.href} aria-disabled={!space.href || undefined} aria-current={space.active ? "page" : undefined} onClick={event => link(event, space.href)}><Icon size={24}/><strong>{space.name}</strong><span>{space.description}</span></a>; })}</nav>
           <footer className="pos-space-home-footer">
             <button type="button" className="pos-default-settings" onClick={() => setView("settings")}><Settings2 size={16}/>기본 Space 설정</button>
