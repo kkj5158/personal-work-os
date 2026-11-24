@@ -9,3 +9,11 @@
 @media(prefers-reduced-motion:reduce){.study-shell *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 .study-material-library{display:grid;gap:16px}.study-material-card{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:0}.study-material-card>div{min-width:0}.study-material-card h3{font-size:17px}.study-material-drop{border:2px dashed var(--border-default);background:var(--canvas-subtle);padding:36px;border-radius:8px;margin:24px 0}.study-material-drop:focus-within{border-color:var(--focus-outline)}.study-material-drop input[type=file]{width:100%;max-width:100%;font:inherit}.study-wide-workspace{width:100%;min-width:0}.study-wide-workspace>h2{margin-top:20px}.study-material-library+.study-panel{margin-top:24px}.study-wide-workspace p,.study-material-card p{overflow-wrap:anywhere}
 @media(max-width:800px){.study-material-card{align-items:flex-start;flex-direction:column;gap:14px}.study-material-drop{padding:24px 16px}.study-material-card .study-actions{width:100%}.study-material-card .study-actions button{min-height:44px}}
+.learning-bars {display:flex;align-items:end;gap:2px;overflow-x:auto;margin:1rem 0;padding:.2rem}
+.learning-bars button {display:grid;align-content:end;justify-items:center;flex:1;min-width:1.35rem;height:5rem;border:0;background:transparent;padding:0}
+.learning-bars button i {display:block;width:76%;background:var(--study-accent,#386950);border-radius:3px 3px 0 0}
+.learning-bars button[aria-pressed=true] {outline:2px solid currentColor;outline-offset:-2px}
+.learning-bars button:focus-visible {outline:3px solid currentColor}
+.learning-editor fieldset {display:grid;gap:.55rem;border:0;padding:0;min-width:0}
+.learning-editor label {display:grid;gap:.2rem}
+.learning-editor textarea,.learning-editor input,.learning-editor select {max-width:100%;min-width:0}

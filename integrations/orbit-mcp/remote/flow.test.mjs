@@ -12,6 +12,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {moneyTools} from '../money-tools.mjs';
+import {studyTools} from '../study-tools.mjs';
 import {diaryTools} from '../diary-tools.mjs';
 import {queueTools} from '../work-queue-tools.mjs';
 
@@ -175,7 +176,7 @@ test('Claude web hosted callback and Claude Code native loopback register exactl
   assert.equal((await raw({redirect_uris:['http://localhost:33418/callback','https://claude.ai/api/mcp/auth_callback']})).status,400,'Loopback cannot be mixed with hosted callbacks');
   assert.equal((await raw({redirect_uris:['https://claude.ai/api/mcp/auth_callback/']})).status,400);
   assert.equal((await raw({redirect_uris:['https://claude.ai.evil.example/api/mcp/auth_callback']})).status,400);
-  const total=20+moneyTools.length+diaryTools.length+queueTools.length;
+  const total=20+moneyTools.length+diaryTools.length+queueTools.length+studyTools.length;
   for(const redirect of ['https://claude.ai/api/mcp/auth_callback','http://localhost:33418/callback']){
    const {body:client,status}=await s.register(redirect);assert.equal(status,201,redirect);
    const other=await s.flow({...client,redirect_uris:[redirect.replace('33418','33419').replace('auth_callback','auth_callbackx')]});assert.ok(!other.callback?.searchParams.get('code'),'Unregistered redirect never receives a code');
@@ -203,12 +204,12 @@ test('real OAuth code exchange and SDK Streamable HTTP isolate all20 tools and r
   for(const tool of ['', 'get_diet_context']){
    const env={...process.env,ORBIT_QA_MCP_URL:s.config.resource,ORBIT_QA_MCP_TOKEN:ta.body.access_token,ORBIT_QA_TOOL:tool};
    const run=await promisify(execFile)(process.execPath,[fileURLToPath(new URL('../../../qa/orbit-mcp-inspector.mjs',import.meta.url))],{env,timeout:30000,windowsHide:true});
-   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length+diaryTools.length+queueTools.length),'MCP Inspector verified synthetic streamable HTTP: '+JSON.stringify(inspected));
+   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length+diaryTools.length+queueTools.length+studyTools.length),'MCP Inspector verified synthetic streamable HTTP: '+JSON.stringify(inspected));
   }
   for(const [session,owner]of [[ta,A],[tb,B]]){
    const client=new Client({name:'ORBIT synthetic integration',version:'1.0.0'});
    await client.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+session.body.access_token}}}));
-   const list=await client.listTools();assert.equal(list.tools.length,20+moneyTools.length+diaryTools.length+queueTools.length);
+   const list=await client.listTools();assert.equal(list.tools.length,20+moneyTools.length+diaryTools.length+queueTools.length+studyTools.length);
    for(const tool of list.tools.filter(t=>t.name.startsWith('get_'))){const result=await client.callTool({name:tool.name,arguments:{}});assert.ok(!result.isError&&JSON.parse(result.content[0].text).data[0].syntheticOwner===owner);}
    const before=s.reads;const bad=await client.callTool({name:'get_diet_context',arguments:{userId:B}});assert.ok(bad.isError&&s.reads===before);
    await client.close();
