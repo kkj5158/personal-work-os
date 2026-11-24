@@ -21,14 +21,14 @@ const REPAYMENT_PARTS=[
 ] as const;
 type Segment={id:string;label:string;amount:number;color?:string;formatted?:string;detail?:string;excludeFromRing?:boolean};
 const segmentAmount=(row:Segment)=>row.formatted??won(row.amount);
-function Donut({title,total,totalLabel,rows,selected,selection,onSelect,onBack,unavailable,loading,error,controls,empty,caption="선택 기간",coverage}:{title:string;total:number|null|undefined;totalLabel?:string;rows:Segment[];selected?:string;selection?:Segment;onSelect:(row:Segment)=>void;onBack?:()=>void;unavailable?:boolean;loading?:boolean;error?:string;controls?:ReactNode;empty?:string;caption?:string;coverage?:ReactNode}){
+function Donut({title,total,totalLabel,rows,selected,selection,onSelect,onBack,unavailable,loading,error,controls,empty,caption="선택 기간",coverage,positiveBalancesOnly}:{title:string;total:number|null|undefined;totalLabel?:string;rows:Segment[];selected?:string;selection?:Segment;onSelect:(row:Segment)=>void;onBack?:()=>void;unavailable?:boolean;loading?:boolean;error?:string;controls?:ReactNode;empty?:string;caption?:string;coverage?:ReactNode;positiveBalancesOnly?:boolean}){
  const hasCredits=rows.some(row=>row.amount<0);
- const sectors=hasCredits?[]:donutSectors(rows.filter(row=>!row.excludeFromRing)),chosen=rows.find(row=>row.id===selected)??selection,circumference=2*Math.PI*82;
+ const sectors=hasCredits&&!positiveBalancesOnly?[]:donutSectors(rows.filter(row=>!row.excludeFromRing&&row.amount>0)),chosen=rows.find(row=>row.id===selected)??selection,circumference=2*Math.PI*82;
  return <section className="money-month-donut"><header><h3>{title}</h3>{onBack&&<button onClick={onBack}>상위 분류로</button>}{controls}</header>
   <div className="money-month-donut-body"><div className="money-month-ring"><svg viewBox="0 0 220 220" aria-label={`${title} ${caption}`}><circle cx="110" cy="110" r="82" fill="none" stroke="var(--money-border,#e2e8f0)" strokeWidth="27"/>{sectors.map((row,index)=>row.share>0&&<circle key={row.id} cx="110" cy="110" r="82" fill="none" stroke={row.color||COLORS[index%COLORS.length]} strokeWidth={row.id===selected?33:27} strokeDasharray={`${row.share*circumference} ${circumference}`} strokeDashoffset={-row.start*circumference} transform="rotate(-90 110 110)" tabIndex={0} role="button" aria-label={`${row.label} ${segmentAmount(row)} 거래 보기`} aria-pressed={row.id===selected} onClick={()=>onSelect(row)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onSelect(row);}}}><title>{row.label} · {segmentAmount(row)}</title></circle>)}</svg><div className="money-month-center"><small>{caption}</small><strong>{unavailable?"확인 필요":totalLabel??(total==null?"—":won(total))}</strong></div></div>
   <div className="money-month-legend">{rows.length?rows.map((row,index)=><button key={row.id} aria-pressed={selected===row.id} onClick={()=>onSelect(row)}><i style={{background:row.color||COLORS[index%COLORS.length]}}/><span>{row.label}{row.detail&&<small className="money-month-evidence">{row.detail}</small>}</span><strong>{segmentAmount(row)}</strong></button>):<p className="money-muted">{error?"구성 조회 실패":loading?"불러오는 중…":empty??"이 기간의 기록이 없습니다."}</p>}</div></div>
   {coverage??<p className="money-month-selection" aria-live="polite">{chosen?`${chosen.label} · ${segmentAmount(chosen)} · ${hasCredits?(chosen.amount<0?"차감":"금액") :((sectors.find(s=>s.id===chosen.id)?.share??0)*100).toFixed(1)+"%"}`:"분류를 선택하면 아래 거래표에 적용됩니다."}</p>}
-  {rows.some(row=>row.amount<0)&&<small className="money-muted">음수 항목이 있어 구성비 대신 부호가 있는 금액을 표시합니다.</small>}
+  {hasCredits&&<small className="money-muted">{positiveBalancesOnly?"원형 그래프는 양수 잔액의 구성비입니다. 합계와 계좌 목록에는 음수 잔액도 반영합니다.":"음수 항목이 있어 구성비 대신 부호가 있는 금액을 표시합니다."}</small>}
  </section>;
 }
 export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filter,onFilter}:{from:string;to:string;categories:Category[];scope:string[]|null;loanAccounts:string[]|null;filter:MonthlyFilter|null;onFilter:(filter:MonthlyFilter|null)=>boolean;navigate?:(path:string)=>void}){
@@ -53,13 +53,13 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
  }
  function stock(title:string,group:StatisticalGroup|undefined){
   const rows=group?.members.map(row=>{
-   const amount=stockAmount(row), estimated=row.confidence==="ESTIMATED";
+   const amount=stockAmount(row), estimated=row.confidence==="ESTIMATED"||row.confidence==="CONFLICT";
    return {id:row.accountId,label:row.displayName,amount:amount==null?0:Number(amount),color:row.color,excludeFromRing:amount==null,
     formatted:amount==null?"확인 필요":stockWon(amount)+(estimated?" · 추정":""),
     detail:stockMemberEvidence(row).join(" · ")};
   })??[];
   const total=group?stockTotal(group):null;
-  return <Donut key={title} title={title} caption={group?.confidence==="ESTIMATED"?"장부 기준 추정":"기준일 잔액"}
+  return <Donut key={title} title={title} positiveBalancesOnly caption={group?.partial?"부분 합계":group?.confidence==="CONFLICT"?"불일치 · 추정":group?.confidence==="ESTIMATED"?"장부 기준 추정":"기준일 잔액"}
    total={null} totalLabel={total==null?undefined:stockWon(total)} unavailable={!!group&&total==null}
    rows={rows} loading={balance.loading} error={balance.error} empty="해당 용도의 계좌가 없습니다."
    coverage={group?<p className="money-month-selection">{stockCoverage(group)}</p>:undefined}
@@ -92,13 +92,13 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
   return {formatted:total==null?(group?"확인 필요":"—"):stockWon(total),note:balanceNote(group)};
  }
  const kpis=[
-  {label:"실제 소득",value:data?.actualIncome},
-  {label:"전체 지출",value:data?.totalExpense,note:"일반 소비와 대출상환"},
+  {label:"실제 소득",value:data?.actualIncome,provisional:data?.provisionalIncome,provisionalLabel:"확인 대기 입금"},
+  {label:"전체 지출",value:data?.totalExpense,note:"일반 소비와 대출상환",provisional:data?.provisionalExpense,provisionalLabel:"확인 대기 출금"},
   {label:"대출상환",formatted:loanTotal==null?"—":won(loanTotal),className:"money-month-loan",note:"추적 지출 계좌의 확정 상환액"},
   {label:"저축 잔액",className:"money-month-net",...stockKpi(balance.data?.savings)},
   {label:"적금 잔액",...stockKpi(balance.data?.installment)},
  ];
- return <div className="money-month-summary"><LoadState error={metrics.error} loading={metrics.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
+ return <div className="money-month-summary"><LoadState error={metrics.error} loading={metrics.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span>{!!kpi.provisional&&<span>{kpi.provisionalLabel} {won(kpi.provisional)} · 합계 제외</span>}</section>)}</div>
  <div className="money-month-donuts">{([["INCOME","I"],["EXPENSE","E"]] as const).map(([kind,bucket])=>{
   const groups=categoryTotals(categories.filter(c=>c.kind===kind),data?.composition.filter(row=>row.bucket===bucket)??[]);
   const root=groups.find(g=>g.id===roots[kind]);

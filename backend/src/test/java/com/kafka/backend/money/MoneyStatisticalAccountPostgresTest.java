@@ -76,7 +76,7 @@ class MoneyStatisticalAccountPostgresTest {
     private static final Instant END = Instant.parse("2026-10-31T14:59:59.999999Z");
     private static final Instant LATER = Instant.parse("2026-10-31T15:00:00Z");
 
-    @Test void coveredZeroAndSignedTransferRemainExactAndMissingCoverageDoesNotBecomeZero() {
+    @Test void s01s02CoveredAndUncoveredBalancesIncludeOnlyScopedSignedMovementsOnce() {
         fixture.check(e -> {
             var db = e.db();
             UUID left = fixture.account(e,AccountRole.SPENDING).id();
@@ -91,7 +91,7 @@ class MoneyStatisticalAccountPostgresTest {
             checkpoint(e,owner,left,"500.12",ANCHOR);
             checkpoint(e,owner,right,"-320.31",ANCHOR);
             checkpoint(e,owner,zero,"0",ANCHOR);
-            checkpoint(e,owner,missing,"0",ANCHOR);
+
             Instant movement = END.minusSeconds(30);
             UUID transfer = cash(e,owner,"TRANSFER",left,right,"200.23",movement,"KRW");
             UUID incoming = cash(e,owner,"INCOME",null,left,"100.02",movement.plusSeconds(1),"KRW");
@@ -124,10 +124,20 @@ class MoneyStatisticalAccountPostgresTest {
             assertThat(partial.confidence()).isEqualTo(UNKNOWN);
             assertThat(partial.displayTotal()).isNull();
             assertThat(partial.estimatedSubtotal()).isEqualTo("279.83");
-            assertThat(member(partial,missing).reason()).isEqualTo("LEDGER_COVERAGE_UNPROVEN");
+            assertThat(partial.displaySubtotal()).isEqualTo("279.83");
+            assertThat(partial.partial()).isTrue();
+            assertThat(member(partial,missing).reason()).isEqualTo("NO_ANCHOR");
             assertThat(member(partial,missing).balance()).isNull();
             assertThat(service.snapshot(MONTH_END,"KRW",ids,END)).isEqualTo(snapshot);
             assertThat(db.queryForList("select id,version,amount from money_transactions where user_id=? order by id",owner)).isEqualTo(before);
+
+            checkpoint(e,owner,missing,"0",ANCHOR);
+            var uncovered = service.snapshot(MONTH_END,"KRW",all,END).savings();
+            assertThat(member(uncovered,missing).reason()).isEqualTo("LEDGER_COVERAGE_UNPROVEN");
+            assertThat(member(uncovered,missing).displayBalance()).isEqualTo("0");
+            assertThat(uncovered.partial()).isFalse();
+            cash(e,owner,"INCOME",null,missing,"30.75",movement,"KRW");
+            assertThat(service.snapshot(MONTH_END,"KRW",all,END).savings().displaySubtotal()).isEqualTo("310.58");
 
             var unlinked = cash(e,owner,"INCOME",null,zero,"10",movement,"KRW");
             assertThat(member(service.snapshot(MONTH_END,"KRW",ids,END).savings(),zero).reason())
@@ -160,7 +170,7 @@ class MoneyStatisticalAccountPostgresTest {
             assertThat(conflict.confidence()).isEqualTo(CONFLICT);
             assertThat(conflict.reason()).isEqualTo("OBSERVATION_LEDGER_MISMATCH");
             assertThat(conflict.displayDifference()).isEqualTo("1");
-            assertThat(conflict.displayBalance()).isNull();
+            assertThat(conflict.displayBalance()).isEqualTo("110");
             checkpoint(e,owner,account,"105",END);
             var sameTime = service.snapshot(MONTH_END,"KRW",account.toString(),END).installment().members().getFirst();
             assertThat(sameTime.reason()).isEqualTo("OBSERVATIONS_DISAGREE");

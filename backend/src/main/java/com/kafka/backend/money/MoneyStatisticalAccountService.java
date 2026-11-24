@@ -75,7 +75,7 @@ public class MoneyStatisticalAccountService {
     public record Group(String purpose, BigDecimal total, BigDecimal confirmedPartialSum, int memberCount, int knownCount,
                         int unknownCount, long conflicts, String currency, List<Member> members,
                         Confidence confidence, String displayTotal, String verifiedSubtotal, String estimatedSubtotal,
-                        int estimatedCount, int membershipUnknownCount) {}
+                        int estimatedCount, int membershipUnknownCount, String displaySubtotal, boolean partial) {}
     public record Unresolved(UUID accountId, String displayName, String reason, List<String> possibleGroups) {}
     public record Snapshot(Instant asOfCutoff, String currency, Group savings, Group installment, List<Unresolved> unresolved) {}
     private record Account(UUID id, String name, String color, String purpose, boolean membershipUnknown,
@@ -198,11 +198,12 @@ public class MoneyStatisticalAccountService {
         var statements = MoneyStatisticalLedgerCoverage.statements(db,owner,account.id(),currency);
         Timestamp at = Timestamp.from(cutoff);
         var evidence = db.query("""
-            SELECT observed_at,amount,'OWNER_OBSERVATION' FROM money_balance_observations
+            SELECT observed_at,amount,'OWNER_OBSERVATION',updated_at,id FROM money_balance_observations
             WHERE user_id=? AND account_id=? AND status='ACTIVE' AND updated_at<=? AND observed_at<=?
             UNION ALL
-            SELECT verified_at,amount,'OWNER_CHECKPOINT' FROM money_balance_checkpoints
+            SELECT verified_at,amount,'OWNER_CHECKPOINT',created_at,id FROM money_balance_checkpoints
             WHERE user_id=? AND account_id=? AND created_at<=? AND verified_at<=?
+            ORDER BY 4 DESC,5
             """, (r,n) -> new Evidence(r.getTimestamp(1).toInstant(),r.getBigDecimal(2),r.getString(3)),
             owner,account.id(),at,at,owner,account.id(),at,at);
         statements.stream().filter(s -> !s.end().isAfter(cutoff))
@@ -216,6 +217,14 @@ public class MoneyStatisticalAccountService {
             case "OWNER_OBSERVATION" -> 3;
             default -> 4;
         }));
+        if (evidence.isEmpty()) {
+            // A bank statement's opening is an absolute balance immediately before its first day.
+            // Native statement coverage starts at a transaction, whose opening is not a post-transaction balance.
+            statements.stream().filter(s -> s.source().equals("BANK_STATEMENT") && !s.start().isAfter(cutoff))
+                .sorted(Comparator.comparing(MoneyStatisticalLedgerCoverage.Statement::start).reversed()
+                    .thenComparing(MoneyStatisticalLedgerCoverage.Statement::id))
+                .forEach(s -> evidence.add(new Evidence(s.start(),s.opening(),"BANK_STATEMENT_OPENING")));
+        }
         if (evidence.isEmpty()) {
             return result(account,currency,cutoff,null,null,Confidence.UNKNOWN,null,null,null,"NO_ANCHOR");
         }
@@ -233,31 +242,38 @@ public class MoneyStatisticalAccountService {
             difference = disagreement(evidence,previous);
         }
         if (difference!=null) {
-            return result(account,currency,cutoff,null,latest,Confidence.CONFLICT,latest.at(),bankObservedAt,
+            boolean ambiguous = evidence.stream().anyMatch(e -> e.at().equals(latest.at())
+                && e.source().equals(latest.source()) && e.amount().compareTo(latest.amount())!=0);
+            if (ambiguous) return result(account,currency,cutoff,null,latest,Confidence.CONFLICT,latest.at(),bankObservedAt,
                 difference,"OBSERVATIONS_DISAGREE");
+            return projected(account,currency,cutoff,latest,bankObservedAt,difference,"OBSERVATIONS_DISAGREE");
         }
         if (previous!=null && !latest.source().equals("OWNER_CHECKPOINT")) {
             difference = latest.amount().subtract(previous.amount().add(product.ledgerDelta(account.id(),previous.at(),latest.at())));
             if (difference.signum()!=0) {
-                return result(account,currency,cutoff,null,previous,Confidence.CONFLICT,latest.at(),bankObservedAt,
-                    difference,"OBSERVATION_LEDGER_MISMATCH");
+                return projected(account,currency,cutoff,latest,bankObservedAt,difference,"OBSERVATION_LEDGER_MISMATCH");
             }
         }
         if (latest.at().equals(cutoff)) {
             var exact = evidence.stream().filter(e -> e.at().equals(cutoff) && e.exact()).findFirst();
             return exact.map(e -> result(account,currency,cutoff,e.amount(),e,Confidence.VERIFIED,latest.at(),bankObservedAt,null,null))
-                .orElseGet(() -> result(account,currency,cutoff,null,latest,Confidence.UNKNOWN,latest.at(),bankObservedAt,
-                    null,"NO_OBSERVATION_AT_CUTOFF"));
+                .orElseGet(() -> projected(account,currency,cutoff,latest,bankObservedAt,null,"NO_OBSERVATION_AT_CUTOFF"));
         }
         var calculation = MoneyStatisticalLedgerCoverage.calculate(db,owner,account.id(),latest.at(),latest.amount(),cutoff,statements);
         if (calculation.reason()!=null) {
-            return result(account,currency,cutoff,null,latest,calculation.difference()==null ? Confidence.UNKNOWN : Confidence.CONFLICT,
-                latest.at(),bankObservedAt,calculation.difference(),calculation.reason());
+            return projected(account,currency,cutoff,latest,bankObservedAt,calculation.difference(),calculation.reason());
         }
         if (product.hasPendingStatisticalEvidence(account.id(),latest.at(),cutoff)) {
-            return result(account,currency,cutoff,null,latest,Confidence.UNKNOWN,latest.at(),bankObservedAt,null,"PENDING_SOURCE_EVIDENCE");
+            return result(account,currency,cutoff,calculation.amount(),latest,Confidence.ESTIMATED,latest.at(),bankObservedAt,null,"PENDING_SOURCE_EVIDENCE");
         }
         return result(account,currency,cutoff,calculation.amount(),latest,Confidence.ESTIMATED,latest.at(),bankObservedAt,null,null);
+    }
+
+    private Member projected(Account account, String currency, Instant cutoff, Evidence anchor, Instant bankObservedAt,
+                             BigDecimal difference, String reason) {
+        BigDecimal balance = anchor.amount().add(product.ledgerDelta(account.id(),anchor.at(),cutoff));
+        return result(account,currency,cutoff,balance,anchor,difference==null ? Confidence.ESTIMATED : Confidence.CONFLICT,
+            anchor.at(),bankObservedAt,difference,reason);
     }
 
     private static BigDecimal disagreement(List<Evidence> evidence, Evidence chosen) {
@@ -294,16 +310,18 @@ public class MoneyStatisticalAccountService {
         var estimates = members.stream().filter(m -> m.confidence()==Confidence.ESTIMATED).toList();
         BigDecimal confirmed = subtotal(verified);
         BigDecimal estimated = subtotal(estimates);
-        int unknown = members.size()-verified.size()-estimates.size();
+        var displayable = members.stream().filter(Member::displayable).toList();
+        int unknown = members.size()-displayable.size();
         long conflicts = members.stream().filter(m -> m.confidence()==Confidence.CONFLICT).count();
         int missingMembership = (int) unresolved.stream().filter(a -> a.possibleGroups().contains(purpose)).count();
         boolean complete = !members.isEmpty() && unknown==0 && missingMembership==0;
         Confidence confidence = conflicts>0 ? Confidence.CONFLICT : !complete ? Confidence.UNKNOWN
             : estimates.isEmpty() ? Confidence.VERIFIED : Confidence.ESTIMATED;
-        BigDecimal displayTotal = complete ? subtotal(members) : null;
+        BigDecimal displaySubtotal = subtotal(displayable);
+        BigDecimal displayTotal = complete && conflicts==0 ? displaySubtotal : null;
         // Legacy consumers continue to see a total only for a complete verified group.
         return new Group(purpose,confidence==Confidence.VERIFIED ? displayTotal : null,confirmed,members.size(),
             verified.size(),unknown,conflicts,currency,members,confidence,decimal(displayTotal),decimal(confirmed),
-            decimal(estimated),estimates.size(),missingMembership);
+            decimal(estimated),estimates.size(),missingMembership,decimal(displaySubtotal),displaySubtotal!=null && !complete);
     }
 }
