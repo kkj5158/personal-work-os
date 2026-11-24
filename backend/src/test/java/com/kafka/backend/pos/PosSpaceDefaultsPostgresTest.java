@@ -1,5 +1,6 @@
 package com.kafka.backend.pos;
 
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.kafka.backend.common.OptimisticLockConflictException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,9 +64,16 @@ class PosSpaceDefaultsPostgresTest {
         assertThat(a.get().revision()).isEqualTo(2);
         assertThat(b.get().revision()).isEqualTo(1);
         assertThat(db.queryForObject("select system_ids from pos_system_order where owner_id=?", String.class, owner)).isEqualTo("notes,work");
-        db.update("update pos_space_defaults set defaults=cast(? as jsonb) where owner_id=?", "{\"life\":\"WORK OS\",\"knowledge\":\"BLOG\"}", owner);
-        assertThat(a.get().defaults()).containsEntry("life", "LIFE CODE").containsEntry("knowledge", "BLOG");
+        var legacy = "{\"life\":\"DIET SYS\",\"knowledge\":\"BLOG\"}";
+        db.update("update pos_space_defaults set defaults=cast(? as jsonb) where owner_id=?", legacy, owner);
+        assertThat(a.get().defaults()).containsEntry("life", "LIFE CODE").containsEntry("knowledge", "BLOG")
+                .containsEntry("diet", "DIET SYS");
         assertThat(db.queryForObject("select revision from pos_space_defaults where owner_id=?", Long.class, owner)).isEqualTo(2);
+        assertThat(db.queryForObject("select defaults->>'life' from pos_space_defaults where owner_id=?", String.class, owner))
+                .isEqualTo("DIET SYS");
+        a.save(new JsonMapper().valueToTree(a.get()).toString());
+        assertThat(a.get().revision()).isEqualTo(3);
+        assertThat(a.get().defaults()).containsEntry("life", "LIFE CODE").containsEntry("knowledge", "BLOG");
     }
 
     private static String atRevision(String body, int revision) {

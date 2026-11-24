@@ -6,11 +6,11 @@ test("explicit Space entry selects the configured system before consulting route
   const history = ["/notes?workspace=one&module=GRAPH&token=omit", "/blog", "/calendar?view=week&date=2026-11-22", "/workflow/projects", "/checklist?archived=1&area=two", "/diet", "/money/loans"]
     .reduce(rememberSpace, emptySpaceHistory());
   assert.deepEqual(SPACES.map(space => resolveSpaceEntry(history, space.id, INITIAL_SPACE_DEFAULTS)), [
-    "/workflow/projects", "/notes?module=GRAPH&workspace=one", "/study", "/life/categories", "/money/loans",
+    "/workflow/projects", "/notes?module=GRAPH&workspace=one", "/study", "/life/categories", "/money/loans", "/diet",
   ]);
   const choices = normalizeSpaceDefaults({ work: "Calendar", knowledge: "NAVER ARCHIVE", growth: "AUTHORING", life: "CHECKLIST SYS", finance: "BLOG" });
   assert.deepEqual(SPACES.map(space => resolveSpaceEntry(history, space.id, choices)), [
-    "/calendar?date=2026-11-22&view=week", "/naver-archive", "/authoring", "/checklist?archived=1&area=two", "/money/loans",
+    "/calendar?date=2026-11-22&view=week", "/naver-archive", "/authoring", "/checklist?archived=1&area=two", "/money/loans", "/diet",
   ]);
   assert.deepEqual(normalizeSpaceDefaults({ work: "STUDY", knowledge: null, growth: [], life: false, finance: "MONEY SYS", future: "FUTURE" }), INITIAL_SPACE_DEFAULTS);
   assert.equal(resolveSpaceEntry({ ...history, systems: { Calendar: "/workflow/projects" } }, "work", choices), "/calendar");
@@ -23,8 +23,9 @@ const matrix = {
   work: ["/workflow", "/workflow/week", "/workflow/projects", "/workflow/todo", "/workflow/timeline", "/workflow/waiting", "/workflow/attention", "/calendar", "/workflow/routine", "/worklog", "/worklog/attendance", "/worklog/checklist", "/workflow/shared-desk", "/workflow/today"],
   knowledge: ["/notes", "/blog", "/naver-archive"],
   growth: ["/study", "/authoring", "/authoring/library", "/authoring/recovery/session/11111111-1111-4111-8111-111111111111/full"],
-  life: ["/life/categories", "/life/calendar", "/life/sleep", "/life/sleep/records", "/life/sleep/statistics", "/life/sleep/settings", "/diet", "/diet/record", "/diet/planner", "/diet/note", "/diet/progress", "/diet/gallery", "/diet/identity", "/checklist", "/checklist/progress", "/checklist/manage", "/checklist/manage/items", "/checklist/archived"],
+  life: ["/life/categories", "/life/calendar", "/life/sleep", "/life/sleep/records", "/life/sleep/statistics", "/life/sleep/settings", "/checklist", "/checklist/progress", "/checklist/manage", "/checklist/manage/items", "/checklist/archived"],
   finance: ["/money", "/money/bookkeeping", "/money/review", "/money/workbench", "/money/classification", "/money/spending-calendar", "/money/income-calendar", "/money/coupang-work-calendar", "/money/accounts", "/money/reconciliation", "/money/loans", "/money/analysis", "/money/settings", "/money/transactions", "/money/flow", "/money/accounts/11111111-1111-4111-8111-111111111111"],
+  diet: ["/diet", "/diet/record", "/diet/planner", "/diet/note", "/diet/progress", "/diet/gallery", "/diet/identity"],
 } as const;
 for (const [spaceId, routes] of Object.entries(matrix)) {
   test(`${spaceId}: every canonical/legacy route retains its system and Space ownership`, () => {
@@ -36,8 +37,8 @@ for (const [spaceId, routes] of Object.entries(matrix)) {
     }
   });
 }
-test("five Spaces, exact WORK menu, CHECKLIST belongs only to LIFE", () => {
-  assert.deepEqual(SPACES.map(row => row.name), ["WORK", "KNOWLEDGE & LOG", "GROWTH", "LIFE", "FINANCE"]);
+test("six Spaces, exact WORK menu, independent DIET membership", () => {
+  assert.deepEqual(SPACES.map(row => row.name), ["WORK", "KNOWLEDGE & LOG", "GROWTH", "LIFE", "FINANCE", "DIET"]);
   assert.deepEqual(WORK_GROUPS.map(row => [row.section, row.items.map(item => item.label)]), [
     ["PLANNING", ["This Week", "Projects", "All To-dos", "Timeline", "Waiting", "WORK QUEUE"]],
     ["EXECUTION", ["Calendar", "Work Routine"]], ["RECORDS", ["근무 기록", "출결 관리", "근무 체크리스트"]], ["TOOLS", ["공유 작업대"]], ["ARCHIVED", ["Workpad"]],
@@ -45,19 +46,32 @@ test("five Spaces, exact WORK menu, CHECKLIST belongs only to LIFE", () => {
   for (const group of WORK_GROUPS) for (const item of group.items) assert.equal(routeNavigation(item.href)?.spaceId, "work");
   assert.equal(routeNavigation("/worklog/checklist")?.id, "WORK OS");
   assert.equal(routeNavigation("/checklist")?.spaceId, "life");
-  assert.deepEqual(SYSTEMS.filter(row => row.spaceId === "life").map(row => row.id), ["LIFE CODE", "DIET SYS", "CHECKLIST SYS"]);
+  assert.deepEqual(SYSTEMS.filter(row => row.spaceId === "life").map(row => row.id), ["LIFE CODE", "CHECKLIST SYS"]);
+  assert.deepEqual(SYSTEMS.filter(row => row.spaceId === "diet").map(row => row.id), ["DIET SYS"]);
+  assert.equal(SYSTEMS.filter(row => row.id === "DIET SYS").length, 1);
 });
 test("first entry uses real pages, return restores per-Space and per-system page/query context", () => {
   let history = emptySpaceHistory();
-  assert.deepEqual(SPACES.map(row => spaceDestination(history, row.id)), ["/workflow/week", "/notes", "/study", "/life/categories", "/money"]);
+  assert.deepEqual(SPACES.map(row => spaceDestination(history, row.id)), ["/workflow/week", "/notes", "/study", "/life/categories", "/money", "/diet"]);
   for (const route of ["/notes?workspace=design&workspaceName=Design&note=one&module=ALL_NOTES&date=2026-11-15&tag=ui", "/blog", "/study?tab=history&demo=1&mode=document&doc=answer", "/life/sleep?date=2026-11-15&view=week&kind=nap", "/checklist?identity=one&area=two", "/calendar?date=2026-11-15&view=week&tab=sleep", "/money/bookkeeping?month=2026-11&account=11111111-1111-4111-8111-111111111111", "/diet/note?workspace=health&note=two&date=2026-11-15"]) history = rememberSpace(history, route);
   history = restoreSpaceHistory(JSON.stringify(history));
   assert.equal(spaceDestination(history, "knowledge"), "/blog");
   assert.equal(systemDestination(history, "NOTE SYS"), "/notes?date=2026-11-15&module=ALL_NOTES&note=one&tag=ui&workspace=design&workspaceName=Design");
   assert.equal(spaceDestination(history, "work"), "/calendar?date=2026-11-15&tab=sleep&view=week");
-  assert.equal(spaceDestination(history, "life"), "/diet/note?date=2026-11-15&note=two&workspace=health");
+  assert.equal(spaceDestination(history, "life"), "/checklist?area=two&identity=one");
+  assert.equal(spaceDestination(history, "diet"), "/diet/note?date=2026-11-15&note=two&workspace=health");
   assert.equal(systemDestination(history, "CHECKLIST SYS"), "/checklist?area=two&identity=one");
   assert.equal(spaceDestination(history, "finance"), "/money/bookkeeping?account=11111111-1111-4111-8111-111111111111&month=2026-11");
+});
+test("legacy LIFE preference and DIET route memory resolve independently", () => {
+  const defaults = normalizeSpaceDefaults({ work: "Calendar", life: "DIET SYS", knowledge: "BLOG" });
+  assert.deepEqual(defaults, { ...INITIAL_SPACE_DEFAULTS, work: "Calendar", knowledge: "BLOG" });
+  const history = restoreSpaceHistory(JSON.stringify({
+    version: 1, spaces: { life: "/diet/planner?date=2026-11-15", knowledge: "/blog" },
+  }));
+  assert.equal(resolveSpaceEntry(history, "life", defaults), "/life/categories");
+  assert.equal(resolveSpaceEntry(history, "diet", defaults), "/diet/planner?date=2026-11-15");
+  assert.equal(resolveSpaceEntry(history, "knowledge", defaults), "/blog");
 });
 test("corrupt, unsafe, cross-Space and stale history safely falls back; content/secrets never stored", () => {
   for (const raw of [null, "{", '{"version":2}', '{"version":1,"spaces":{"life":"/money","work":"//outside.example"},"systems":{"NOTE SYS":"/blog"}}']) assert.deepEqual(restoreSpaceHistory(raw), emptySpaceHistory());
