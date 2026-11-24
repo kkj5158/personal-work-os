@@ -75,8 +75,8 @@ test("Space choices restore the default system's page and Finance has no system 
   assert.equal(document.querySelector<HTMLElement>(".orbit-tab-bar")!.hidden, true);
   await click("Space 전환");
   const choices = Array.from(document.querySelectorAll<HTMLAnchorElement>('[role="menuitemradio"]'));
-  assert.deepEqual(choices.map(row => row.textContent?.replace(/지식과.*|학습.*|생활.*|금융.*|Plan.*/g, "").trim()), SPACES.map(row => row.name));
-  assert.deepEqual(choices.map(row => row.getAttribute("href")), ["/workflow/week", "/notes?module=GRAPH&workspace=one", "/study", "/life/categories", "/money/accounts"]);
+  assert.deepEqual(choices.map(row => row.textContent?.replace(/지식과.*|학습.*|생활.*|금융.*|식단.*|Plan.*/g, "").trim()), SPACES.map(row => row.name));
+  assert.deepEqual(choices.map(row => row.getAttribute("href")), ["/workflow/week", "/notes?module=GRAPH&workspace=one", "/study", "/life/categories", "/money/accounts", "/diet"]);
   await act(() => choices[1].click()); assert.equal(app.destinations.at(-1), "/notes?module=GRAPH&workspace=one");
   await app.render("/blog"); await click("KNOWLEDGE & LOG 시스템 전환");
   assert.equal(document.querySelector('[role="menuitemradio"][href^="/notes"]')?.getAttribute("href"), "/notes?module=GRAPH&workspace=one");
@@ -96,16 +96,24 @@ test("WORK renders exact grouped canonical navigation, every menu item navigates
   assert.equal(document.querySelector('.app-nav-group-toggle')?.getAttribute("aria-expanded"), "true");
   await app.cleanup();
 });
-test("POS home exposes exactly five Spaces and closes with native dialog cancel without changing the page", async () => {
+test("POS home exposes six Spaces, opens DIET directly and closes on native dialog cancel", async () => {
   const app = await setup("/checklist/manage");
   await click("POS 전체 홈");
   const dialog = document.querySelector<HTMLDialogElement>(".pos-space-home")!;
   assert.ok(dialog.open);
+  assert.equal(dialog.querySelector("small")?.textContent, "PERSONAL OS / 6 SPACES");
   assert.deepEqual(Array.from(dialog.querySelectorAll("nav a strong")).map(row => row.textContent), SPACES.map(row => row.name));
   await act(() => dialog.dispatchEvent(new window.Event("cancel", { bubbles: true, cancelable: true })));
   assert.equal(document.querySelector(".pos-space-home"), null);
   assert.deepEqual(app.destinations, []);
   assert.equal(document.querySelector("textarea")!.value, "unsaved draft");
+  await click("POS 전체 홈");
+  await act(() => document.querySelector<HTMLAnchorElement>('.pos-space-home a[href="/diet"]')!.click());
+  await app.render("/diet/planner?date=2026-11-15");
+  assert.deepEqual(app.destinations, ["/diet"]);
+  assert.equal(document.querySelector(".pos-space-crumb")?.textContent, "DIET");
+  assert.equal(document.querySelector(".pos-single-system")?.textContent, "DIET SYS");
+  assert.equal(document.querySelector(".pos-system-select"), null);
   await app.cleanup();
 });
 test("selecting the current system/Space closes its menu without another save or route transition", async () => {
@@ -142,6 +150,21 @@ const change = (space: string, value: string) => act(() => {
   field.dispatchEvent(new window.Event("change", { bubbles: true }));
 });
 const openSettings = async () => { await click("POS 전체 홈"); await tap("기본 Space 설정"); };
+
+test("settings display a fixed DIET SYS and normalize only the obsolete LIFE default", async ctx => {
+  ctx.mock.method(apiClient, "scoped", async () => ({
+    revision: 4, defaults: { ...INITIAL_SPACE_DEFAULTS, knowledge: "BLOG", life: "DIET SYS" },
+  }));
+  const app = await setup("/diet", false, false, true);
+  await openSettings();
+  assert.equal(document.querySelectorAll(".pos-space-defaults select").length, 6);
+  assert.equal(select("KNOWLEDGE & LOG").value, "BLOG");
+  assert.equal(select("LIFE").value, "LIFE CODE");
+  assert.deepEqual(Array.from(select("LIFE").options, option => option.value), ["LIFE CODE", "CHECKLIST SYS"]);
+  assert.equal(select("DIET").value, "DIET SYS");
+  assert.equal(select("DIET").disabled, true);
+  await app.cleanup();
+});
 
 test("Space defaults are loaded once in StrictMode, gate initial entry and apply on every Space surface", async ctx => {
   const calls: string[] = [];
@@ -184,7 +207,7 @@ test("settings save is confirmed, retry preserves the draft and reset only chang
   });
   const app = await setup("/money/loans", false, false, true);
   await openSettings();
-  assert.equal(document.querySelectorAll(".pos-space-defaults select").length, 5);
+  assert.equal(document.querySelectorAll(".pos-space-defaults select").length, 6);
   assert.deepEqual(Array.from(select("WORK").options, row => [row.value, row.text]), [["WORK FLOW", "WORK FLOW"], ["WORK OS", "WORK OS"], ["Calendar", "Calendar"]]);
   assert.equal(select("FINANCE").disabled, true);
   assert.equal(select("FINANCE").value, "MONEY SYS");
