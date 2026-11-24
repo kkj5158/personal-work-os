@@ -355,12 +355,12 @@ class MoneyAccountLedgerPostgresTest {
   String from="2026-09-01",to="2026-09-30";
   for(boolean bookkeepingScope:List.of(false,true)){
    var result=e.unified().loanRepayments(from,to,a.id().toString(),bookkeepingScope);
-   assertThat(result.loanRepayment()).isEqualTo("1300");
-   assertThat(result.loanRepaymentBreakdown().byLoan()).containsExactly(new MoneyUnifiedBookkeepingService.RepaymentGroup(loan.id(),"합성 대출","1300"));
-   assertThat(result.loanRepaymentBreakdown().byPart()).isEqualTo(new MoneyUnifiedBookkeepingService.RepaymentSplit("1000","200","100","0"));
-   assertThat(result.unallocatedCount()).isZero();
+   assertThat(result.loanRepayment()).isEqualTo("2800");
+   assertThat(result.loanRepaymentBreakdown().byLoan()).containsExactlyInAnyOrder(new MoneyUnifiedBookkeepingService.RepaymentGroup(loan.id(),"합성 대출","1300"),new MoneyUnifiedBookkeepingService.RepaymentGroup(null,"미연결 대출상환","1500"));
+   assertThat(result.loanRepaymentBreakdown().byPart()).isEqualTo(new MoneyUnifiedBookkeepingService.RepaymentSplit("1000","200","100","1500"));
+   assertThat(result.unallocatedCount()).isEqualTo(1);
    var unallocated=e.unified().ledger(from,to,false,null,a.id().toString(),50,0,null,"LOAN_PAYMENT",null,null,null,MoneyUnifiedBookkeepingService.RepaymentPart.UNALLOCATED,bookkeepingScope);
-   assertThat(items(unallocated)).isEmpty();
+   assertThat(items(unallocated)).extracting(r->r.get("id")).containsExactly(other.id());
   }
   assertThat(l.row(other.id())).containsEntry("relationStatus","LOAN_SPLIT_PENDING");
   assertThat(items(l.read("2026-09-01","2026-09-30",null,null,"ALL",null,10,0,"EXPENSE")))

@@ -95,7 +95,7 @@ public class MoneyAccountLedgerService {
     order by a.subject_id,a.created_at desc,a.id desc
    """,owner(),ids))origins.put((UUID)origin.get("subject_id"),(String)origin.get("origin"));
   List<MoneyAccount> accounts=null;
-  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible=MoneyOwnerFinancialDecision.meaningApplied(item)&&"CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME","REFUND","LOAN_PAYMENT","LOAN_RECEIPT").contains(item.get("type"));item.put("categoryEligible",eligible);
+  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible=MoneyOwnerFinancialDecision.meaningApplied(item)&&Set.of("EXPENSE","INCOME","REFUND","LOAN_PAYMENT","LOAN_RECEIPT").contains(item.get("type"));item.put("categoryEligible",eligible);
    item.put("classificationVersion",classificationVersions.getOrDefault(id,0L));
    if(eligible&&books.containsKey(id)){var book=books.get(id);boolean inScope=tracked.contains(id)&&!Boolean.TRUE.equals(book.get("excluded"));item.put("classificationInScope",inScope);book.put("categoryWritePath",inScope&&Set.of("INCOME","EXPENSE").contains(item.get("type"))?"RECOMMENDATION":"ACCOUNT_LEDGER");book.put("categoryScopeReason",inScope?"":"가계부 추적·통계 범위 밖입니다. 직접 분류는 이 거래에만 적용되며 통계 포함 설정은 바뀌지 않습니다.");item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
    else item.put("category_id",item.get("semanticCategoryId"));
@@ -181,9 +181,48 @@ public class MoneyAccountLedgerService {
   }
   return result;
  }
+ public record UndoDirection(UUID requestId,Long expectedVersion,UUID decisionRequestId){}
+ public Map<String,Object> undoDirection(UUID id,UndoDirection input){
+  require(input!=null && input.requestId()!=null && input.decisionRequestId()!=null && input.expectedVersion()!=null,"실행 취소할 결정과 거래 버전이 필요합니다.");
+  var receipt=commands.execute(owner(),input.requestId(),"ACCOUNT_LEDGER_DIRECTION_UNDO",List.of(id,input),()->{
+   var decisions=new MoneyOwnerFinancialDecision(db,owner());
+   var current=decisions.fact(id,true);
+   MoneyMeaningService.version(((Number)current.get("version")).longValue(),input.expectedVersion());
+   require(input.decisionRequestId().equals(current.get("decisionRequestId")),"이후 금융 유형이 변경되었습니다.");
+   require("ACCOUNT_LEDGER_FINANCIAL_TYPE".equals(commands.outcome(owner(),input.decisionRequestId()).get("command")),"직접 유형 변경만 되돌릴 수 있습니다.");
+   var snapshots=db.queryForList("""
+      select previous_value::text from money_meaning_audit
+       where user_id=? and subject_id=? and action='ACCOUNT_LEDGER_FINANCIAL_TYPE'
+       and next_value->>'decisionRequestId'=? and (next_value->>'version')::bigint=?
+       and jsonb_exists(previous_value,'storedSemanticCategoryId')
+      """,String.class,owner(),id,input.decisionRequestId().toString(),input.expectedVersion());
+   require(snapshots.size()==1,"되돌릴 직접 변경 내역을 확인할 수 없습니다.");
+   var before=json.readValue(snapshots.getFirst(),Map.class);
+   require(before.get("type")!=null && before.get("meaning_state")!=null,"변경 전 금융 유형이 필요합니다.");
+   db.update("update money_transactions set type=?,meaning_state=?,version=version+1 where user_id=? and id=?",
+       before.get("type"),before.get("meaning_state"),owner(),id);
+   if(before.get("declaredFinancialType")==null){
+    db.update("delete from money_owner_financial_decisions where user_id=? and transaction_id=? and request_id=?",owner(),id,input.decisionRequestId());
+   }else{
+    db.update("""
+       update money_owner_financial_decisions set declared_type=?,relation_status=?,semantic_category_id=?::uuid,
+        request_id=?,version=version+1,updated_at=now() where user_id=? and transaction_id=?
+       """,before.get("declaredFinancialType"),before.get("storedRelationStatus"),before.get("storedSemanticCategoryId"),input.requestId(),owner(),id);
+   }
+   var restored=clean(decisions.fact(id,false));enrich(List.of(restored),null);
+   audit(id,"ACCOUNT_LEDGER_DIRECTION_UNDO",decisionSnapshot(current),decisionSnapshot(restored));
+   var result=new LinkedHashMap<String,Object>();
+   result.put("requestId",input.requestId());result.put("transactionId",id);result.put("row",restored);result.put("intentSaved",true);
+   result.put("status","UNDONE");result.put("currentVersion",restored.get("version"));result.put("meaningApplied",restored.get("meaningApplied"));
+   for(String key:List.of("baseFinancialType","declaredFinancialType","canonicalType","relationStatus"))result.put(key,restored.get(key));
+   return result;
+  });
+  if("NOT_APPLIED".equals(receipt.get("status")))throw new OptimisticLockConflictException("이후 거래가 변경되었거나 복원할 결정이 없습니다.");
+  return (Map<String,Object>)receipt.get("result");
+ }
  private static Map<String,Object> decisionSnapshot(Map<String,Object> row){
   var snapshot=new LinkedHashMap<String,Object>();
-  for(String key:List.of("version","type","meaning_state","declaredFinancialType","canonicalType","relationStatus","decisionRequestId","decisionVersion","decisionActorId"))
+  for(String key:List.of("version","type","meaning_state","declaredFinancialType","canonicalType","relationStatus","decisionRequestId","decisionVersion","decisionActorId","storedRelationStatus","storedSemanticCategoryId"))
    snapshot.put(key,row.get(key));
   return snapshot;
  }
@@ -239,7 +278,7 @@ public class MoneyAccountLedgerService {
     return withFinancialCategory(id,input,result);
    }
    if("TYPE".equals(edit.action())){
-    MoneyService.text(edit.reason(),500,true,"금융 의미 확인 사유");var old=money.transaction(id);
+    MoneyService.text(edit.reason(),500,false,"금융 의미 확인 사유");var old=money.transaction(id);
     if("REFUND".equals(edit.type()))require(edit.refundOf()!=null&&edit.otherVersion()!=null,"환불 원거래와 최신 버전을 확인하세요.");
     if("LOAN_PAYMENT".equals(edit.type()))require(edit.principal()!=null&&edit.interest()!=null&&edit.fee()!=null,"원금·이자·수수료를 각각 확인하세요.");
     if(old.type()==TransactionType.TRANSFER&&old.fromAccountId()!=null&&old.toAccountId()!=null&&Set.of("TRANSFER","SAVINGS","SAVINGS_WITHDRAWAL").contains(Objects.toString(edit.type(),""))){
@@ -297,10 +336,9 @@ public class MoneyAccountLedgerService {
    }
    if("UNRESOLVED".equals(fact.meaningState()) && (input.baseDirection()!=null||input.semanticPolicyVersion()!=null)){
     require(Set.of(TransactionType.INCOME,TransactionType.EXPENSE).contains(fact.type()) &&
-      (before.get("declaredFinancialType")==null || Set.of("UNRESOLVED",direction).contains(before.get("declaredFinancialType")) ||
+      (input.baseDirection()!=null || before.get("declaredFinancialType")==null || Set.of("UNRESOLVED",direction).contains(before.get("declaredFinancialType")) ||
        (input.semanticPolicyVersion()!=null && new MoneyCategoryFinancialPolicy(db,owner()).resolve(input.categoryId(),input.semanticPolicyVersion()).equals(before.get("declaredFinancialType")))),
       "기존 금융 의도나 연결 관계를 먼저 정정하세요.");
-    if(input.baseDirection()!=null)MoneyFinancialEvidence.requireQuick(db,owner(),money,fact,direction);
     decisions.apply(id,new FinancialType(input.requestId(),fact.version(),direction,true),before);
     if(input.baseDirection()!=null)
      audit(id,"ACCOUNT_LEDGER_FINANCIAL_TYPE",decisionSnapshot(before),decisionSnapshot(decisions.fact(id,false)));
@@ -308,8 +346,7 @@ public class MoneyAccountLedgerService {
    }
    require(MoneyOwnerFinancialDecision.meaningApplied(decisions.fact(id,false))&&"CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME,TransactionType.REFUND,TransactionType.LOAN_PAYMENT,TransactionType.LOAN_RECEIPT).contains(fact.type()),"거래의 금융 관계를 먼저 확인하세요.");
    require(input.categoryId()!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),input.categoryId(),Set.of(TransactionType.INCOME,TransactionType.REFUND,TransactionType.LOAN_RECEIPT).contains(fact.type())?"INCOME":"EXPENSE")),"현재 거래 유형에 맞는 소유 활성 분류를 선택하세요.");
-   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_recommendation_save_items where user_id=? and transaction_id=? and status in ('QUEUED','OUTCOME_UNKNOWN'))",Boolean.class,owner(),id)),"원래 분류 저장 요청의 결과를 먼저 확인하세요.");
-   require(db.queryForList(MoneyReviewService.QUEUE+"select reason from queue where id=? and kind='TRANSACTION' and reason='POSSIBLE_INTERNAL_TRANSFER'",owner(),id).isEmpty(),"이체 후보의 금융 의미를 먼저 확인하세요.");
+   // Owner writes and recommendation outcomes share the owner lock and classification version.
    var classification=new MoneyClassificationService(db,users,json,web,null,money,commands);var state=classification.ownedState(id);MoneyMeaningService.version(((Number)state.get("version")).longValue(),input.expectedClassificationVersion());
    var book=web.accountLedgerBookkeepingRow(id);var event=classification.persistRecommendation(id,input.categoryId(),"DIRECT",Boolean.TRUE.equals(input.thisTransactionOnly()),input.requestId(),book,Map.of("source","ACCOUNT_LEDGER_EXPLICIT_CATEGORY"),state);
    if(input.semanticPolicyVersion()!=null){

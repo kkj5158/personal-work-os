@@ -39,7 +39,7 @@ final class MoneyOwnerFinancialDecision {
                when t.type in ('LOAN_PAYMENT','EXPENSE') then 'EXPENSE'
                when t.type='TRANSFER' then 'TRANSFER' end end
         """;
-    static final String FIELDS = DISPLAY + " as display_type, " + CANONICAL + " as \"canonicalType\", "
+    static final String FIELDS = "case when t.meaning_state='UNRESOLVED' and d.transaction_id is null and t.type=t.observed_direction then t.observed_direction end as \"provisionalDirection\", " + DISPLAY + " as display_type, " + CANONICAL + " as \"canonicalType\", "
         + BASE + " as \"baseFinancialType\", "
         + "coalesce(d.semantic_category_id,(select fp.category_id from money_category_financial_policy fp where fp.user_id=t.user_id and fp.semantic_code=t.type and t.meaning_state='CONFIRMED')) as \"semanticCategoryId\", d.request_id as \"decisionRequestId\", d.version as \"decisionVersion\", d.actor_id as \"decisionActorId\", d.declared_type as \"declaredFinancialType\", " + RELATION + " as \"relationStatus\"";
     private static final Set<String> OUT = Set.of("EXPENSE","LOAN_PAYMENT","SAVINGS");
@@ -54,7 +54,7 @@ final class MoneyOwnerFinancialDecision {
     }
 
     Map<String,Object> fact(UUID id, boolean lock) {
-        var rows = db.queryForList("select t.*, " + FIELDS + " from money_transactions t" + JOIN
+        var rows = db.queryForList("select t.*, d.relation_status as \"storedRelationStatus\", d.semantic_category_id as \"storedSemanticCategoryId\", " + FIELDS + " from money_transactions t" + JOIN
             + " where t.user_id=? and t.id=?" + (lock ? " for update of t" : ""), owner, id);
         if (rows.isEmpty()) throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");
         return rows.getFirst();
@@ -150,7 +150,8 @@ final class MoneyOwnerFinancialDecision {
     static boolean meaningApplied(Map<String,Object> row) {
         Object desired=row.get("declaredFinancialType");
         if (desired==null) return !"UNRESOLVED".equals(row.get("canonicalType"));
-        if ("DIRECTION_REVIEW".equals(row.get("relationStatus"))) return false;
+        if (Set.of("DIRECTION_REVIEW","RELATION_CORRECTION_REQUIRED").contains(Objects.toString(row.get("relationStatus"),""))) return false;
+        if ("LOAN_PAYMENT".equals(desired) && "LOAN_SPLIT_PENDING".equals(row.get("relationStatus"))) return true;
         if ("REFUND".equals(desired) && "INCOME".equals(row.get("canonicalType")) && "NONE".equals(row.get("relationStatus"))) return true;
         if (SAVINGS.contains(desired)) return "NONE".equals(row.get("relationStatus"));
         return Objects.equals(desired,row.get("canonicalType"));

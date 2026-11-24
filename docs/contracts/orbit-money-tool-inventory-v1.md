@@ -1,10 +1,11 @@
 # ORBIT MONEY exact tool inventory
 
-Existing 20 tools in server.mjs are preserved unchanged. 89 additions; 109 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
+Existing 20 tools in server.mjs are preserved unchanged. 91 additions; 111 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
 
 | Tool | Backend route | Required scopes | Tier | Effect |
 |---|---|---|---|---|
 | `money_get_console_capabilities` | GET `capabilities` | orbit:read | READ | Read |
+| `money_get_statistical_balances` | GET `statistical-balances` | orbit:read | READ | Read |
 | `money_get_dashboard` | GET `dashboard` | orbit:read | READ | Read |
 | `money_get_attention_summary` | GET `attention` | orbit:read | READ | Read |
 | `money_list_review_items` | GET `review-items` | orbit:read | READ | Read |
@@ -32,6 +33,7 @@ Existing 20 tools in server.mjs are preserved unchanged. 89 additions; 109 hoste
 | `money_get_transaction_financial_detail` | GET `financial-detail` | orbit:read | READ | Read |
 | `money_get_logical_savings_balance` | GET `financial-engine/savings-balance` | orbit:read | READ | Read |
 | `money_get_contribution_summary` | GET `financial-engine/summary` | orbit:read | READ | Read |
+| `money_get_composition` | GET `financial-engine/composition` | orbit:read | READ | Read |
 | `money_list_account_transactions` | GET `financial-engine/ledger` | orbit:read | READ | Read |
 | `money_get_financial_suggestions` | GET `financial-engine/candidates` | orbit:read | READ | Read |
 | `money_get_financial_engine_status` | GET `financial-engine/status` | orbit:read | READ | Read |
