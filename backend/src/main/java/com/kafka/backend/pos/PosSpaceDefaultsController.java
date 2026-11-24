@@ -25,8 +25,9 @@ public class PosSpaceDefaultsController {
             "work", List.of("WORK FLOW", "WORK OS", "Calendar"),
             "knowledge", List.of("NOTE SYS", "BLOG", "NAVER ARCHIVE"),
             "growth", List.of("STUDY", "AUTHORING"),
-            "life", List.of("LIFE CODE", "DIET SYS", "CHECKLIST SYS"),
-            "finance", List.of("MONEY SYS"));
+            "life", List.of("LIFE CODE", "CHECKLIST SYS"),
+            "finance", List.of("MONEY SYS"),
+            "diet", List.of("DIET SYS"));
     private static final JsonMapper JSON = JsonMapper.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
@@ -75,8 +76,7 @@ public class PosSpaceDefaultsController {
             if (root != null && root.isObject() && root.size() == 2) {
                 JsonNode defaults = root.path("defaults"), revision = root.path("revision");
                 if (revision.isIntegralNumber() && revision.canConvertToLong() && revision.longValue() >= 0
-                        && revision.longValue() < Long.MAX_VALUE && defaults.isObject() && defaults.size() == SYSTEMS.size()
-                        && SYSTEMS.entrySet().stream().allMatch(entry -> accepts(defaults.get(entry.getKey()), entry.getValue()))) {
+                        && revision.longValue() < Long.MAX_VALUE && defaults.isObject() && acceptsDefaults(defaults)) {
                     return new Preference(normalize(defaults), revision.longValue());
                 }
             }
@@ -84,6 +84,18 @@ public class PosSpaceDefaultsController {
             // Use the same response for invalid structure, duplicate keys and malformed JSON.
         }
         throw new InvalidRequestException("기본 Space 설정을 확인하세요.");
+    }
+
+    private static boolean acceptsDefaults(JsonNode defaults) {
+        // Older tabs can submit the original five Space keys during rollout.
+        boolean legacy = defaults.size() == SYSTEMS.size() - 1 && !defaults.has("diet");
+        if (!legacy && defaults.size() != SYSTEMS.size()) return false;
+        return SYSTEMS.entrySet().stream().allMatch(entry -> {
+            String space = entry.getKey();
+            JsonNode id = defaults.get(space);
+            return accepts(id, entry.getValue())
+                    || (legacy && ("diet".equals(space) || ("life".equals(space) && "DIET SYS".equals(defaults.path(space).asText()))));
+        });
     }
 
     static Map<String, String> normalizeStored(String stored) {

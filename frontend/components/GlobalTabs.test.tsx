@@ -9,7 +9,7 @@ import { GlobalTabsProvider, useGlobalTabs, useShellNavigationGuard } from "./Gl
 import { EMPTY_TABS, TAB_STORAGE_KEY, visitTab } from "../lib/globalTabs";
 import { SPACE_STORAGE_KEY, SPACES } from "../lib/spaceNavigation";
 
-test("the plus menu offers exactly five Spaces and every destination waits for the leave guard", async () => {
+test("the plus menu offers six Spaces and every destination waits for the leave guard", async () => {
   const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/calendar", pretendToBeVisual: true });
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
   window.sessionStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify({ version: 1, spaces: { knowledge: "/blog" }, systems: {
@@ -27,7 +27,7 @@ test("the plus menu offers exactly five Spaces and every destination waits for t
   await act(() => trigger.focus());
   await press("ArrowUp");
   assert.deepEqual(menuItems().map(item => item.textContent), SPACES.map(space => `${space.name} 새 탭으로 열기`));
-  assert.equal(document.activeElement, menuItems()[4]);
+  assert.equal(document.activeElement, menuItems().at(-1));
   await press("Home");
   assert.equal(document.activeElement, menuItems()[0]);
   await press("ArrowDown");
@@ -36,7 +36,7 @@ test("the plus menu offers exactly five Spaces and every destination waits for t
   assert.equal(menuItems().length, 0);
   assert.equal(document.activeElement, trigger);
   const recent = window.sessionStorage.getItem(SPACE_STORAGE_KEY);
-  const expected = ["/workflow/projects", "/notes?module=GRAPH&workspace=demo", "/study", "/life/categories", "/money/loans"];
+  const expected = ["/workflow/projects", "/notes?module=GRAPH&workspace=demo", "/study", "/life/categories", "/money/loans", "/diet"];
   for (const [index, href] of expected.entries()) {
     const tabs = window.sessionStorage.getItem(TAB_STORAGE_KEY);
     await act(() => trigger.click());

@@ -7,6 +7,7 @@ export const SPACES = [
   { id: "growth", name: "GROWTH", shortName: "GROWTH", description: "학습 · 자기 탐구 · 글쓰기", defaultRoute: "/study" },
   { id: "life", name: "LIFE", shortName: "LIFE", description: "생활 · 건강 · 수행 체크리스트", defaultRoute: "/life/categories" },
   { id: "finance", name: "FINANCE", shortName: "FINANCE", description: "금융 · 가계부 · 부채", defaultRoute: "/money" },
+  { id: "diet", name: "DIET", shortName: "DIET", description: "식단 · 다이어트 · 체중 관리", defaultRoute: "/diet" },
 ] as const;
 export type SpaceId = typeof SPACES[number]["id"];
 export const SYSTEMS: readonly { id: TabSystem; spaceId: SpaceId; displayName: string; defaultRoute: string }[] = [
@@ -19,9 +20,9 @@ export const SYSTEMS: readonly { id: TabSystem; spaceId: SpaceId; displayName: s
   { id: "STUDY", spaceId: "growth", displayName: "STUDY", defaultRoute: "/study" },
   { id: "AUTHORING", spaceId: "growth", displayName: "AUTHORING", defaultRoute: "/authoring" },
   { id: "LIFE CODE", spaceId: "life", displayName: "LIFE OS", defaultRoute: "/life/categories" },
-  { id: "DIET SYS", spaceId: "life", displayName: "DIET SYS", defaultRoute: "/diet" },
   { id: "CHECKLIST SYS", spaceId: "life", displayName: "CHECKLIST SYS", defaultRoute: "/checklist" },
   { id: "MONEY SYS", spaceId: "finance", displayName: "MONEY SYS", defaultRoute: "/money" },
+  { id: "DIET SYS", spaceId: "diet", displayName: "DIET SYS", defaultRoute: "/diet" },
 ];
 export const WORK_GROUPS = [
   { section: "PLANNING", items: [
@@ -63,6 +64,12 @@ export function restoreSpaceHistory(raw: string | null): SpaceHistory {
     for (const system of SYSTEMS) {
       const route = value.systems?.[system.id];
       if (typeof route === "string" && routeNavigation(route)?.restorable && routeNavigation(route)?.id === system.id) history.systems[system.id] = routeNavigation(route)!.route;
+    }
+    const legacyLife = value.spaces?.life;
+    const legacyDiet = typeof legacyLife === "string" ? routeNavigation(legacyLife) : null;
+    if (!history.spaces.diet && legacyDiet?.restorable && legacyDiet.spaceId === "diet") {
+      history.spaces.diet = legacyDiet.route;
+      history.systems[legacyDiet.id] ??= legacyDiet.route;
     }
   } catch { /* Corrupt/disabled storage never prevents navigation. */ }
   return history;
