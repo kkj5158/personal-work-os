@@ -1,7 +1,8 @@
 "use client";
 import {baseDirectionLabel} from "@/lib/money/categorySemantics";
 import {AccountLedgerEditor} from "./MoneyAccountLedgerEditor";
-import {recoverLedgerOperation,type LedgerOperation} from "@/lib/money/accountLedger";
+import {useLedgerCategories,ledgerClassificationVersion} from './MoneyLedgerCategory';
+import {ACCOUNT_LEDGER,type LedgerRow,recoverLedgerOperation,type LedgerOperation} from "@/lib/money/accountLedger";
 import {type UnifiedOutcome} from "@/lib/money/unified";
 import {UnifiedLedger,UnifiedFinancialAction} from "./MoneyUnifiedLedger";
 import {typeLabels} from "@/lib/money/unified";
@@ -223,6 +224,13 @@ function BookkeepingList(
     pendingOpen.current = null;
     if (row) setFocused(row.id);
   }, [result.loading, data, setFocused]);
+  const financialCategories=useLedgerCategories();
+  async function saveFinancialCategory(row:BookRow,category:Category){
+    const fact=await api.get<LedgerRow>(ACCOUNT_LEDGER+'/rows/'+row.id);
+    if(fact.version!==row.transactionVersion||ledgerClassificationVersion(fact)!==(row.classificationVersion??0))
+      throw Error('거래 또는 분류가 변경되었습니다. 최신 값을 확인하세요.');
+    return !!await financialCategories.save(fact,category);
+  }
   async function saveInline(row:BookRow,patch:Partial<BookFields>){
     try{const source='categoryId' in patch?'classification-stage':'title' in patch?'inline:title':'inline:memo';const saved=await coordinator.edit(latest(row),patch,[],source,bookkeepingScope);setFresh(old=>({...old,[row.id]:saved}));if('categoryId' in patch&&saved.classificationEventId)remember([saved.classificationEventId],'분류를 저장했습니다.',[row.id]);cache.patchBooks([saved]);cache.mutate("book");}
     catch(error){try{const current=await api.get<BookRow>(bookRowPath(row.id,bookkeepingScope));setFresh(old=>({...old,[row.id]:current}));try{coordinator.acknowledge(current);}catch{/* Unresolved mutations must use outcome lookup first. */}cache.mutate("book");}catch{/* Preserve the original error and caller-owned draft. */}throw error;}
@@ -293,6 +301,7 @@ function BookkeepingList(
         </div>
       </div></section>
       </><ManualBulkClassification selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} onClear={()=>setSelected([])}/>{p.mode==='workbench'&&<RecommendationControls/>}
+      {Object.entries(financialCategories.entries).filter(([,entry])=>entry.phase==='unknown'||entry.phase==='failed'||entry.phase==='conflict').map(([id,entry])=><p key={id} role="alert">{data?.items.find(row=>row.id===id)?.title??'거래'} · {entry.message} {entry.phase==='unknown'&&<button onClick={()=>void financialCategories.retry(id)}>원래 분류 요청 재확인</button>}</p>)}
       <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (
@@ -334,8 +343,8 @@ function BookkeepingList(
                     <td className="money-muted" onClick={(e) => e.stopPropagation()}>
                       <InlineText id={row.id} field="memo" label={`${latest(row).title} 메모`} value={latest(row).memo ?? ""} onSave={(v) => saveInline(row, { memo: v })} />
                     </td>
-                    <td onClick={e=>e.stopPropagation()}>{p.mode==="workbench"?<UnifiedFinancialAction id={row.id} categories={p.categories} accounts={p.accounts} label={typeLabels[row.financialType??row.type]}/>:<button type="button" onClick={()=>openEditor(row.id)}>{baseDirectionLabel(row)}</button>}{row.excluded&&<small className="money-muted">통계 제외</small>}</td>
-                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} onFinancial={p.mode==="monthly"?id=>openEditor(row.id,id):undefined} disabled={result.loading||search!==debounced||(p.mode==="workbench"&&['REFUND','LOAN_PAYMENT','LOAN_RECEIPT'].includes(row.financialType??row.type))}/></td>
+                    <td onClick={e=>e.stopPropagation()}>{p.mode==="workbench"?<UnifiedFinancialAction id={row.id} categories={p.categories} accounts={p.accounts} label={typeLabels[row.financialType??row.type]}/>:<button type="button" onClick={()=>openEditor(row.id)}>{baseDirectionLabel(row)}</button>}{row.interpretationStatus==="PROVISIONAL"&&<small>입출금 등록 · 금융 의미 잠정</small>}{row.excluded&&<small className="money-muted">통계 제외</small>}</td>
+                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} onFinancial={(category,book)=>saveFinancialCategory(book,category)} disabled={result.loading||search!==debounced||financialCategories.entries[row.id]?.phase==='saving'||financialCategories.entries[row.id]?.phase==='unknown'}/></td>
                   </>
                 <td><div className="money-row-management">{p.mode==="workbench"?<RecommendationAction row={latest(row)} onOpen={()=>openRow(row)}/>:<button type="button" aria-expanded={!!editors[row.id]} aria-controls={"ledger-editor-"+row.id} onClick={()=>openEditor(row.id)}>수정</button>}
                   <RegistrationAction id={row.id} version={latest(row).transactionVersion}/>

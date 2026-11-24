@@ -139,7 +139,7 @@ export function RecommendationControls(){return <>{useRecommendations().controls
 export function RecommendationLedger({children}:{children:ReactNode}){return <div className="bk-v2-ledger" hidden={useRecommendations().reviewing}>{children}</div>;}
 function emoji(c?:Category){return c?.iconType==='EMOJI'?c.iconValue:c?.emoji;}
 export function CategoryLines({id,categories}:{id:string|null|undefined;categories:Category[]}){const index=categoryIndex(categories),leaf=id?index.byId.get(id):undefined,root=leaf?.parentId?index.byId.get(leaf.parentId):leaf;return <span className="bk-v2-category-lines"><strong>{emoji(root)} {root?.name??'미분류'}</strong><span>{leaf?.parentId?<>{emoji(leaf)} {leaf.name}</>:leaf?'소분류 없음':'소분류 없음'}</span></span>;}
-export function RecommendationCategory({row,categories,disabled=false,compact=false,onFinancial}:{row:BookRow;categories:Category[];disabled?:boolean;compact?:boolean;onFinancial?:(id:string)=>void}){
+export function RecommendationCategory({row,categories,disabled=false,compact=false,onFinancial}:{row:BookRow;categories:Category[];disabled?:boolean;compact?:boolean;onFinancial?:(category:Category,row:BookRow)=>Promise<boolean>}){
  const state=useRecommendations(),d=state.drafts.find(d=>d.transactionId===row.id),choice=state.choices.find(c=>c.command.id===row.id),[open,setOpen]=useState(false),[current,setCurrent]=useState<{stamp:string;book:BookRow}|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
  const button=useRef<HTMLButtonElement>(null),lookup=useRef(0),[anchor,setAnchor]=useState<HTMLElement|null>(null);
  const restoreTriggerFocus=useRef(false);
@@ -153,7 +153,7 @@ export function RecommendationCategory({row,categories,disabled=false,compact=fa
  return <div className="bk-v2-category-cell"><div className={compact?"bk-v2-current-value":"bk-v2-three-values"}><span>{!compact&&<small>현재</small>}<CategoryLines id={row.categoryId} categories={categories}/></span>{!compact&&<><span><small>원 AI</small>{d?<CategoryLines id={d.active.categoryId} categories={categories}/>:<em>추천 없음</em>}</span><span><small>선택</small>{choice?<CategoryLines id={choice.command.categoryId} categories={categories}/>:<em>선택 전</em>}</span></>}</div><button ref={button} disabled={disabled||loading||state.busy} className="bk-v2-category-button" aria-label={row.title+' 직접 분류'} aria-expanded={open} aria-busy={loading} onClick={()=>{setAnchor(button.current);setOpen(true);void loadCurrent();}}>직접 분류 ▾</button><small className={d?'bk-v2-draft-badge':''}>{state.savingIds.includes(row.id)?'분류 저장 중…':loading?'최신 분류 확인 중…':choice?'명시 선택 초안 · 미저장':d?labels[d.status]??d.status:classificationLabels[row.classificationOrigin??'']??(row.categoryId?'현재 분류':'미분류')}{d?.conflict&&' · 최신 값 비교 필요'}</small>{error&&<small role="alert">{error}</small>}{open&&<CategoryPopup onFinancial={onFinancial} row={row} categories={categories} draft={d} current={current} lookupError={error} onRetry={()=>void loadCurrent()} anchor={anchor} onClose={(restoreFocus=true)=>{restoreTriggerFocus.current=restoreFocus;lookup.current++;setLoading(false);setOpen(false);}}/>}</div>;
 }
 type PickerDraft={initial:string|null;baseline:BookRow;chosen:string;parent:string;search:string;only:boolean};
-function CategoryPopup({row,categories,draft,current,lookupError,onRetry,anchor,onFinancial,onClose:closePopup}:{onFinancial?:(id:string)=>void;row:BookRow;categories:Category[];draft?:RecommendationDraft;current:{stamp:string;book:BookRow}|null;lookupError:string;onRetry:()=>void;anchor:HTMLElement|null;onClose:(restoreFocus?:boolean)=>void}){
+function CategoryPopup({row,categories,draft,current,lookupError,onRetry,anchor,onFinancial,onClose:closePopup}:{onFinancial?:(category:Category,row:BookRow)=>Promise<boolean>;row:BookRow;categories:Category[];draft?:RecommendationDraft;current:{stamp:string;book:BookRow}|null;lookupError:string;onRetry:()=>void;anchor:HTMLElement|null;onClose:(restoreFocus?:boolean)=>void}){
  const state=useRecommendations(),cache=useMoneyCache(),[created,setCreated]=useState<Category[]>([]),[newName,setNewName]=useState(''),[creating,setCreating]=useState(false),[createError,setCreateError]=useState('');
  // Creation responses bridge the category refetch. Once it arrives, the server's
  // category with the same ID replaces that bridge in both the index and list.
@@ -186,7 +186,7 @@ function CategoryPopup({row,categories,draft,current,lookupError,onRetry,anchor,
   const latest=await api.get<{stamp:string;book:BookRow}>(ROOT+'/current/'+row.id);
   if(latest.stamp!==current.stamp){setManualError('거래 저장값이 변경되었습니다. 선택을 유지했습니다. 최신 값을 조회하고 확인해 주세요.');onRetry();return;}
   if(onFinancial&&(node.semanticCode||['REFUND','LOAN_PAYMENT','LOAN_RECEIPT'].includes(row.financialType??row.type))){
-   onClose(false);onFinancial(categoryId);return;
+   if(await onFinancial(node,latest.book))onClose();else setManualError('분류 저장 결과를 확인하세요.');return;
   }
   const command={id:row.id,categoryId,expectedStamp:current.stamp,thisTransactionOnly:only};
   if(await state.choose(command)){if(await state.save([command]))onClose();else setManualError('분류 저장이 완료되지 않았습니다. 처리 결과를 확인한 뒤 다시 시도해 주세요.');}

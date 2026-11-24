@@ -62,8 +62,11 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   assert.ok(document.querySelector('[aria-label="금융 유형 편집"]'));
   assert.equal(document.activeElement,categoryTrigger);
 
-  await choose('변경 저장');assert.deepEqual(Object.keys(posts.at(-1)!.body).sort(),['action','expectedVersion','requestId','type']);
+  await choose('변경 저장');assert.equal(posts.at(-1)!.body.action,'OWNER_INTENT');assert.deepEqual(Object.keys(posts.at(-1)!.body).sort(),['action','expectedVersion','requestId','type']);
   assert.match(document.body.textContent??'',/서버에 저장했습니다/);
+  await close();row={...initial,meaning_state:'UNRESOLVED',declaredFinancialType:'EXPENSE',version:2};
+  await open();await choose('↗출금');await choose('변경 저장');
+  assert.equal(posts.at(-1)!.body.type,'EXPENSE');assert.equal(posts.at(-1)!.body.action,'OWNER_INTENT');
   await close();row={...initial,type:'LOAN_PAYMENT',loan_id:'loan',principal:420000,interest:70000,fee:10000,version:3};await open();
   assert.equal(control('원금').value,'420000');assert.equal(control('상환 대출').disabled,true);
   await change('원금','420001');assert.equal(button('변경 저장').disabled,true,'Split must equal cash outflow');
@@ -83,7 +86,7 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   row={...initial,version:9};await open();await choose('⇄이체');await close();row={...row,version:10};await open();
   assert.equal(button('변경 저장').disabled,true,'Reopening an externally changed draft requires comparison');
   await choose('최신 값과 비교 후 재적용 준비');await choose('변경 저장');await close();
-  for(const type of ['INITIAL_BALANCE','BALANCE_ADJUSTMENT','LOAN_RECEIPT']){
+  for(const type of ['INITIAL_BALANCE','BALANCE_ADJUSTMENT']){
    row={...initial,type,version:row.version+1};await open();assert.equal([...document.querySelectorAll('button')].some(node=>node.textContent==='변경 저장'),false);assert.match(document.body.textContent??'',/별도 정정/);await close();
   }
   row={...initial,version:20};await open();await run(()=>document.querySelector('summary')!.click());

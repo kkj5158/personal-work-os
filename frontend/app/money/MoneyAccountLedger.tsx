@@ -14,7 +14,7 @@ import {Pagination,type Props} from './MoneyWebViews';
 import {RecommendationProvider,useRecommendations,type SavePreview} from './MoneyBookkeepingRecommendations';
 import {AccountLedgerEditor} from './MoneyAccountLedgerEditor';
 import {MoneyFinancialEngine} from './MoneyFinancialEngine';
-import {DecisionStatus,FinancialTypePicker,directionHint,useFinancialDecisions} from './MoneyLedgerFinancialType';
+import {DecisionStatus,FinancialTypePicker,decisionDescription,useFinancialDecisions} from './MoneyLedgerFinancialType';
 import {LedgerCategory,ledgerClassificationVersion,useLedgerCategories} from './MoneyLedgerCategory';
 import './money-account-ledger.css';
 
@@ -99,7 +99,8 @@ export function AccountLedger(p:Props){
   async function worker(){
    while(next<targets.length){
     const row=targets[next++];
-    if((!categoryEligible(row)&&row.meaning_state!=="UNRESOLVED")||row.declaredFinancialType&&row.declaredFinancialType!==row.type||rowBusy(row.id)||directionHint(row,bulkType)||ledgerDisplayType(row)===bulkType){totals.skipped++;continue;}
+    if(['INITIAL_BALANCE','BALANCE_ADJUSTMENT'].includes(row.type)||rowBusy(row.id)||
+       (row.meaning_state==='CONFIRMED'&&row.meaningApplied!==false&&baseDirection(row)===bulkType)){totals.skipped++;continue;}
     const outcome=await decisions.save(row,bulkType,false);
     if(outcome==='saved'||outcome==='pending')totals[outcome]++;
     else{totals.failed++;remaining.push(row);}
@@ -107,7 +108,7 @@ export function AccountLedger(p:Props){
   }
   try{
    await Promise.all(Array.from({length:Math.min(4,targets.length)},worker));
-   const message='금융유형 일괄 결과 · 저장 '+totals.saved+'건 · 연결 대기 '+totals.pending+'건 · 제외 '+totals.skipped+'건 · 확인 필요 '+totals.failed+'건';
+   const message='금융유형 일괄 결과 · 저장 '+totals.saved+'건 · 반영·연결 대기 '+totals.pending+'건 · 제외 '+totals.skipped+'건 · 확인 필요 '+totals.failed+'건';
    setBatch(current=>current.generation===batch.generation?{...current,selection:remaining,message}:current);
    cache.mutate('transaction');
   }finally{setBulkBusy(false);}
@@ -143,7 +144,7 @@ export function AccountLedger(p:Props){
    {Object.values(pendingRows).map(pending=><div key={pending.id} className="al-pending" role="status"><strong>금융 저장 결과 확인 필요</strong><span>요청 ID {pending.operation.edit.requestId}</span><button disabled={recovering} onClick={()=>void recover(pending)}>원래 요청 결과 확인</button><button disabled={recovering} onClick={()=>void recover(pending,true)}>원래 요청으로 재시도</button></div>)}
    {Object.values(decisions.entries).filter(entry=>entry.phase==='unknown'&&!visible.includes(entry.id)).map(entry=><div className="al-pending" key={entry.id} role="status"><strong>{entry.title} · 금융유형 저장 결과 확인 필요</strong><span>{entry.command.requestId}</span><button onClick={()=>void decisions.retry(entry)}>원래 요청 재확인</button></div>)}
    {Object.values(decisions.entries).filter(entry=>(entry.phase==='conflict'||entry.phase==='failed')&&!visible.includes(entry.id)).map(entry=><div className="al-pending" key={entry.id} role="status">{entry.title} · {ledgerTypes[entry.command.financialType]} · {entry.message}<Link href={'/money/ledger?transactionId='+entry.id}>거래에서 확인</Link></div>)}
-   {Object.values(decisions.entries).filter(entry=>entry.phase==='saved' &&entry.receipt&&!visible.includes(entry.id)).slice(-1).map(entry=><div className="al-pending" key={entry.id} role="status">{entry.title} · {ledgerTypes[entry.command.financialType]} 저장됨 <button onClick={()=>void decisions.undo(entry)}>실행 취소</button></div>)}
+   {Object.values(decisions.entries).filter(entry=>entry.phase==='saved' &&entry.receipt&&!visible.includes(entry.id)).slice(-1).map(entry=><div className="al-pending" key={entry.id} role="status">{entry.title} · {ledgerTypes[entry.command.financialType]} · {decisionDescription(entry.receipt!)} {!entry.command.decisionRequestId&&<button onClick={()=>void decisions.undo(entry)}>실행 취소</button>}</div>)}
    {filters.view==='pending'?<div className="al-raw"><p>미처리 알림은 금융 거래와 별도입니다. 계좌 잔액·수입·소비에 포함하지 않습니다.</p>{raw.data?.items.map(item=><article key={item.id}><div><strong>{item.title??item.merchant??'은행 알림 확인'}</strong><small>{item.occurredAt?seoul(item.occurredAt):'시각 확인 필요'} · {p.accounts.find(a=>a.id===item.accountId)?.displayName??'계좌 미확인'}</small><small>{item.reason}</small></div><span>{item.amount!=null?moneyAmount(item.amount,'KRW'):'금액 확인 필요'}</span><Link href="/money/review" onClick={e=>{e.preventDefault();p.navigate?.('/money/review');}}>기존 검토 필요에서 확인 →</Link></article>)}{!raw.loading&&!raw.data?.items.length&&<p className="al-empty">조건에 맞는 미처리 알림이 없습니다.</p>}</div>:<>
     {selected.length>0&&<section className="al-bulk" aria-label="선택 거래 금융유형 변경"><strong>현재 페이지 {selected.length}건 선택</strong><select aria-label="일괄 금융유형" disabled={bulkBusy} value={bulkType} onChange={e=>setBulkType(e.target.value)}><option value="">금융유형 선택</option>{Object.entries({INCOME:"입금",EXPENSE:"출금",TRANSFER:"이체"}).map(([type,label])=><option key={type} value={type}>{label}</option>)}</select><button disabled={!bulkType||bulkBusy} onClick={()=>void applyBulk()}>{bulkBusy?'저장 중…':'선택 거래에 적용'}</button><button disabled={bulkBusy} onClick={()=>setSelection([])}>선택 해제</button></section>}
     {bulkMessage&&<p className="al-batch-result" role="status">{bulkMessage}</p>}

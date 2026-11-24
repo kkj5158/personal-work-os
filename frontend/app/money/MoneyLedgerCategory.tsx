@@ -97,6 +97,7 @@ export function useLedgerCategories(){
    remember(owner,id);
    put(id,{categoryId,phase:'saved',receipt,previousCategoryId});
    refresh();
+   return receipt;
   }catch(error){
    const conflict=!command&&error instanceof ApiError&&error.status===409;
    put(id,{categoryId,phase:command?'unknown':conflict?'conflict':'failed',command,previousCategoryId,
@@ -105,8 +106,8 @@ export function useLedgerCategories(){
   }finally{active.current.delete(id);}
  }
 
- function save(row:LedgerRow,category:Category){
-  if(!owner||entries[row.id]?.phase==='unknown'||!category.id||savedCategory(row)===category.id)return;
+ function save(row:LedgerRow,category:Category,direction:BaseDirection=baseDirection(row)){
+  if(!owner||entries[row.id]?.phase==='unknown'||!category.id||(savedCategory(row)===category.id&&row.meaning_state==='CONFIRMED'&&row.meaningApplied!==false&&baseDirection(row)===direction))return;
   return write(row.id,category.id,async()=>{
    if(category.semanticCode&&!Number.isSafeInteger(category.semanticPolicyVersion))throw Error('최신 카테고리 정책을 확인하세요.');
    const current=await api.get<LedgerRow>(ACCOUNT_LEDGER+'/rows/'+row.id,owner);
@@ -114,7 +115,7 @@ export function useLedgerCategories(){
    if(!current.fingerprint||current.version!==row.version||classificationVersion!==ledgerClassificationVersion(row))
     throw new ApiError(409,'거래 또는 분류가 변경되었습니다. 최신 값과 비교하세요.');
    return {requestId:crypto.randomUUID(),expectedVersion:current.version,fingerprint:current.fingerprint,
-    categoryId:category.id,expectedClassificationVersion:classificationVersion,thisTransactionOnly:true,baseDirection:baseDirection(row),
+    categoryId:category.id,expectedClassificationVersion:classificationVersion,thisTransactionOnly:true,baseDirection:direction,
     ...(category.semanticCode?{semanticPolicyVersion:category.semanticPolicyVersion!}:{})};
   },false,!category.semanticCode&&row.meaning_state==='CONFIRMED'&&!row.semanticCategoryId?savedCategory(row):undefined);
  }
@@ -142,7 +143,7 @@ export function LedgerCategory({row,categories,disabled,entry,save,retry,onDetai
  },[disabled]);
  function select(id:string){
   const option=options.find(category=>category.id===id);
-  if(!option||id===savedCategory(row))return;
+  if(!option)return;
   restore.current=true;
   save(row,option);
  }
@@ -154,7 +155,7 @@ export function LedgerCategory({row,categories,disabled,entry,save,retry,onDetai
   <CategoryPicker disabled={disabled} allowUncategorized={false} label={(row.title??'거래')+' 생활 카테고리'}
    value={savedCategory(row)} categories={available} onChange={select}/>
   {entry?.phase==='saving'&&<small role="status">저장 중…</small>}
-  {saved&&<small role="status">저장됨</small>}
+  {saved&&<small role="status">{entry.receipt?.meaningApplied===false?'카테고리 저장됨 · 금융 반영 대기':'저장됨'}</small>}
   {saved&&previous&&<button type="button" disabled={disabled} onClick={()=>save(row,previous)}>카테고리 실행 취소</button>}
   {row.semanticCategoryId&&relation&&<><small>{relation}</small><button type="button" onClick={onDetails}>관계 확인</button></>}
   {entry&&entry.phase!=='saving'&&entry.phase!=='saved'&&<>

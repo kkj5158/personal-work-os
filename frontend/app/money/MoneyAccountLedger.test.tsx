@@ -47,7 +47,7 @@ test('a live evidence refresh cannot silently replace the financial draft baseli
   const select=document.querySelector<HTMLSelectElement>('[aria-label="편집 금융 유형"]')!;
   await act(()=>{select.value='TRANSFER';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});await tick();
   current={...expense,version:2,fingerprint:'changed-evidence',amount:200};await act(()=>cache!.invalidate(key=>key==='/account-ledger/rows/expense'));await tick();
-  assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal([...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='금융 유형 영향 확인')!.disabled,true);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'TRANSFER');
+  assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal([...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='방향·카테고리 저장')!.disabled,true);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'TRANSFER');
  }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
 });
 
@@ -95,8 +95,8 @@ test('review link opens the canonical ledger row outside the current period and 
  }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
 });
 
-type DecisionRequest={requestId:string;expectedVersion:number;financialType:string};
-const outgoing={...expense,id:'debit',title:'Debit',meaning_state:'UNRESOLVED',categoryEligible:false} as LedgerRow;
+type DecisionRequest={requestId:string;expectedVersion:number;financialType?:string;decisionRequestId?:string};
+const outgoing={...expense,counterparty_text:'오픈 송금 이체',quickConfirmAvailable:false,id:'debit',title:'Debit',meaning_state:'UNRESOLVED',categoryEligible:false} as LedgerRow;
 const incoming={...refund,id:'credit',title:'Credit',type:'INCOME',meaning_state:'UNRESOLVED',categoryEligible:false} as LedgerRow;
 async function withDecisions(run:(tools:{
  choose:(id:string,type:string)=>Promise<void>;calls:{id:string;command:DecisionRequest}[];reads:string[];
@@ -114,15 +114,17 @@ async function withDecisions(run:(tools:{
    const items=[...records.values()].filter(row=>state==='UNRESOLVED'?row.meaning_state==='UNRESOLVED':state==='RELATION_PENDING'?row.relationStatus&&row.relationStatus!=='NONE':true);
    return {...page(path),items,total:items.length} as T;
   }
+  if(path.startsWith('/account-ledger/rows/'))return records.get(path.split('/').at(-1)!) as T;
   return page(path) as T;
  };
  api.post=async()=>{throw Error('Unexpected multi-step financial write');};
  api.patch=async<T,>(path:string,body:unknown)=>{
-  const match=path.match(/^\/account-ledger\/rows\/([^/]+)\/financial-type$/);assert.ok(match);
+  const match=path.match(/^\/account-ledger\/rows\/([^/]+)\/financial-type(\/undo)?$/);assert.ok(match);
   const id=match[1],command=body as DecisionRequest;calls.push({id,command});
   if(before)await before(id,command);
   const previous=records.get(id)!;if(previous.version!==command.expectedVersion)throw new ApiError(409,'Conflict');
-  const type=command.financialType,ordinary=['EXPENSE','INCOME'].includes(type),pending=type==='TRANSFER';
+  if(match[2]){assert.ok(command.decisionRequestId);assert.equal(command.financialType,undefined);}
+  const type=match[2]?'UNRESOLVED':command.financialType!,ordinary=['EXPENSE','INCOME'].includes(type),pending=type==='TRANSFER';
   const row:LedgerRow={...previous,type:ordinary?type:previous.type,declaredFinancialType:type,meaning_state:ordinary?'CONFIRMED':'UNRESOLVED',categoryEligible:ordinary,meaningApplied:!pending,relationStatus:pending?'TRANSFER_PAIR_PENDING':'NONE',version:previous.version+1};
   records.set(id,row);
   return {requestId:command.requestId,transactionId:id,intentSaved:true,meaningApplied:!pending,currentVersion:row.version,row} as T;
@@ -157,9 +159,39 @@ test('ordinary outgoing and incoming decisions each send one versioned PATCH, en
   assert.ok(document.querySelector('[aria-label="Debit 생활 카테고리"]'));assert.ok(document.querySelector('[aria-label="Credit 생활 카테고리"]'));
   assert.equal(document.querySelector('.al-editor'),null);
   await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id=debit] .al-decision-result button')!.click());await tick();
-  assert.equal(calls[2].command.financialType,'UNRESOLVED');assert.equal(calls[2].command.expectedVersion,2);
+  assert.equal(calls[2].command.decisionRequestId,calls[0].command.requestId);assert.equal(calls[2].command.financialType,undefined);assert.equal(calls[2].command.expectedVersion,2);
   assert.notEqual(calls[0].command.requestId,calls[2].command.requestId);
   assert.equal(records.get('debit')!.signedAmount,-100);assert.ok(document.querySelector('[aria-label="Debit 생활 카테고리"]'));
+ });
+});
+test('W01 unresolved owner declaration can reselect the same inline direction despite transfer keywords',async()=>{
+ await withDecisions(async({choose,records,reload,calls})=>{
+  records.set('debit',{...records.get('debit')!,declaredFinancialType:'EXPENSE',meaningApplied:false});
+  await reload();await choose('debit','EXPENSE');
+  assert.equal(calls.length,1);assert.equal(calls[0].command.financialType,'EXPENSE');
+ });
+});
+test('W01/W02 explicit same-direction choices on unresolved declarations work in detail and batch',async()=>{
+ await withDecisions(async({dom,calls,records,reload})=>{
+  records.set('debit',{...records.get('debit')!,declaredFinancialType:'EXPENSE',meaningApplied:false});
+  records.set('credit',{...records.get('credit')!,declaredFinancialType:'INCOME',meaningApplied:false});
+  await reload();
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="Debit 상세 편집"]')!.click());await tick();
+  assert.equal(document.querySelector<HTMLSelectElement>('[aria-label="편집 금융 유형"]')!.value,'EXPENSE');
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='방향·카테고리 저장')!.click());await tick();
+  assert.equal(calls[0].command.financialType,'EXPENSE');
+  await act(()=>document.querySelector<HTMLInputElement>('[aria-label="Credit 분류 선택"]')!.click());
+  const select=document.querySelector<HTMLSelectElement>('[aria-label="일괄 금융유형"]')!;
+  await act(()=>{select.value='INCOME';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='선택 거래에 적용')!.click());await tick();
+  assert.deepEqual(calls.map(c=>c.command.financialType),['EXPENSE','INCOME']);
+ });
+});
+test('W03 filtered-out decision reports pending from the durable receipt',async()=>{
+ await withDecisions(async({choose})=>{
+  await choose('expense','TRANSFER');
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('nav button')].find(b=>b.textContent==='미처리 알림')!.click());await tick();
+  assert.match(document.querySelector('.al-pending')!.textContent!,/금융 반영 대기.*상대 거래 연결 대기/);
  });
 });
 test('unmatched relationship persists on confirmed row and is discoverable under follow-up',async()=>{
@@ -195,7 +227,7 @@ test('picker keyboard navigation restores focus on Escape and Enter saves exactl
   const key=async(name:string)=>{await act(()=>document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:name,bubbles:true})));};
   const direction=()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="거래 방향"] button')];
   await act(()=>trigger.click());assert.equal(document.activeElement,direction()[1]);
-  assert.equal(direction()[0].disabled,true);
+  assert.equal(direction()[0].disabled,false);
   assert.equal(document.querySelector('[role=option]'),null);
   await key('Escape');assert.equal(document.activeElement,trigger);assert.equal(calls.length,0);
   await act(()=>trigger.click());await key('ArrowDown');assert.equal(document.activeElement,direction()[2]);
