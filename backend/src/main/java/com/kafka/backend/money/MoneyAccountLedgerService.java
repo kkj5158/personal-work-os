@@ -324,20 +324,26 @@ public class MoneyAccountLedgerService {
    valid(id,input.fingerprint(),input.expectedVersion());
    var decisions=new MoneyOwnerFinancialDecision(db,owner());
    var before=decisions.fact(id,true);
+   // Older direct editors only sent the category ID. Read the current mapping under the owner lock.
+   Long policyVersion=input.semanticPolicyVersion();
+   if(policyVersion==null && input.categoryId()!=null){
+    var matches=db.queryForList("select policy_version from money_category_financial_policy where user_id=? and category_id=? for share",Long.class,owner(),input.categoryId());
+    if(!matches.isEmpty())policyVersion=matches.getFirst();
+   }
    var fact=money.transaction(id);
    String direction=fact.fromAccountId()!=null?"EXPENSE":"INCOME";
    if(input.baseDirection()!=null){
     require(input.baseDirection().equals(direction) && (fact.fromAccountId()==null ^ fact.toAccountId()==null),"선택한 계좌의 실제 방향과 다릅니다.");
     if(before.get("loan_id")!=null||fact.refundOf()!=null||Set.of(TransactionType.LOAN_PAYMENT,TransactionType.LOAN_RECEIPT,TransactionType.REFUND).contains(fact.type())){
-     require(input.semanticPolicyVersion()!=null && new MoneyCategoryFinancialPolicy(db,owner())
-       .resolve(input.categoryId(),input.semanticPolicyVersion()).equals(fact.type().name()),
+     require(policyVersion!=null && new MoneyCategoryFinancialPolicy(db,owner())
+       .resolve(input.categoryId(),policyVersion).equals(fact.type().name()),
        "대출·환불 분류는 상세 편집에서 정정하세요.");
     }
    }
-   if("UNRESOLVED".equals(fact.meaningState()) && (input.baseDirection()!=null||input.semanticPolicyVersion()!=null)){
+   if("UNRESOLVED".equals(fact.meaningState()) && (input.baseDirection()!=null||policyVersion!=null)){
     require(Set.of(TransactionType.INCOME,TransactionType.EXPENSE).contains(fact.type()) &&
       (input.baseDirection()!=null || before.get("declaredFinancialType")==null || Set.of("UNRESOLVED",direction).contains(before.get("declaredFinancialType")) ||
-       (input.semanticPolicyVersion()!=null && new MoneyCategoryFinancialPolicy(db,owner()).resolve(input.categoryId(),input.semanticPolicyVersion()).equals(before.get("declaredFinancialType")))),
+       (policyVersion!=null && new MoneyCategoryFinancialPolicy(db,owner()).resolve(input.categoryId(),policyVersion).equals(before.get("declaredFinancialType")))),
       "기존 금융 의도나 연결 관계를 먼저 정정하세요.");
     decisions.apply(id,new FinancialType(input.requestId(),fact.version(),direction,true),before);
     if(input.baseDirection()!=null)
@@ -349,12 +355,12 @@ public class MoneyAccountLedgerService {
    // Owner writes and recommendation outcomes share the owner lock and classification version.
    var classification=new MoneyClassificationService(db,users,json,web,null,money,commands);var state=classification.ownedState(id);MoneyMeaningService.version(((Number)state.get("version")).longValue(),input.expectedClassificationVersion());
    var book=web.accountLedgerBookkeepingRow(id);var event=classification.persistRecommendation(id,input.categoryId(),"DIRECT",Boolean.TRUE.equals(input.thisTransactionOnly()),input.requestId(),book,Map.of("source","ACCOUNT_LEDGER_EXPLICIT_CATEGORY"),state);
-   if(input.semanticPolicyVersion()!=null){
+   if(policyVersion!=null){
     var policy=new MoneyCategoryFinancialPolicy(db,owner());
-    String code=policy.resolve(input.categoryId(),input.semanticPolicyVersion());
+    String code=policy.resolve(input.categoryId(),policyVersion);
     require(code.equals(fact.type().name())||Set.of(TransactionType.INCOME,TransactionType.EXPENSE).contains(fact.type()),
       "기존 대출·환불 관계를 전용 정정에서 확인하세요.");
-    policy.bind(id,input.requestId(),input.categoryId(),input.semanticPolicyVersion(),fact.type().name());
+    policy.bind(id,input.requestId(),input.categoryId(),policyVersion,fact.type().name());
     audit(id,"ACCOUNT_LEDGER_CATEGORY_INTENT",fact,Map.of("categoryId",input.categoryId(),"semanticCode",code,"requestId",input.requestId()));
    }
    return Map.of("row",row(id),"classification",event);
