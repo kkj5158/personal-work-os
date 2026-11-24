@@ -60,7 +60,7 @@ public class MoneyV4ReadService {
     public record Metrics(String currency, String timezone, BigDecimal actualIncome, BigDecimal consumption,
                           BigDecimal totalExpense, BigDecimal loanRepayment, BigDecimal savingsIn,
                           BigDecimal savingsOut, BigDecimal savingsNet, BigDecimal savingsMovement,
-                          long unqualifiedIncomeCount, long unknownSavingsCount, long unknownTrackingCount, List<Slice> composition) {}
+                          long unqualifiedIncomeCount, long unknownSavingsCount, long unknownTrackingCount, List<Slice> composition, BigDecimal provisionalIncome, BigDecimal provisionalExpense) {}
 
     private String accountScope(String accounts, MapSqlParameterSource params) {
         var selected = parseAccountScope(accounts);
@@ -163,7 +163,8 @@ public class MoneyV4ReadService {
         return new Metrics(currency, SEOUL.getId(), income, expense, expense.add(loan), loan,
                 unknownSavings == 0 ? in : null, unknownSavings == 0 ? out : null,
                 unknownSavings == 0 ? in.subtract(out) : null, unknownSavings == 0 ? in.add(out) : null,
-                unknownIncome, unknownSavings, slices.stream().filter(row->row.bucket().equals("UNKNOWN_TRACKING")).mapToLong(Slice::count).sum(), slices);
+                unknownIncome, unknownSavings, slices.stream().filter(row->row.bucket().equals("UNKNOWN_TRACKING")).mapToLong(Slice::count).sum(), slices,
+                totals.getOrDefault("PROVISIONAL_IN", BigDecimal.ZERO), totals.getOrDefault("PROVISIONAL_OUT", BigDecimal.ZERO));
     }
 
     public record SavingsMember(UUID id, String name) {}

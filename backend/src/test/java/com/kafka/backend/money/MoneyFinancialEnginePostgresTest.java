@@ -80,6 +80,38 @@ class MoneyFinancialEnginePostgresTest {
         return result;
     }
 
+    @Test void deterministicSourceRegistrationIsProvisionalReversibleAndOwnerConfirmationSupersedesIt() {
+        fixture.check(e -> {
+            var owner=MoneyPostgresIntegrationTest.OWNER;
+            var services=services(e,owner);
+            var account=account(e,"8847");
+            var fact=admitted(e,account,true,900,"8847","오픈 송금",AT);
+            var engine=new MoneyObservedDirectionService(e.db(),()->owner,e.money(),services.commands());
+            var balance=e.product().balance(account.id());
+            var candidate=engine.inventory().stream().filter(c->c.id().equals(fact.id())).findFirst().orElseThrow();
+            assertThat(candidate.disposition()).isEqualTo("REGISTER_OBSERVED_DIRECTION");
+            var request=new MoneyObservedDirectionService.Register(UUID.randomUUID(),fact.version(),candidate.fingerprint());
+            assertThat(engine.register(fact.id(),request)).containsEntry("status","APPLIED");
+            assertThat(engine.register(fact.id(),request)).containsEntry("status","APPLIED");
+            assertThat(services.ledger().row(fact.id())).containsEntry("meaning_state","UNRESOLVED").containsEntry("provisionalDirection","EXPENSE");
+            assertThat(e.web().accountLedgerBookkeepingRow(fact.id())).containsEntry("interpretationStatus","PROVISIONAL");
+            var reversal=new MoneyObservedDirectionService.Reverse(UUID.randomUUID(),fact.version()+1,request.requestId());
+            assertThat(engine.reverse(fact.id(),reversal)).containsEntry("status","APPLIED");
+            assertThat(engine.reverse(fact.id(),reversal)).containsEntry("status","APPLIED");
+            assertThat(services.ledger().row(fact.id()).get("provisionalDirection")).isNull();
+            var command=new MoneyAccountLedgerService.FinancialType(UUID.randomUUID(),fact.version()+2,"EXPENSE",true);
+            var receipt=services.ledger().financialType(fact.id(),command);
+            assertThat(receipt).containsEntry("meaningApplied",true);
+            assertThat(e.web().accountLedgerBookkeepingRow(fact.id())).containsEntry("interpretationStatus","CONFIRMED");
+            assertThat(engine.inventory()).noneMatch(c->c.id().equals(fact.id()));
+            var undo=new MoneyAccountLedgerService.UndoDirection(UUID.randomUUID(),fact.version()+3,command.requestId());
+            assertThat(services.ledger().undoDirection(fact.id(),undo)).containsEntry("status","UNDONE");
+            assertThat(services.ledger().row(fact.id())).containsEntry("meaning_state","UNRESOLVED");
+            assertThat(e.product().balance(account.id())).isEqualTo(balance);
+            assertThat(e.money().transaction(fact.id()).sources()).isEqualTo(fact.sources());
+        });
+    }
+
     @Test void quickConfirmationPreservesCashSourcesAndOwnerProtectsIt() {
         fixture.check(e -> {
             var s = services(e, MoneyPostgresIntegrationTest.OWNER);

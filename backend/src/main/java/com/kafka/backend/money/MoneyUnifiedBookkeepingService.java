@@ -111,7 +111,7 @@ public class MoneyUnifiedBookkeepingService {
  }
 
  private static String decimal(BigDecimal value){return value.stripTrailingZeros().toPlainString();}
- private Map<String,Object> fact(UUID id){var found=db.queryForList("select t.*,"+MoneySavingsReadService.displayTypeSql("t")+" as display_type from money_transactions t where t.user_id=? and t.id=?",owner(),id);if(found.isEmpty())throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");return found.getFirst();}
+ private Map<String,Object> fact(UUID id){var found=db.queryForList("select t.*,"+MoneyOwnerFinancialDecision.FIELDS+" from money_transactions t"+MoneyOwnerFinancialDecision.JOIN+" where t.user_id=? and t.id=?",owner(),id);if(found.isEmpty())throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");return found.getFirst();}
  private void version(Map<String,Object> row,Long expected){MoneyMeaningService.version(((Number)row.get("version")).longValue(),expected);}
  private String state(UUID id){return fact(id).get("meaning_state").toString();}
  private void active(Map<String,Object> row){require(!Boolean.TRUE.equals(row.get("excluded"))&&row.get("merged_into")==null,"취소·연결된 원본 거래는 변경할 수 없습니다.");require("KRW".equals(row.get("currency")),"지원되지 않는 통화는 전용 금융 확인이 필요합니다.");}
@@ -177,10 +177,11 @@ public class MoneyUnifiedBookkeepingService {
  @Transactional(readOnly=true) public Map<String,Object> pending(){
   String sql="""
       select count(*) filter(where undecided) as count,
+        count(*) filter(where unresolved) as "canonicalUnresolved",
         coalesce(sum(amount) filter(where undecided and from_account_id is not null),0) as outgoing,
         coalesce(sum(amount) filter(where undecided and to_account_id is not null),0) as incoming,
         count(*) filter(where split_pending) as "loanSplitPending"
-      from (select t.amount,t.from_account_id,t.to_account_id,(%s) as undecided,
+      from (select t.amount,t.from_account_id,t.to_account_id,t.meaning_state='UNRESOLVED' as unresolved,(%s) as undecided,
         ((t.type='LOAN_PAYMENT' and t.principal is null) or (t.type='EXPENSE' and t.meaning_state='UNRESOLVED'
            and d.declared_type='LOAN_PAYMENT' and d.relation_status='LOAN_SPLIT_PENDING')) as split_pending
       from money_transactions t
@@ -208,7 +209,7 @@ public class MoneyUnifiedBookkeepingService {
  public Map<String,Object> edit(UUID id,Edit input){require(input!=null&&input.action()!=null,"변경 내용이 필요합니다.");return commands.execute(owner(),input.requestId(),"UNIFIED_"+input.action(),Arrays.asList(id,input),()->applyValidatedEdit(id,input));}
  /** Shared by the ledger's rollback-only preview and guarded execution under the owner lock. */
  Map<String,Object> applyValidatedEdit(UUID id,Edit input){
-  var before=fact(id);version(before,input.expectedVersion());active(before);require(before.get("transfer_destination_status")==null||input.action().equals("ATTACH_SOURCE"),"관리 제외 본인 계좌 이체는 은행 대사 변경 이력으로 먼저 복구하세요.");UUID undo=null;
+  var before=fact(id);version(before,input.expectedVersion());active(before);require(before.get("transfer_destination_status")==null||Set.of("ATTACH_SOURCE","OWNER_INTENT").contains(input.action()),"관리 제외 본인 계좌 이체는 은행 대사 변경 이력으로 먼저 복구하세요.");UUID undo=null;
   switch(input.action()){
    case "OWNER_INTENT" -> {
     require(Set.of("INCOME","EXPENSE","REFUND","SAVINGS","SAVINGS_WITHDRAWAL","LOAN_RECEIPT","LOAN_PAYMENT","TRANSFER").contains(Objects.toString(input.type(),"")),"상세 금융 유형을 선택하세요.");
