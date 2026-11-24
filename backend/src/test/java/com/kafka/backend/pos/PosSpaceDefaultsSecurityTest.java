@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PosSpaceDefaultsSecurityTest {
     private static final String ENDPOINT = "/api/pos/preferences/space-defaults";
     static final String INITIAL = """
-            {"defaults":{"work":"WORK FLOW","knowledge":"NOTE SYS","growth":"STUDY","life":"LIFE CODE","finance":"MONEY SYS"},"revision":0}
+            {"defaults":{"work":"WORK FLOW","knowledge":"NOTE SYS","growth":"STUDY","life":"LIFE CODE","finance":"MONEY SYS","diet":"DIET SYS"},"revision":0}
             """;
     static final String CHANGED = INITIAL.replace("WORK FLOW", "Calendar").replace("NOTE SYS", "BLOG")
             .replace("LIFE CODE", "CHECKLIST SYS");
@@ -65,6 +65,8 @@ class PosSpaceDefaultsSecurityTest {
                 INITIAL.replace("\"work\":\"WORK FLOW\"", "\"work\":\"WORK FLOW\",\"work\":\"WORK OS\""),
                 INITIAL.replace("\"finance\":\"MONEY SYS\"", "\"finance\":\"WORK OS\""),
                 INITIAL.replace("\"finance\":\"MONEY SYS\"", "\"finance\":null"),
+                INITIAL.replace("\"life\":\"LIFE CODE\"", "\"life\":\"DIET SYS\""),
+                INITIAL.replace("\"diet\":\"DIET SYS\"", "\"diet\":\"LIFE CODE\""),
                 INITIAL.replace("\"work\":\"WORK FLOW\"", "\"work\":[\"WORK FLOW\"]"),
                 INITIAL.replace("\"work\"", "\"unknown\""), INITIAL.replace(",\"revision\":0", ""),
                 INITIAL.replace("\"revision\":0", "\"revision\":\"0\""),
@@ -91,5 +93,14 @@ class PosSpaceDefaultsSecurityTest {
         initial.put("work", "Calendar");
         assertThat(PosSpaceDefaultsController.normalizeStored("{\"work\":\"Calendar\",\"life\":\"BLOG\",\"growth\":false,\"extra\":[]}"))
                 .containsAllEntriesOf(initial).doesNotContainKey("extra");
+    }
+
+    @Test void legacyLifeDietDefaultsUseTheExistingLifeFallback() {
+        String legacy = CHANGED.replace(",\"diet\":\"DIET SYS\"", "").replace("CHECKLIST SYS", "DIET SYS");
+        var expected = PosSpaceDefaultsController.parse(CHANGED.replace("CHECKLIST SYS", "LIFE CODE"));
+        assertThat(PosSpaceDefaultsController.parse(legacy)).isEqualTo(expected);
+        assertThat(PosSpaceDefaultsController.normalizeStored("""
+                {"work":"Calendar","knowledge":"BLOG","growth":"STUDY","life":"DIET SYS","finance":"MONEY SYS"}
+                """)).isEqualTo(expected.defaults());
     }
 }
