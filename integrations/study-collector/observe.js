@@ -13,9 +13,13 @@
         if(message.action==='detach'){stop();reply({});return;}
         if(message.action==='sample'){
             if(!valid()){stop();reply({bound:false});return;}
-            const streaming=!!document.querySelector('main [data-is-streaming="true"],main [data-talvt-turn-state="in_progress"]');
-            const stopButton=document.querySelector('button[data-testid="stop-button"]');
-            const generating=streaming && !!stopButton && !stopButton.disabled && stopButton.getClientRects().length>0;
+            const stopButtons=document.querySelectorAll('button[data-testid="stop-button"],button[aria-label="중지"],button[aria-label="Stop"],button[aria-label="Stop generating"]');
+            const generating=Array.from(stopButtons).some(button=>{
+                if(button.disabled || !button.getClientRects().length)return false;
+                const surface=button.closest('main');
+                const turns=surface?.querySelectorAll('[data-is-streaming="true"],[data-talvt-turn-state="in_progress"]')??[];
+                return Array.from(turns).some(turn=>turn.getClientRects().length && turn.closest('main')===surface);
+            });
             reply({bound:true,generating,visible:!document.hidden && document.hasFocus(),idleMs:Math.max(0,performance.now()-lastInput)});
         }
     }
