@@ -36,13 +36,14 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
      basisAt:"2027-01-20T03:00:00Z",bankObservedAt:"2027-01-24T04:00:00Z",source:"OWNER_CHECKPOINT"};
     const zero={...common,accountId:"zero",displayName:"합성 0원 계좌",displayBalance:"0",balance:0};
     const negative={...common,accountId:"negative",displayName:"합성 음수 계좌",displayBalance:"-0.25",balance:-0.25};
+    const positive={...common,accountId:"positive",displayName:"양수 계좌",displayBalance:"1",balance:1};
     const estimated={...common,displayBalance:"9007199254740993.42",balance:9007199254740994};
     const unknown={...common,accountId:"unknown",displayName:"합성 미확인 계좌",confidence:"UNKNOWN",status:"UNKNOWN",
      reason:"LEDGER_COVERAGE_UNPROVEN",displayable:false,balance:null,displayBalance:null};
     return {asOfCutoff:"2027-01-31T14:59:59Z",unresolved:[],savings:{confidence:"ESTIMATED",total:null,
      displayTotal:"9007199254740993.42",knownCount:0,unknownCount:0,estimatedCount:2,memberCount:2,members:[estimated,zero]},
-     installment:{confidence:"UNKNOWN",total:null,displayTotal:null,estimatedSubtotal:"-0.25",
-      knownCount:0,unknownCount:1,estimatedCount:1,memberCount:2,members:[negative,unknown]}} as T;
+     installment:{confidence:"UNKNOWN",total:null,displayTotal:null,displaySubtotal:"0.75",partial:true,estimatedSubtotal:"0.75",
+      knownCount:0,unknownCount:1,estimatedCount:2,memberCount:3,members:[negative,positive,unknown]}} as T;
    }
    return {asOfCutoff:"2026-11-30T14:59:59Z",savings:{total:5100,knownCount:1,memberCount:1,members:[member]},installment:{total:null,knownCount:0,memberCount:0,members:[]},unresolved:[]} as T;
   }
@@ -66,7 +67,7 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
    const zero=q.get('from')==='2027-01-01'||q.get('accountIds')!=='source';
    if(q.get('from')==='2026-12-01'){await decemberRead;throw Error('월간 합계 테스트 실패');}
    if(q.get('from')==='2027-01-01')return {actualIncome:0,consumption:-50000,totalExpense:-50000,loanRepayment:0,composition:[{bucket:'E',categoryId:null,amount:-50000,count:2}]} as T;
-   return {actualIncome:100,consumption:100,totalExpense:zero?100:142100,loanRepayment:zero?0:142000,savingsIn:5100,savingsOut:900,savingsMovement:6000,savingsNet:4200,composition:[]} as T;
+   return {actualIncome:100,consumption:100,provisionalIncome:11,provisionalExpense:17,totalExpense:zero?100:142100,loanRepayment:zero?0:142000,savingsIn:5100,savingsOut:900,savingsMovement:6000,savingsNet:4200,composition:[]} as T;
   }
   if(path.startsWith('/v4/contributions?')){const matching=q.get('search')?rows.filter(r=>r.title.includes(q.get('search')!)):rows,offset=Number(q.get('offset'));return {items:matching.slice(offset,offset+50),total:matching.length,filteredAmount:matching.length*100,totals:{amount:5100,count:51,analyticsUnavailable:false,unknownHistoryCount:0,currencies:['KRW'],composition:[{accountId:'installment',label:'purpose installment',amount:5100,count:51}]}} as T;}
   if(path.includes('category-groups')||path==='/loans')return [] as T;
@@ -94,6 +95,8 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   assert.deepEqual([...document.querySelectorAll('.money-month-kpis small')].map(n=>n.textContent),['실제 소득','전체 지출','대출상환','저축 잔액','적금 잔액']);
   assert.deepEqual([...document.querySelectorAll('.money-month-donut h3')].map(n=>n.textContent),['소득 구성','일반 소비 구성','대출상환 구성','저축 구성','적금 구성']);
   assert.deepEqual([...document.querySelectorAll('.money-month-kpis strong')].map(n=>n.textContent),['100원','142,100원','142,000원','5,100원','확인 필요']);
+  assert.match(document.querySelector('.money-month-kpis')!.textContent!,/확인 대기 입금 11원 · 합계 제외/);
+  assert.match(document.querySelector('.money-month-kpis')!.textContent!,/확인 대기 출금 17원 · 합계 제외/);
   assert.ok(paths.some(p=>p.startsWith('/v4/summary?')&&p.includes('accountIds=source')));
   assert.ok(paths.some(p=>p.includes('/loan-repayments?')&&p.includes('accountIds=source')));
   const loan=[...document.querySelectorAll('.money-month-donut')].find(n=>n.querySelector('h3')?.textContent==='대출상환 구성')!;
@@ -166,10 +169,13 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   await act(()=>zero.click());await tick();
   const stockTable=document.querySelector('[aria-label="합성 0원 계좌 거래"]')!;
   assert.match(stockTable.textContent!,/0원.*장부 기준 추정.*수동 기준점.*최근 은행 관측/);
-  assert.equal(installment.querySelector('.money-month-center strong')?.textContent,'확인 필요');
-  assert.match(installment.textContent!,/추정 부분 합계 -0.25원/);
+  assert.equal(installment.querySelector('.money-month-center strong')?.textContent,'0.75원');
+  assert.match(installment.textContent!,/부분 합계/);
+  assert.match(installment.textContent!,/합성 미확인 계좌/);
   assert.match(installment.textContent!,/기준점 이후 장부 범위 미입증/);
-  assert.equal(installment.querySelectorAll('circle[role="button"]').length,0);
+  assert.equal(installment.querySelectorAll('circle[role="button"]').length,1);
+  assert.match(installment.querySelector('circle[role="button"]')!.getAttribute('aria-label')!,/양수 계좌 1원/);
+  assert.match(installment.textContent!,/-0.25원 · 추정/);
   const netChart=[...document.querySelectorAll('.money-month-donut')].find(chart=>chart.querySelector('h3')?.textContent==='일반 소비 구성')!;
   assert.equal(netChart.querySelector('.money-month-center strong')?.textContent,'-50,000원');
   assert.equal(netChart.querySelector('.money-month-legend strong')?.textContent,'-50,000원');

@@ -37,6 +37,7 @@ export function donutSectors<T extends {id:string;amount:number}>(rows:T[]){cons
 
 export type V4Summary = {
  actualIncome:number; consumption:number; totalExpense:number; loanRepayment:number;
+ provisionalIncome?:number; provisionalExpense?:number;
  savingsIn:number|null; savingsOut:number|null; savingsNet:number|null; savingsMovement:number|null;
  unqualifiedIncomeCount:number; unknownTrackingCount?:number;unknownSavingsCount:number;
  composition:{bucket:string;categoryId:string|null;loanId:string|null;amount:number;count:number}[];
@@ -53,7 +54,7 @@ export type StatisticalMember = {
 export type StatisticalGroup = {
  purpose:string;total:number|null;confirmedPartialSum:number|null;memberCount:number;knownCount:number;unknownCount:number;members:StatisticalMember[];
  confidence?:BalanceConfidence;displayTotal?:string|null;verifiedSubtotal?:string|null;estimatedSubtotal?:string|null;
- estimatedCount?:number;membershipUnknownCount?:number;
+ estimatedCount?:number;membershipUnknownCount?:number;displaySubtotal?:string|null;partial?:boolean;conflicts?:number;
 };
 export type StatisticalBalances = {asOfCutoff:string;savings:StatisticalGroup;installment:StatisticalGroup;unresolved:{accountId:string;displayName:string;reason:string;possibleGroups?:string[]}[]};
 
@@ -65,14 +66,17 @@ export function stockAmount(member:StatisticalMember) {
  return member.displayable===undefined?(member.known && member.balance!=null?String(member.balance):null):member.displayBalance??null;
 }
 export function stockTotal(group:StatisticalGroup) {
+ if(group.displaySubtotal!==undefined)return group.displaySubtotal;
  return group.displayTotal===undefined?(group.total==null?null:String(group.total)):group.displayTotal;
 }
 export function stockCoverage(group:StatisticalGroup): string {
  const total=stockTotal(group), verified=group.verifiedSubtotal??(group.confirmedPartialSum==null?null:String(group.confirmedPartialSum));
  return [
-  group.confidence==="ESTIMATED"?"장부 기준 추정":total!=null?"확인 잔액":group.memberCount>0||group.membershipUnknownCount?"전체 잔액 미확정":null,
+  group.partial?"부분 합계":null,
+  group.confidence==="CONFLICT"?"잔액 근거 불일치":group.confidence==="ESTIMATED"?"장부 기준 추정":total!=null&&!group.partial?"확인 잔액":group.memberCount>0||group.membershipUnknownCount?"전체 잔액 미확정":null,
   `확인 ${group.knownCount}/${group.memberCount}계좌`,
   group.estimatedCount?`추정 ${group.estimatedCount}계좌`:null,
+  group.conflicts?`불일치 ${group.conflicts}계좌`:null,
   group.unknownCount?`미확인 ${group.unknownCount}계좌`:null,
   group.membershipUnknownCount?`편입 여부 미확인 ${group.membershipUnknownCount}계좌`:null,
   total==null&&verified!=null?`확인된 부분 합계 ${stockWon(verified)}`:null,
@@ -99,7 +103,7 @@ export const balanceEvidenceLabels:Record<string,string> = {
  TRACKING_OR_FUND_HISTORY_MISSING:"기준일 추적 또는 자금 이력 없음",
  LEDGER_COVERAGE_UNPROVEN:"기준점 이후 장부 범위 미입증",LEDGER_MOVEMENT_UNRESOLVED:"미확정 또는 불일치 금융 이동",
  LEDGER_TIME_UNCERTAIN:"거래 시각 정밀도 부족",PENDING_SOURCE_EVIDENCE:"미등록·미확정 알림 확인 필요",
- BANK_STATEMENT:"은행 명세",OWNER_ATTESTED_STATEMENT:"소유자 확인 명세",BANK_NOTIFICATION:"은행 알림",
+ BANK_STATEMENT_OPENING:"은행 명세 기초 잔액",BANK_STATEMENT:"은행 명세",OWNER_ATTESTED_STATEMENT:"소유자 확인 명세",BANK_NOTIFICATION:"은행 알림",
  OWNER_OBSERVATION:"소유자 관측",OWNER_CHECKPOINT:"수동 기준점",
  BANK_OBSERVED:"은행 명세 확인",OWNER_CHECKED:"소유자 확인",LEDGER_ESTIMATE:"장부 기준 추정",
 };

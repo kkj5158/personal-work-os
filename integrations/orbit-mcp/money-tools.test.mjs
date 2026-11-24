@@ -36,7 +36,7 @@ test('statistical balances uses the owner read scope and preserves exact values'
  assert.deepEqual(validateMoney(name,args).requiredScopes,['orbit:read']);
  assert.throws(()=>validateMoney(name,{...args,ownerId:'untrusted'}));
  assert.throws(()=>validateMoney(name,{from:args.from}));
- const data={asOfCutoff:args.cutoff,savings:{confidence:'ESTIMATED',displayTotal:'9007199254740993.42'}};
+ const data={asOfCutoff:args.cutoff,savings:{confidence:'UNKNOWN',displayTotal:null,displaySubtotal:'9007199254740993.42',partial:true}};
  const result=await callMoney(name,args,{origin:'https://workflow-api-development-development.up.railway.app',token:'synthetic',
    proof:async ({method,path,body})=>{
     assert.equal(method,'GET');
