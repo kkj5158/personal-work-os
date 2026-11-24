@@ -29,13 +29,14 @@ public final class OrbitMoneyProofFilter extends OncePerRequestFilter {
  public static String digest(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
  public boolean valid(JwtAuthenticationToken user,String method,String path,String query,String body,String proof){
   if(decoder==null||proof==null||proof.length()>8192)return false;
+  boolean study=com.kafka.backend.study.LearningRoutes.allowed(method,path);
   boolean diary=path.startsWith(com.kafka.backend.naverarchive.ArchiveRoutes.PREFIX+"/");
   boolean queue=path.startsWith(com.kafka.backend.workflow.attention.AttentionManagementRoutes.PREFIX);
   boolean read="GET".equals(method)||diary&&path.endsWith("/duplicate-check");
-  try{var p=decoder.decode(proof);var now=Instant.now();String scope=queue?(read?"orbit:read":"orbit:write:work-queue"):diary?(read?"orbit:read:diary":"orbit:write:diary"):(read?"orbit:read":"orbit:write:money");
+  try{var p=decoder.decode(proof);var now=Instant.now();String scope=study?(read?"orbit:read:study":"orbit:write:study"):queue?(read?"orbit:read":"orbit:write:work-queue"):diary?(read?"orbit:read:diary":"orbit:write:diary"):(read?"orbit:read":"orbit:write:money");
    return issuer.equals(p.getIssuer().toString())&&p.getAudience().equals(List.of(audience))&&user.getName().equals(p.getSubject())
     &&Objects.equals(user.getTokenAttributes().get("client_id"),p.getClaimAsString("upstream_client"))
-    &&(queue?"orbit-work-queue-v1":diary?"orbit-diary-v1":"orbit-money-v1").equals(p.getClaimAsString("purpose"))&&scope.equals(p.getClaimAsString("scope"))
+    &&(study?"orbit-study-v1":queue?"orbit-work-queue-v1":diary?"orbit-diary-v1":"orbit-money-v1").equals(p.getClaimAsString("purpose"))&&scope.equals(p.getClaimAsString("scope"))
     &&p.getIssuedAt()!=null&&p.getExpiresAt()!=null&&p.getIssuedAt().isAfter(now.minusSeconds(35))&&!p.getIssuedAt().isAfter(now.plusSeconds(2))&&p.getExpiresAt().isAfter(now)&&p.getExpiresAt().isBefore(p.getIssuedAt().plusSeconds(36))
     &&digest(user.getToken().getTokenValue()).equals(p.getClaimAsString("upstream_hash"))
     &&digest(method+"\n"+path+(query==null?"":"?"+query)+"\n"+body).equals(p.getClaimAsString("request_hash"))
@@ -44,11 +45,12 @@ public final class OrbitMoneyProofFilter extends OncePerRequestFilter {
  }
  @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)throws IOException,ServletException{
   var a=SecurityContextHolder.getContext().getAuthentication();
+  boolean study=com.kafka.backend.study.LearningRoutes.allowed(request.getMethod(),request.getServletPath());
   boolean diary=request.getServletPath().startsWith(com.kafka.backend.naverarchive.ArchiveRoutes.PREFIX+"/");
   boolean queue=request.getServletPath().startsWith(com.kafka.backend.workflow.attention.AttentionManagementRoutes.PREFIX);
-  if(!(queue||diary||request.getServletPath().startsWith(OrbitMoneyRoutes.PREFIX))||!(a instanceof JwtAuthenticationToken user)||!user.getTokenAttributes().containsKey("client_id")){chain.doFilter(request,response);return;}
+  if(!(study||queue||diary||request.getServletPath().startsWith(OrbitMoneyRoutes.PREFIX))||!(a instanceof JwtAuthenticationToken user)||!user.getTokenAttributes().containsKey("client_id")){chain.doFilter(request,response);return;}
   byte[] body=request.getInputStream().readNBytes(65537);
-  if(body.length>65536||!valid(user,request.getMethod(),request.getServletPath(),request.getQueryString(),new String(body,StandardCharsets.UTF_8),request.getHeader(queue?"X-Orbit-Work-Queue-Proof":diary?"X-Orbit-Diary-Proof":"X-Orbit-Money-Proof"))){response.setStatus(403);response.setContentType("application/json");response.setHeader("Cache-Control","no-store");response.getWriter().write("{\"error\":\"FORBIDDEN\",\"message\":\"Explicit ORBIT scope and signed request entitlement required\"}");return;}
+  if(body.length>65536||!valid(user,request.getMethod(),request.getServletPath(),request.getQueryString(),new String(body,StandardCharsets.UTF_8),request.getHeader(study?"X-Orbit-Study-Proof":queue?"X-Orbit-Work-Queue-Proof":diary?"X-Orbit-Diary-Proof":"X-Orbit-Money-Proof"))){response.setStatus(403);response.setContentType("application/json");response.setHeader("Cache-Control","no-store");response.getWriter().write("{\"error\":\"FORBIDDEN\",\"message\":\"Explicit ORBIT scope and signed request entitlement required\"}");return;}
   chain.doFilter(new HttpServletRequestWrapper(request){
    @Override public ServletInputStream getInputStream(){var input=new ByteArrayInputStream(body);return new ServletInputStream(){public int read(){return input.read();}public boolean isFinished(){return input.available()==0;}public boolean isReady(){return true;}public void setReadListener(ReadListener listener){throw new UnsupportedOperationException();}};}
    @Override public BufferedReader getReader(){return new BufferedReader(new InputStreamReader(getInputStream(),StandardCharsets.UTF_8));}

@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "POS 대화 학습 측정",
+  "version": "1.0.0",
+  "minimum_chrome_version": "120",
+  "permissions": ["activeTab", "scripting", "storage", "idle", "alarms"],
+  "host_permissions": ["https://workflow-api-development-development.up.railway.app/*","https://personal-work-os-prod-production.up.railway.app/*"],
+  "action": {"default_title":"대화 학습 연결","default_popup":"popup.html"},
+  "background": {"service_worker":"worker.js","type":"module"}
+}
