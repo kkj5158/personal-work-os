@@ -1,8 +1,8 @@
 "use client";
 import {baseDirectionLabel} from "@/lib/money/categorySemantics";
 import {AccountLedgerEditor} from "./MoneyAccountLedgerEditor";
-import {useLedgerCategories,ledgerClassificationVersion} from './MoneyLedgerCategory';
-import {ACCOUNT_LEDGER,type LedgerRow,recoverLedgerOperation,type LedgerOperation} from "@/lib/money/accountLedger";
+import {useLedgerCategories} from './MoneyLedgerCategory';
+import {recoverLedgerOperation,type LedgerOperation} from "@/lib/money/accountLedger";
 import {type UnifiedOutcome} from "@/lib/money/unified";
 import {UnifiedLedger,UnifiedFinancialAction} from "./MoneyUnifiedLedger";
 import {typeLabels} from "@/lib/money/unified";
@@ -48,7 +48,7 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
   const [unresolved,setUnresolved]=useState(false);
   const lastLinkedContext=useRef('');
   useEffect(()=>{const signature=String(p.initialAll)+':'+query.toString();if(lastLinkedContext.current===signature)return;lastLinkedContext.current=signature;if(p.initialAll||query.get('view')==='all'||query.get('transactionId'))setView('all');},[p.initialAll,query,setView]);
-  const pending=useMoneyData<{count:number;outgoing:number;incoming:number;loanSplitPending:number}>(mode==='monthly'?UNIFIED+'/pending':null);
+  const pending=useMoneyData<{count:number;canonicalUnresolved?:number;outgoing:number;incoming:number;loanSplitPending:number}>(mode==='monthly'?UNIFIED+'/pending':null);
   const [tab,setTab]=useMoneyViewState("book-workbench-tab",()=>"classification");
   const [monthFilter,setMonthFilter]=useMoneyViewState<MonthlyFilter|null>("book-month-installment-filter-v1-"+p.period.from+":"+p.period.to,()=>null);
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
@@ -85,7 +85,7 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
     <>
       {mode==="workbench"&&<nav className="money-actions" aria-label="AI 작업대 내부 탭"><button aria-pressed={tab==="classification"} onClick={()=>setTab("classification")}>AI 분류 작업대</button><button aria-pressed={tab==="cancelled"} onClick={()=>setTab("cancelled")}>등록 취소 내역</button></nav>}
       {mode==="monthly"&&<MoneyMonthlySummary key={p.period.from+":"+p.period.to} from={p.period.from} to={p.period.to} categories={p.categories} scope={temporaryAccounts} loanAccounts={loanAccounts} filter={monthFilter} onFilter={selectMonthFilter} navigate={p.navigate}/>}
-      {mode==='monthly'&&<div className="money-unified-view-tabs">{view!=="all"&&!unresolved&&<button onClick={()=>p.select({kind:"transaction",value:null})}>+ 거래 추가</button>}<button aria-pressed={view==='legacy'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('all');setUnresolved(false);}}}>거래 등록·정정</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setUnresolved(true);}}}>유형 미확정 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">미확정 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
+      {mode==='monthly'&&<div className="money-unified-view-tabs">{view!=="all"&&!unresolved&&<button onClick={()=>p.select({kind:"transaction",value:null})}>+ 거래 추가</button>}<button aria-pressed={view==='legacy'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('all');setUnresolved(false);}}}>거래 등록·정정</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setUnresolved(true);}}}>유형 미선택 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">{pending.data.canonicalUnresolved!=null&&<>원장 의미 미확정 전체 {pending.data.canonicalUnresolved}건 · </>}유형 미선택 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
       <RegistrationUndoNotice/>
       <LoadState error={tracking.error||pending.error} loading={tracking.loading} />
       {mode==="monthly"&&monthFilter?.kind==="STOCK"?<StockLedger key={monthFilter.accountId+monthFilter.asOf} {...p} filter={monthFilter}/>:mode==="monthly"&&loanFilter?<UnifiedLedger key={`loan:${loanFilter.part??loanFilter.loanId??"unlinked"}:${p.period.from}:${p.period.to}`} {...p} unresolved={false} onExit={()=>setMonthFilter(null)} repayment={{filter:loanFilter,accounts:loanAccounts,availableAccounts:p.accounts,onAccounts:ids=>setDrilldownAccounts({ids}),scroll:ledgerScroll}}/>:
@@ -225,12 +225,6 @@ function BookkeepingList(
     if (row) setFocused(row.id);
   }, [result.loading, data, setFocused]);
   const financialCategories=useLedgerCategories();
-  async function saveFinancialCategory(row:BookRow,category:Category){
-    const fact=await api.get<LedgerRow>(ACCOUNT_LEDGER+'/rows/'+row.id);
-    if(fact.version!==row.transactionVersion||ledgerClassificationVersion(fact)!==(row.classificationVersion??0))
-      throw Error('거래 또는 분류가 변경되었습니다. 최신 값을 확인하세요.');
-    return !!await financialCategories.save(fact,category);
-  }
   async function saveInline(row:BookRow,patch:Partial<BookFields>){
     try{const source='categoryId' in patch?'classification-stage':'title' in patch?'inline:title':'inline:memo';const saved=await coordinator.edit(latest(row),patch,[],source,bookkeepingScope);setFresh(old=>({...old,[row.id]:saved}));if('categoryId' in patch&&saved.classificationEventId)remember([saved.classificationEventId],'분류를 저장했습니다.',[row.id]);cache.patchBooks([saved]);cache.mutate("book");}
     catch(error){try{const current=await api.get<BookRow>(bookRowPath(row.id,bookkeepingScope));setFresh(old=>({...old,[row.id]:current}));try{coordinator.acknowledge(current);}catch{/* Unresolved mutations must use outcome lookup first. */}cache.mutate("book");}catch{/* Preserve the original error and caller-owned draft. */}throw error;}
@@ -344,7 +338,7 @@ function BookkeepingList(
                       <InlineText id={row.id} field="memo" label={`${latest(row).title} 메모`} value={latest(row).memo ?? ""} onSave={(v) => saveInline(row, { memo: v })} />
                     </td>
                     <td onClick={e=>e.stopPropagation()}>{p.mode==="workbench"?<UnifiedFinancialAction id={row.id} categories={p.categories} accounts={p.accounts} label={typeLabels[row.financialType??row.type]}/>:<button type="button" onClick={()=>openEditor(row.id)}>{baseDirectionLabel(row)}</button>}{row.interpretationStatus==="PROVISIONAL"&&<small>입출금 등록 · 금융 의미 잠정</small>}{row.excluded&&<small className="money-muted">통계 제외</small>}</td>
-                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} onFinancial={(category,book)=>saveFinancialCategory(book,category)} disabled={result.loading||search!==debounced||financialCategories.entries[row.id]?.phase==='saving'||financialCategories.entries[row.id]?.phase==='unknown'}/></td>
+                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} onFinancial={financialCategories.saveBook} disabled={result.loading||search!==debounced||financialCategories.entries[row.id]?.phase==='saving'||financialCategories.entries[row.id]?.phase==='unknown'}/></td>
                   </>
                 <td><div className="money-row-management">{p.mode==="workbench"?<RecommendationAction row={latest(row)} onOpen={()=>openRow(row)}/>:<button type="button" aria-expanded={!!editors[row.id]} aria-controls={"ledger-editor-"+row.id} onClick={()=>openEditor(row.id)}>수정</button>}
                   <RegistrationAction id={row.id} version={latest(row).transactionVersion}/>

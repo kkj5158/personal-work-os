@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect,useRef} from 'react';
+import type {BookRow} from './MoneyWebData';
 import {ApiError} from '@/lib/api/client';
 import {ACCOUNT_LEDGER,type LedgerRow} from '@/lib/money/accountLedger';
 import {activeCategories,baseDirection,type BaseDirection} from '@/lib/money/categorySemantics';
@@ -123,7 +124,13 @@ export function useLedgerCategories(){
   const entry=entries[id],command=entry?.command;
   if(entry?.phase==='unknown'&&command)return write(id,entry.categoryId,async()=>command,true,entry.previousCategoryId);
  }
- return {entries,save,retry};
+ async function saveBook(category:Category,book:BookRow){
+  const fact=await api.get<LedgerRow>(ACCOUNT_LEDGER+'/rows/'+book.id);
+  if(fact.version!==book.transactionVersion||ledgerClassificationVersion(fact)!==(book.classificationVersion??0))
+   throw Error('거래 또는 분류가 변경되었습니다. 최신 값을 확인하세요.');
+  return !!await save(fact,category);
+ }
+ return {entries,save,saveBook,retry};
 }
 
 export function LedgerCategory({row,categories,disabled,entry,save,retry,onDetails}:{
