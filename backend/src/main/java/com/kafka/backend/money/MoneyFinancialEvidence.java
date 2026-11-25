@@ -86,13 +86,13 @@ final class MoneyFinancialEvidence {
 
     static boolean ownerProtected(JdbcTemplate db, UUID owner, UUID id) {
         return Boolean.TRUE.equals(db.queryForObject("""
-                select exists(select 1 from money_meaning_audit
+                select exists(select 1 from money_owner_financial_decisions where user_id=? and transaction_id=?) or exists(select 1 from money_meaning_audit
                    where user_id=? and subject_id=? and (action in
                       ('ACCOUNT_LEDGER_FINANCIAL_TYPE','UNIFIED_TYPE','UNIFIED_CORRECT','UNIFIED_LINK_TRANSFER','UNIFIED_UNLINK_TRANSFER',
                        'UNIFIED_UNDO_UNLINK','ACCOUNT_LEDGER_UNRESOLVED','ACCOUNT_LEDGER_LOAN_RECEIPT',
                        'OWNER_REVIEW_MANUAL_FINANCIAL_V2','OWNER_REVIEW_FINANCIAL_V2','REVIEW_COMPLETE')
                       or action like 'FINANCIAL_ENGINE_OWNER%'))
-                """, Boolean.class, owner, id));
+                """, Boolean.class, owner, id, owner, id));
     }
 
     static Proof requireQuick(JdbcTemplate db, UUID owner, MoneyService money, MoneyTransaction fact, String requestedType) {

@@ -4,7 +4,7 @@ import {createPortal} from 'react-dom';
 import {ApiError} from '@/lib/api/client';
 import {moneyApi} from '@/lib/money/model';
 import {ACCOUNT_LEDGER,ledgerDisplayType,ledgerTypes,type LedgerRow} from '@/lib/money/accountLedger';
-import {baseDirection,baseDirectionLabel,protectedMeaning,type BaseDirection} from '@/lib/money/categorySemantics';
+import {baseDirection,baseDirectionLabel,type BaseDirection} from '@/lib/money/categorySemantics';
 import {UNIFIED,type UnifiedOutcome} from '@/lib/money/unified';
 import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
 
@@ -14,18 +14,16 @@ const labels:Record<string,string>={
  REFUND_ORIGINAL_PENDING:'원거래 연결 대기', RELATION_CORRECTION_REQUIRED:'관계 정정 필요',
  DIRECTION_REVIEW:'입출금 방향 확인 필요',
 };
-export function relationLabel(row:LedgerRow){
+export function relationLabel(row:Pick<LedgerRow,'relationStatus'>){
  return row.relationStatus && row.relationStatus!=='NONE' ? labels[row.relationStatus]??'세부정보 미확정' : '';
 }
-export function directionHint(row:LedgerRow,type:string){
- if(row.from_account_id&&row.to_account_id)return '';
- if(type==='UNRESOLVED'||type==='TRANSFER')return '';
- if(row.direction==='IN'&&['EXPENSE','SAVINGS','LOAN_PAYMENT'].includes(type))return '출금 거래에서 선택 가능';
- if(row.direction==='OUT'&&['INCOME','REFUND','SAVINGS_WITHDRAWAL','LOAN_RECEIPT'].includes(type))return '입금 거래에서 선택 가능';
- return '';
-}
-type TypeCommand={requestId:string;expectedVersion:number;financialType:string;v4?:boolean};
+type TypeCommand={requestId:string;expectedVersion:number;financialType:string;v4?:boolean;decisionRequestId?:string};
 type Receipt={intentSaved:boolean;meaningApplied:boolean;currentVersion:number;requestId:string;transactionId:string;row:LedgerRow};
+export function decisionDescription(receipt:Receipt){
+ const relation=relationLabel(receipt.row);
+ if(!receipt.meaningApplied)return ['선택 저장 · 금융 반영 대기',relation].filter(Boolean).join(' · ');
+ return ['저장됨',relation].filter(Boolean).join(' · ');
+}
 type Phase='saving'|'saved'|'unknown'|'conflict'|'failed';
 type Decision={id:string;title:string;before:string;command:TypeCommand;phase:Phase;receipt?:Receipt;message?:string};
 type Recovery=Pick<Decision,'id'|'before'|'command'>;
@@ -63,7 +61,7 @@ export function useFinancialDecisions(){
   });
  },[owner,setEntries]);
  function put(entry:Decision){setEntries(old=>({...old,[entry.id]:entry}));}
- async function send(entry:Decision,refresh=true,recover=false){
+ async function send(entry:Decision,refresh=true,recover=false,onReceipt?:(row:LedgerRow)=>void){
   if(!owner||cache.preferenceOwner!==owner||active.current.has(entry.id))return 'busy';
   active.current.add(entry.id);
   remember(owner,entry.id,entry);
@@ -79,40 +77,49 @@ export function useFinancialDecisions(){
   try{
    let receipt=recover?await lookup():undefined;
    if(!receipt){
-    try{receipt=await moneyApi.patch<Receipt>(ACCOUNT_LEDGER+'/rows/'+entry.id+'/financial-type',entry.command,owner);}
+    try{
+     const {requestId,expectedVersion,decisionRequestId}=entry.command;
+     const path=ACCOUNT_LEDGER+'/rows/'+entry.id+'/financial-type';
+     receipt=decisionRequestId
+      ?await moneyApi.patch<Receipt>(path+'/undo',{requestId,expectedVersion,decisionRequestId},owner)
+      :await moneyApi.patch<Receipt>(path,entry.command,owner);
+    }
     catch(error){
      if(error instanceof ApiError&&error.status>=400&&error.status<500&&error.status!==408)throw error;
      receipt=await lookup();
     }
    }
-   if(!receipt?.intentSaved||receipt.requestId!==entry.command.requestId||receipt.transactionId!==entry.id||receipt.row?.id!==entry.id)throw Error('저장 응답을 확인할 수 없습니다.');
+   if(!receipt?.intentSaved||typeof receipt.meaningApplied!=='boolean'||receipt.requestId!==entry.command.requestId||receipt.transactionId!==entry.id||receipt.row?.id!==entry.id)throw Error('저장 응답을 확인할 수 없습니다.');
    remember(owner,entry.id);
    put({...entry,phase:'saved',receipt});
    if(refresh)cache.mutate('transaction');
-   return relationLabel(receipt.row)?'pending':'saved';
+   onReceipt?.(receipt.row);
+   return !receipt.meaningApplied||relationLabel(receipt.row)?'pending':'saved';
   }catch(error){
    const rejected=error instanceof ApiError && error.status>=400 && error.status<500 && error.status!==408;
    const phase=error instanceof ApiError&&error.status===409?'conflict':rejected?'failed':'unknown';
-   const message=phase==='conflict'?'거래가 변경되었습니다. 최신 값과 선택을 비교하세요.':rejected?error.message:'응답을 확인하지 못했습니다.';
+   const message=phase==='conflict'&&entry.command.decisionRequestId?'거래가 변경되어 이전 결정을 취소할 수 없습니다.':phase==='conflict'?'거래가 변경되었습니다. 최신 값과 선택을 비교하세요.':rejected?error.message:'응답을 확인하지 못했습니다.';
    if(phase!=='unknown')remember(owner,entry.id);
    put({...entry,phase,message});
    if(refresh&&phase==='conflict')cache.mutate('transaction');
    return phase;
   }finally{active.current.delete(entry.id);}
  }
- function save(row:LedgerRow,type:string,refresh=true){
+ function save(row:LedgerRow,type:string,refresh=true,onReceipt?:(row:LedgerRow)=>void){
   const prior=entries[row.id];
   if(prior?.phase==='unknown'||prior?.phase==='saving')return Promise.resolve('busy');
-  return send({id:row.id,title:row.title??'거래',before:ledgerDisplayType(row),phase:'saving',command:{requestId:crypto.randomUUID(),expectedVersion:row.version,financialType:type,...(type==='REFUND'?{v4:true}:{})}},refresh);
+  return send({id:row.id,title:row.title??'거래',before:ledgerDisplayType(row),phase:'saving',command:{requestId:crypto.randomUUID(),expectedVersion:row.version,financialType:type,...(type==='REFUND'?{v4:true}:{})}},refresh,false,onReceipt);
  }
  function retry(entry:Decision,row?:LedgerRow){
   if(entry.phase==='unknown')return send(entry,true,true);
-  if(!row)return;
+  if(!row||entry.command.decisionRequestId)return;
   return save(row,entry.command.financialType);
  }
  function undo(entry:Decision){
-  if(!entry.receipt)return;
-  return save({...entry.receipt.row,version:entry.receipt.currentVersion},entry.before);
+  if(!entry.receipt||entry.command.decisionRequestId)return;
+  return send({id:entry.id,title:entry.title,before:entry.command.financialType,phase:'saving',
+   command:{requestId:crypto.randomUUID(),expectedVersion:entry.receipt.currentVersion,decisionRequestId:entry.receipt.requestId,financialType:entry.before}});
+
  }
  return {entries,save,retry,undo};
 }
@@ -122,17 +129,11 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
  const [open,setOpen]=useState(false);
  const [position,setPosition]=useState({top:8,left:8,maxHeight:220});
  const restoreAfterSave=useRef(false);
- const protectedRelation=protectedMeaning(row)||!!row.transfer_destination_status||!!(row.from_account_id&&row.to_account_id);
- const needsEvidence=row.meaning_state==='UNRESOLVED'&&row.quickConfirmAvailable===false;
- function unavailable(type:BaseDirection){
-  return protectedRelation?'연결된 금융 관계는 상세 편집에서 확인하세요.'
-   :directionHint(row,type)||(type!=='TRANSFER'&&needsEvidence?'원본과 입출금 방향을 상세 편집에서 확인하세요.':'');
- }
  useEffect(()=>{if(!disabled&&restoreAfterSave.current){restoreAfterSave.current=false;if(document.activeElement===document.body)trigger.current?.focus();}},[disabled]);
  function close(){setOpen(false);trigger.current?.focus();}
  function choose(next:BaseDirection){
   close();
-  if(next!==current || (row.meaning_state==='UNRESOLVED' && (!row.declaredFinancialType||row.declaredFinancialType==='UNRESOLVED'))){restoreAfterSave.current=true;onChoose(next);}
+  if(next!==current || row.meaning_state==='UNRESOLVED'||row.meaningApplied===false){restoreAfterSave.current=true;onChoose(next);}
  }
  useLayoutEffect(()=>{
   if(!open)return;
@@ -144,13 +145,13 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
    const menuHeight=Math.min(maxHeight,menu.current?.scrollHeight||420);
    setPosition({top:up?Math.max(4,rect.top-menuHeight-4):rect.bottom+4,left:Math.max(8,Math.min(rect.left,width-288)),maxHeight});
   }
-  place();menu.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  place();menu.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus();
   function outside(e:PointerEvent){if(!menu.current?.contains(e.target as Node)&&!trigger.current?.contains(e.target as Node))setOpen(false);}
   window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
   window.visualViewport?.addEventListener('resize',place);document.addEventListener('pointerdown',outside);
   return ()=>{window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);window.visualViewport?.removeEventListener('resize',place);document.removeEventListener('pointerdown',outside);};
  },[open]);
- return <><button type="button" ref={trigger} className="al-type-trigger" aria-label={(row.title??'거래')+' 금융 유형'} aria-haspopup="dialog" aria-expanded={open} disabled={disabled}
+ return <><button type="button" ref={trigger} className="al-type-trigger" aria-label={(row.title??'거래')+' 금융 유형'} aria-haspopup="dialog" aria-expanded={open} disabled={disabled || ['INITIAL_BALANCE','BALANCE_ADJUSTMENT'].includes(row.type)}
  onClick={()=>open?close():setOpen(true)}>{baseDirectionLabel(row)}<span aria-hidden="true">⌄</span></button>
  {open&&createPortal(<div ref={menu} className="al-type-menu" role="dialog" aria-label="금융 유형 편집" style={position}
  onBlur={e=>{if(e.relatedTarget&&!e.currentTarget.contains(e.relatedTarget))setOpen(false);}}
@@ -163,17 +164,16 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
   else if(e.key==='Enter'){e.preventDefault();buttons[index].click();}
  }}>
  <div role="group" aria-label="거래 방향">{(['INCOME','EXPENSE','TRANSFER'] as const).map(type=><button type="button" key={type} aria-pressed={current===type}
- disabled={!!unavailable(type)} title={unavailable(type)||undefined} onClick={()=>choose(type)}>{baseDirectionLabel({type})}</button>)}</div>
- {protectedRelation?<small>연결된 금융 관계는 상세 편집에서 확인하세요.</small>:
-  needsEvidence&&<small>원본과 입출금 방향을 상세 편집에서 확인하세요.</small>}
+ onClick={()=>choose(type)}>{baseDirectionLabel({type})}</button>)}</div>
  </div>,document.body)}</>;
 }
 
 export function DecisionStatus({row,entry,retry,undo}:{row:LedgerRow;entry?:Decision;retry:(entry:Decision,row:LedgerRow)=>void;undo:(entry:Decision)=>void}){
  const relation=relationLabel(row);
  if(entry?.phase==='saving')return <span role="status">저장 중…</span>;
- if(entry&&entry.phase!=='saved')return <div className="al-decision-result" role="status"><span>{ledgerTypes[entry.command.financialType]} · {entry.message}</span><button type="button" onClick={()=>retry(entry,row)}>{entry.phase==='unknown'?'원래 요청 재확인':'선택 다시 적용'}</button></div>;
+ if(entry&&entry.phase!=='saved')return <div className="al-decision-result" role="status"><span>{ledgerTypes[entry.command.financialType]} · {entry.message}</span>{(entry.phase==='unknown'||!entry.command.decisionRequestId)&&<button type="button" onClick={()=>retry(entry,row)}>{entry.phase==='unknown'?'원래 요청 재확인':'선택 다시 적용'}</button>}</div>;
  const saved=entry?.receipt?.currentVersion===row.version;
- return <div className="al-decision-result" role="status"><span className={'al-status '+(relation||ledgerDisplayType(row)==='UNRESOLVED'?'unresolved':'')}>{relation||(saved?'저장됨':ledgerDisplayType(row)==='UNRESOLVED'?'금융 의미 미확정':row.meaningOrigin==='AUTO'?'자동 확정':row.declaredFinancialType||row.meaningOrigin==='OWNER'?'직접 확정':'확정')}</span>
- {relation&&<small>{row.meaningApplied===false?'유형 선택 저장 · 금융 반영 대기':'유형 저장됨'}</small>}{entry?.receipt&&entry.receipt.currentVersion<row.version&&<small>이후 수정되어 실행 취소할 수 없습니다.</small>}{saved&&entry&&<button type="button" onClick={()=>undo(entry)}>실행 취소</button>}</div>;
+ return <div className="al-decision-result" role="status"><span className={'al-status '+(relation||ledgerDisplayType(row)==='UNRESOLVED'?'unresolved':'')}>{saved&&entry?.receipt?decisionDescription(entry.receipt):relation||(row.meaningApplied===false?'선택 저장 · 금융 반영 대기':ledgerDisplayType(row)==='UNRESOLVED'?'금융 의미 미확정':row.meaningOrigin==='AUTO'?'자동 확정':row.declaredFinancialType||row.meaningOrigin==='OWNER'?'직접 확정':'확정')}</span>
+ {row.provisionalDirection&&<small>{row.provisionalDirection==='EXPENSE'?'출금':'입금'} 등록 · 금융 의미 잠정</small>}
+ {relation&&!saved&&<small>{row.meaningApplied===false?'유형 선택 저장 · 금융 반영 대기':'유형 저장됨'}</small>}{entry?.receipt&&entry.receipt.currentVersion<row.version&&<small>이후 수정되어 실행 취소할 수 없습니다.</small>}{saved&&entry&&!entry.command.decisionRequestId&&<button type="button" onClick={()=>undo(entry)}>실행 취소</button>}</div>;
 }

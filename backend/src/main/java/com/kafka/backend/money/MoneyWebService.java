@@ -36,7 +36,9 @@ public class MoneyWebService {
  private static String bookProjection(boolean v4,boolean cashBasis) {
   String type=v4?"case when t.type in ('REFUND','LOAN_RECEIPT') then 'INCOME' when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end":"t.type";
   String state=v4?"(t.meaning_state='CONFIRMED' or (t.meaning_state='UNRESOLVED' and exists(select 1 from money_owner_financial_decisions sd where sd.user_id=t.user_id and sd.transaction_id=t.id and ((t.type='EXPENSE' and t.from_account_id is not null and t.to_account_id is null and sd.declared_type='LOAN_PAYMENT' and sd.relation_status='LOAN_SPLIT_PENDING') or (sd.semantic_category_id is not null and sd.declared_type='LOAN_RECEIPT' and sd.relation_status='LOAN_LINK_PENDING')))))":"t.meaning_state='CONFIRMED'";
-  String detail=v4?"case when t.meaning_state='UNRESOLVED' then (select sd.declared_type from money_owner_financial_decisions sd where sd.user_id=t.user_id and sd.transaction_id=t.id) else t.type end":"t.type";
+  String provisional="t.meaning_state='UNRESOLVED' and t.observed_direction=t.type and not exists(select 1 from money_owner_financial_decisions od where od.user_id=t.user_id and od.transaction_id=t.id)";
+  if(v4) state="("+state+" or ("+provisional+"))";
+  String detail=v4?"case when t.meaning_state='UNRESOLVED' then coalesce((select sd.declared_type from money_owner_financial_decisions sd where sd.user_id=t.user_id and sd.transaction_id=t.id),t.observed_direction) else t.type end":"t.type";
   String account=v4?"coalesce(t.from_account_id,t.to_account_id)":"coalesce(original.from_account_id,t.from_account_id,t.to_account_id)";
   String refund=v4 ? "coalesce((select p.category_id from money_v4_income_categories p where p.user_id=t.user_id and p.basis='REFUND' order by p.category_id limit 1),t.category_id)"
                   : "case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end";
@@ -48,7 +50,7 @@ public class MoneyWebService {
   String occurredAt=cashBasis?"t.occurred_at":"case when jsonb_exists(b.overrides,'occurredAt') then (b.overrides->>'occurredAt')::timestamptz else t.occurred_at end";
   return """
   with effective as (
-   select t.id,t.currency,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as "occurrencePrecision",%s as "financialType",%s as type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
+   select t.id,t.currency,case when %s then 'PROVISIONAL' else 'CONFIRMED' end as "interpretationStatus",coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as "occurrencePrecision",%s as "financialType",%s as type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
     coalesce(rp.defaults,'{}'::jsonb)::text as "ruleDefaults",
     coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",ce.created_at as "classificationAt",ce.evidence->>'reason' as "classificationReason",
     mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
@@ -84,7 +86,7 @@ public class MoneyWebService {
    left join money_accounts f on f.user_id=t.user_id and f.id=t.from_account_id
    left join money_accounts d on d.user_id=t.user_id and d.id=t.to_account_id
    where t.user_id=? and %s and t.excluded=false and t.merged_into is null and %s
-  """.formatted(detail,type,account,category,amount,occurredAt,state,eligible);
+  """.formatted(provisional,detail,type,account,category,amount,occurredAt,state,eligible);
  }
  private static final String BOOK_PROJECTION=bookProjection(false,false);
  private static final String V4_METRIC_BOOK=bookProjection(true,true)+") ";
@@ -198,7 +200,7 @@ public class MoneyWebService {
   return " and ("+String.join(" or ",clauses)+")";
  }
  @Transactional(readOnly=true) Map<String,Object> v4Book(UUID id,boolean tracked){
-  String filter=tracked?" AND "+TRACKED_BOOK_ACCOUNT:"";
+  String filter=tracked?" AND "+HISTORICAL_BOOK_ACCOUNT:"";
   Object[] args=tracked?new Object[]{owner(),id,owner()}:new Object[]{owner(),id};
   var result=rows(V4_BOOK+"select * from effective where id=?"+filter,args);
   if(result.isEmpty())throw new ResourceNotFoundException("가계부 거래를 찾을 수 없습니다.");

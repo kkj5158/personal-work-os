@@ -29,3 +29,22 @@ test('request path/body proof, fixed origins, redirects and response cap',async(
  let calls=0;await assert.rejects(callMoney('money_list_accounts',{}, {origin:'https://evil.invalid',token:'synthetic',fetcher:()=>calls++}));assert.equal(calls,0);
  const data=await callMoney('money_list_accounts',{}, {origin:'https://personal-work-os-prod-production.up.railway.app',token:'synthetic',proof:async p=>{assert.deepEqual(p,{method:'GET',path:'/api/orbit/money/v1/accounts',body:''});return 'signed';},fetcher:async(url,o)=>{assert.equal(o.redirect,'error');assert.equal(o.headers['X-Orbit-Money-Proof'],'signed');return new Response('{"data":[]}',{headers:{'content-type':'application/json'}});}});assert.deepEqual(data.data,[]);
 });
+
+test('statistical balances uses the owner read scope and preserves exact values',async()=>{
+ const args={from:'2026-11-01',to:'2026-11-30',currency:'KRW',accountIds:'none',cutoff:'2026-11-22T19:00:00Z'};
+ const name='money_get_statistical_balances';
+ assert.deepEqual(validateMoney(name,args).requiredScopes,['orbit:read']);
+ assert.throws(()=>validateMoney(name,{...args,ownerId:'untrusted'}));
+ assert.throws(()=>validateMoney(name,{from:args.from}));
+ const data={asOfCutoff:args.cutoff,savings:{confidence:'UNKNOWN',displayTotal:null,displaySubtotal:'9007199254740993.42',partial:true}};
+ const result=await callMoney(name,args,{origin:'https://workflow-api-development-development.up.railway.app',token:'synthetic',
+   proof:async ({method,path,body})=>{
+    assert.equal(method,'GET');
+    assert.equal(body,'');
+    const url=new URL(path,'https://example.test');
+    assert.equal(url.pathname,'/api/orbit/money/v1/statistical-balances');
+    assert.deepEqual(Object.fromEntries(url.searchParams),args);
+    return 'signed';
+   },fetcher:async()=>Response.json({data})});
+ assert.deepEqual(result.data,data);
+});

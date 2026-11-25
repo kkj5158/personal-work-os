@@ -152,9 +152,30 @@ class OrbitHttpIntegrationTest {
         var orbit=json.readTree(get("get_money_overview_context?from="+today+"&to="+today,other).body()).get("data");
         var canonical=http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/money/overview?from="+today+"&to="+today)).header("Authorization","Bearer "+token(other,Instant.now().plusSeconds(300),ISSUER,"authenticated")).build(),HttpResponse.BodyHandlers.ofString());
         assertThat(canonical.statusCode()).isEqualTo(200);
-        assertThat(orbit.get("kpis")).isEqualTo(json.readTree(canonical.body()).get("kpis"));
-        assertThat(orbit.get("kpis").get("consumption").asInt()).isEqualTo(8100);
-        assertThat(orbit.get("kpis").get("income").asInt()).isEqualTo(20000);
+        var kpis=orbit.get("kpis");
+        assertThat(kpis).isEqualTo(json.readTree(canonical.body()).get("kpis"));
+        // Linked refunds reduce general consumption. The 100 KRW of loan interest belongs to loan repayment.
+        assertThat(kpis.get("consumption").asInt()).isEqualTo(10000-2000);
+        assertThat(kpis.get("income").asInt()).isEqualTo(20000);
+        assertThat(kpis.get("loanPrincipal").asInt()).isEqualTo(1000);
+
+        UUID account=db.queryForObject("select id from money_accounts where user_id=?",UUID.class,other);
+        try {
+            db.update("insert into money_tracking_settings(user_id) values(?)",other);
+            db.update("insert into money_tracking_selections(user_id,kind,effective_at,version,accounts) values(?,'EXPENSE',?,0,?)",
+                other,LocalDate.parse(today).atStartOfDay(ZoneId.of("Asia/Seoul")).toOffsetDateTime(),new UUID[]{account});
+            var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/money/v4/summary?from="+today+"&to="+today+"&currency=KRW&accountIds="+account))
+                .header("Authorization","Bearer "+token(other,Instant.now().plusSeconds(300),ISSUER,"authenticated")).build();
+            var summary=http.send(request,HttpResponse.BodyHandlers.ofString());
+            assertThat(summary.statusCode()).isEqualTo(200);
+            var flows=json.readTree(summary.body());
+            assertThat(flows.get("consumption").asInt()).isEqualTo(8000);
+            assertThat(flows.get("loanRepayment").asInt()).isEqualTo(1100);
+            assertThat(flows.get("totalExpense").asInt()).isEqualTo(9100);
+        } finally {
+            db.update("delete from money_tracking_selections where user_id=?",other);
+            db.update("delete from money_tracking_settings where user_id=?",other);
+        }
     }
     @Test void missingMeasurementsStayUnknownAndSeoulMidnightAttributionIsPreserved()throws Exception{
         var missing=json.readTree(get("get_diet_context",empty).body());
@@ -191,7 +212,7 @@ class OrbitHttpIntegrationTest {
             assertThat(r.statusCode()).isEqualTo(422);assertThat(json.readTree(r.body()).get("code").asText()).isEqualTo("CONTEXT_LIMIT");
         }finally{db.update("delete from auth.users where id=?",crowded);}
     }
-    void cleanupMoneyConsole(UUID user){ for(String table:List.of("money_ai_events","money_command_outcomes","money_meaning_audit","money_classification_jobs","money_classification_state","money_classification_events","money_review_decisions","money_rule_projections","money_bookkeeping_overrides","money_transaction_sources","money_raw_notifications","money_transactions","money_accounts","money_categories"))db.update("delete from "+table+" where user_id=?",user);db.update("delete from auth.users where id=?",user); }
+    void cleanupMoneyConsole(UUID user){ for(String table:List.of("money_ai_events","money_command_outcomes","money_meaning_audit","money_classification_jobs","money_classification_state","money_classification_events","money_review_decisions","money_rule_projections","money_bookkeeping_overrides","money_owner_financial_decisions","money_transaction_sources","money_raw_notifications","money_transactions","money_accounts","money_categories"))db.update("delete from "+table+" where user_id=?",user);db.update("delete from auth.users where id=?",user); }
     HttpResponse<String> console(UUID user,String route,String method,Object body)throws Exception{
         var b=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/orbit/money/v1/"+route)).timeout(Duration.ofSeconds(30)).header("Authorization","Bearer "+token(user,Instant.now().plusSeconds(300),ISSUER,"authenticated"));
         return http.send(b.header("Content-Type","application/json").method(method,body==null?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build(),HttpResponse.BodyHandlers.ofString());
@@ -257,8 +278,16 @@ class OrbitHttpIntegrationTest {
             db.update("insert into money_accounts(id,user_id,provider,display_name,role) values(?,?,'TEST','Synthetic classification account','SPENDING')",account,user);
             db.update("insert into money_tracking_settings(user_id) values(?)",user);
             db.update("insert into money_tracking_accounts(user_id,account_id,kind,slot) values(?,?,'EXPENSE',1)",user,account);
-            for(UUID fact:List.of(a,b))db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,title,counterparty_text) values(?,?,'EXPENSE',?,1000,now(),'Synthetic purchase','Synthetic merchant')",fact,user,account);
+            for(UUID fact:List.of(a,b))db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,title,counterparty_text,meaning_state) values(?,?,'EXPENSE',?,1000,now(),'Synthetic purchase','Synthetic merchant','CONFIRMED')",fact,user,account);
             for(UUID cat:List.of(category,otherCategory))db.update("insert into money_categories(id,user_id,name,color,kind) values(?,?,?,'#123456','EXPENSE')",cat,user,"Category "+cat);
+            // A current selection alone does not establish that either purchase belonged to bookkeeping at occurrence.
+            assertThat(console(user,"bookkeeping-item?id="+a,"GET",null).statusCode()).isEqualTo(404);
+            db.update("""
+                insert into money_tracking_selections(user_id,kind,effective_at,version,accounts)
+                select s.user_id,'EXPENSE',min(t.occurred_at),s.version,array[?::uuid]
+                from money_tracking_settings s join money_transactions t on t.user_id=s.user_id
+                where s.user_id=? group by s.user_id,s.version
+                """,account,user);
             var single=Map.of("requestId",UUID.randomUUID(),"items",List.of(classifyTarget(user,a,category)));var saved=console(user,"bookkeeping-category","POST",single);assertThat(saved.statusCode()).as(saved.body()).isEqualTo(200);assertThat(saved.body()).contains("APPLIED");
             var bulk=Map.of("requestId",UUID.randomUUID(),"items",List.of(classifyTarget(user,a,otherCategory),classifyTarget(user,b,otherCategory)));var changed=console(user,"bulk-classify","POST",bulk);assertThat(changed.statusCode()).as(changed.body()).isEqualTo(200);assertThat(changed.body()).contains("DIRECT_PROTECTED",b.toString());
             assertThat(console(user,"bookkeeping-item?id="+a,"GET",null).body()).contains(category.toString());assertThat(console(user,"bookkeeping-item?id="+b,"GET",null).body()).contains(otherCategory.toString());
@@ -268,6 +297,6 @@ class OrbitHttpIntegrationTest {
             assertThat(db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,user)).isEqualTo(2);
             var candidates=console(user,"review-candidates?id="+a+"&kind=TRANSACTION","GET",null);assertThat(candidates.statusCode()).as(candidates.body()).isEqualTo(200);var links=json.readTree(candidates.body()).get("data");assertThat(links.get("transferCandidates").get("items").isArray()).isTrue();assertThat(links.get("refundCandidates").get("items").isArray()).isTrue();assertThat(links.get("candidatePolicy").asText()).contains("NOT_CONFIRMED_LINKS");assertThat(console(other,"review-candidates?id="+a+"&kind=TRANSACTION","GET",null).statusCode()).isBetween(400,499);
             var attention=console(user,"attention","GET",null);assertThat(attention.statusCode()).as(attention.body()).isEqualTo(200);assertThat(json.readTree(attention.body()).get("data").get("uncategorizedExpense").asLong()).isZero();
-        }finally{db.update("delete from money_tracking_accounts where user_id=?",user);db.update("delete from money_tracking_settings where user_id=?",user);cleanupMoneyConsole(user);}
+        }finally{db.update("delete from money_tracking_selections where user_id=?",user);db.update("delete from money_tracking_accounts where user_id=?",user);db.update("delete from money_tracking_settings where user_id=?",user);cleanupMoneyConsole(user);}
     }
 }
