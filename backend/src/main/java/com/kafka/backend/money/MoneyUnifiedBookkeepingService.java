@@ -235,7 +235,7 @@ public class MoneyUnifiedBookkeepingService {
   audit(id,"UNIFIED_"+input.action(),clean(before),result);return result;
  }
  /** Reuse the same financial validation inside an enclosing atomic owner-review command. */
- void resolveReviewType(UUID id,Edit v){type(id,v,fact(id));}
+ void resolveReviewType(UUID id,Edit v){type(id,v,fact(id),false);}
  private void type(UUID id,Edit v,Map<String,Object> before,boolean preserveClassification){
   require(v.type()!=null,"금융 유형을 선택하세요.");TransactionType type;try{type=TransactionType.valueOf(v.type());}catch(IllegalArgumentException e){throw new InvalidRequestException("지원하지 않는 금융 유형입니다.");}
   var old=money.transaction(id);boolean out=old.fromAccountId()!=null&&old.toAccountId()==null,in=old.toAccountId()!=null&&old.fromAccountId()==null;
