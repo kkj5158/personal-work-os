@@ -261,6 +261,79 @@ class MoneyFinancialEnginePostgresTest {
         });
     }
 
+    @Test void verifiedExternalAdmissionAfterWaitNeedsNoMerchantRuleAndDoesNotRepost() {
+        fixture.check(e -> {
+            UUID owner=MoneyPostgresIntegrationTest.OWNER;
+            var account=account(e,"8557");
+            var services=services(e,owner);
+            Instant now=Instant.now().truncatedTo(ChronoUnit.SECONDS);
+            var salary=notification(e,false,84671,"8557","합성 급여",now.minusSeconds(900));
+            var expense=notification(e,true,3000,"8557","합성 카페",now.minusSeconds(300));
+            var open=notification(e,true,4500,"8557","오픈 송금",now.minusSeconds(1));
+            var processing=new MoneyProcessingService(e.db(),JsonMapper.builder().build(),
+                    new DataSourceTransactionManager(e.db().getDataSource()),Clock.fixed(now.plusSeconds(30),ZoneOffset.UTC));
+            assertThat(processing.runOwner(owner)).isEqualTo(3);
+            assertThat(processing.runOwner(owner)).isZero();
+            for(var raw:List.of(salary,expense,open)){
+                UUID id=e.db().queryForObject("select transaction_id from money_transaction_sources where raw_event_id=?",UUID.class,raw.id());
+                var fact=e.money().transaction(id);
+                assertThat(fact.sources()).hasSize(1);
+                if(raw.equals(open)){
+                    assertThat(fact.meaningState()).isEqualTo("UNRESOLVED");
+                    continue;
+                }
+                assertThat(fact.meaningState()).isEqualTo("CONFIRMED");
+                assertThat(fact.type()).isEqualTo(raw.equals(salary)?TransactionType.INCOME:TransactionType.EXPENSE);
+                assertThat(services.ledger().row(id)).containsEntry("meaningOrigin","AUTO");
+                assertThat(e.web().accountLedgerBookkeepingRow(id).get("categoryId")).isNull();
+            }
+            assertThat(e.db().queryForObject("select count(*) from money_transactions where user_id=?",Integer.class,owner)).isEqualTo(3);
+        });
+    }
+
+    @Test void strictOwnerDecisionConfirmsProvisionalValueAndRejectsConflictsWithoutMutation() {
+        fixture.check(e -> {
+            var owner=MoneyPostgresIntegrationTest.OWNER;
+            var services=services(e,owner);
+            var account=account(e,"8557");
+            var fact=admitted(e,account,true,3000,"8557","합성 카페",AT);
+            var balance=e.product().balance(account.id());
+            var command=new MoneyAccountLedgerService.FinancialType(UUID.randomUUID(),fact.version(),"EXPENSE",null,true);
+            var receipt=services.ledger().financialType(fact.id(),command);
+            assertThat(receipt).containsEntry("status","APPLIED").containsEntry("meaningApplied",true);
+            assertThat(services.ledger().financialType(fact.id(),command)).isEqualTo(receipt);
+            long version=e.money().transaction(fact.id()).version();
+            var conflict=new MoneyAccountLedgerService.FinancialType(UUID.randomUUID(),version,"INCOME",null,true);
+            assertThatThrownBy(()->services.ledger().financialType(fact.id(),conflict)).isInstanceOf(InvalidRequestException.class);
+            assertThat(services.commands().outcome(owner,conflict.requestId())).containsEntry("status","NOT_APPLIED");
+            assertThatThrownBy(()->services.ledger().financialType(fact.id(),
+                    new MoneyAccountLedgerService.FinancialType(UUID.randomUUID(),fact.version(),"EXPENSE",null,true)))
+                    .isInstanceOf(com.kafka.backend.common.OptimisticLockConflictException.class);
+            assertThat(e.money().transaction(fact.id()).version()).isEqualTo(version);
+            assertThat(e.product().balance(account.id())).isEqualTo(balance);
+        });
+    }
+
+    @Test void unlinkedLateRawVetoesBothBatchAndStrictOwnerConfirmation() {
+        fixture.check(e -> {
+            var owner=MoneyPostgresIntegrationTest.OWNER;
+            var s=services(e,owner);
+            var account=account(e,"8557");
+            account(e,"8765");
+            var fact=admitted(e,account,false,34671,"8557","합성 소유자",AT);
+            var raw=notification(e,true,34671,"8765","합성 소유자",AT.plusSeconds(2));
+            e.money().process(raw.id(),new KakaoNotificationParserV1());
+            e.money().finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"LATE_POSTED_TRANSFER_LINK_REQUIRED");
+            assertThat(s.engine().candidates(25,0).get("items").toString()).contains("LATE_POSTED_TRANSFER_LINK_REQUIRED");
+            assertThatThrownBy(()->s.engine().batchPreview(new BatchInput(List.of(new Target(fact.id(),fact.version(),"INCOME")))))
+                    .isInstanceOf(InvalidRequestException.class);
+            assertThatThrownBy(()->s.ledger().financialType(fact.id(),new MoneyAccountLedgerService.FinancialType(
+                    UUID.randomUUID(),fact.version(),"INCOME",null,true))).isInstanceOf(InvalidRequestException.class);
+            assertThat(e.money().transaction(fact.id()).meaningState()).isEqualTo("UNRESOLVED");
+            assertThat(e.money().notification(raw.id()).state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);
+        });
+    }
+
     private BatchExecute command(Map<String, Object> preview, boolean confirmed) {
         return new BatchExecute(UUID.randomUUID(), (UUID) preview.get("previewId"),
                 preview.get("fingerprint").toString(), confirmed);

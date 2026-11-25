@@ -47,7 +47,7 @@ public class MoneyObservedDirectionService {
         else if (row.get("observed_direction")!=null) status="ALREADY_REGISTERED";
         else if (direction==null || t.manual() || t.refundOf()!=null || t.transferDestinationStatus()!=null || row.get("loan_id")!=null) status="REVIEW_RELATION";
         else {
-            var statements=statementEvidence(owner,t);
+            var statements=statementEvidence(db,owner,t);
             var notification=MoneyFinancialEvidence.primaryAttempt(money,t);
             boolean pushVerified=false;
             if(notification!=null && notification.candidate().direction()==direction) {
@@ -80,7 +80,12 @@ public class MoneyObservedDirectionService {
             && MoneyStatementReconciliationService.near(c.occurredAt(),t.occurredAt());
     }
 
-    private List<Map<String,Object>> statementEvidence(UUID owner,MoneyTransaction t) {
+    static boolean statementVerified(JdbcTemplate db, UUID owner, MoneyTransaction fact, Direction direction) {
+        var rows=statementEvidence(db,owner,fact);
+        return rows.size()==1 && statementMatches(rows.getFirst(),fact,direction,!fact.sources().isEmpty());
+    }
+
+    private static List<Map<String,Object>> statementEvidence(JdbcTemplate db,UUID owner,MoneyTransaction t) {
         if(!MoneyStatementProtection.installed(db))return List.of();
         return db.queryForList("""
             select r.id,r.account_id,r.direction,r.amount,extract(epoch from r.occurred_at) as occurred_epoch,s.currency,s.fingerprint,

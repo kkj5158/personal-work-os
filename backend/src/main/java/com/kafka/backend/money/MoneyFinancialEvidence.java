@@ -13,7 +13,7 @@ import static com.kafka.backend.money.MoneyTypes.*;
 
 /** Policy B evidence shared by the ledger, Shadow Mode and live admission. */
 final class MoneyFinancialEvidence {
-    static final String VERSION = "1.1.0";
+    static final String VERSION = "1.2.0";
     private static final Set<String> ORDINARY_SOURCES = Set.of(
             "VERIFIED_CASH_UNRESOLVED", "VERIFIED_ORDINARY_AFTER_WAIT");
 
@@ -64,7 +64,11 @@ final class MoneyFinancialEvidence {
         var opposite = resolver.resolve(accounts, candidate.provider(),
                 direction == Direction.OUT ? candidate.destinationAccountHint() : candidate.sourceAccountHint());
         UUID accountId = direction == Direction.OUT ? fact.fromAccountId() : fact.toAccountId();
-        if (!own.resolved() || !accountId.equals(own.account().id()) || own.account().archived() || opposite.resolved()) return null;
+        String otherHint = direction == Direction.OUT ? candidate.destinationAccountHint() : candidate.sourceAccountHint();
+        if (!own.resolved() || !accountId.equals(own.account().id()) || own.account().archived()
+                || opposite.resolved() || otherHint != null && !otherHint.isBlank()) return null;
+        if (MoneyStatementProtection.hasSource(db,owner,fact.id()) &&
+                !MoneyObservedDirectionService.statementVerified(db,owner,fact,direction)) return null;
 
         if (Boolean.TRUE.equals(db.queryForObject("""
                 select exists(select 1 from money_transactions
@@ -72,6 +76,33 @@ final class MoneyFinancialEvidence {
                 """, Boolean.class, owner, fact.id(), fact.id()))) return null;
         return new Proof(accountId, direction, candidate.provider(), merchantKey(candidate.counterpartyText()),
                 source.rawEventId(), latest.id(), latest.parserVersion());
+    }
+
+    static boolean externalActivity(MoneyTransaction fact, Proof proof) {
+        var evidence = fact.sources().getFirst().evidence();
+        return "VERIFIED_ORDINARY_AFTER_WAIT".equals(evidence.get("rule"))
+                && "VERIFIED_EXTERNAL_ACTIVITY".equals(evidence.get("meaningProof"))
+                && MoneyOrdinaryAdmission.explicitExternal(proof.direction(), fact.counterpartyText());
+    }
+
+    /** An unlinked RAW explicitly marked as a possible overlap can veto an admission, never establish a pair. */
+    static String reviewConflict(JdbcTemplate db, UUID owner, MoneyTransaction fact) {
+        var reasons = db.queryForList("""
+                select r.processing_reason from money_raw_notifications r
+                join lateral(select p.amount,p.direction,p.candidate from money_parse_attempts p
+                    where p.user_id=r.user_id and p.raw_event_id=r.id order by p.created_at desc,p.id desc limit 1) parsed on true
+                where r.user_id=? and r.state in ('REVIEW_REQUIRED','FAILED','PARSED')
+                  and r.processing_reason in ('LATE_POSTED_TRANSFER_LINK_REQUIRED','LATE_POSTED_TRANSFER_SOURCE_OVERLAP',
+                    'POSSIBLE_ALREADY_POSTED_ROUTE','INDISTINGUISHABLE_TRANSFER_EVIDENCE','AMBIGUOUS_TRANSFER_PAIR',
+                    'LATE_TERMINAL_EVIDENCE_REQUIRES_CONFIRMATION','UNRESOLVED_TRANSFER_CANDIDATE','NET_GROSS_TRANSFER_CONFLICT')
+                  and (parsed.amount=? or r.processing_reason='NET_GROSS_TRANSFER_CONFLICT' and parsed.candidate->>'counterpartyText'=?)
+                  and (parsed.candidate->>'occurredAt')::timestamptz between ? and ?
+                  and not exists(select 1 from money_transaction_sources s where s.user_id=r.user_id and s.raw_event_id=r.id)
+                order by r.id limit 1
+                """,String.class,owner,fact.amount(),fact.counterpartyText(),
+                Timestamp.from(fact.occurredAt().minus(VerifiedMoneyTransferMatcher.PROVIDER_WINDOW)),
+                Timestamp.from(fact.occurredAt().plus(VerifiedMoneyTransferMatcher.PROVIDER_WINDOW)));
+        return reasons.isEmpty() ? null : reasons.getFirst();
     }
 
     static Direction simpleDirection(MoneyTransaction fact) {
@@ -105,7 +136,7 @@ final class MoneyFinancialEvidence {
     static Proof quickProof(JdbcTemplate db, UUID owner, MoneyService money, MoneyTransaction fact, List<MoneyAccount> accounts) {
         if (!"UNRESOLVED".equals(fact.meaningState()) || ownerProtected(db, owner, fact.id())) return null;
         var proof = ordinary(db, owner, money, fact, accounts);
-        return proof != null && transfer(db, owner, money, fact, accounts) == null ? proof : null;
+        return proof != null && reviewConflict(db, owner, fact) == null && transfer(db, owner, money, fact, accounts) == null ? proof : null;
     }
 
     record Transfer(String reason, UUID counterpartId) {}

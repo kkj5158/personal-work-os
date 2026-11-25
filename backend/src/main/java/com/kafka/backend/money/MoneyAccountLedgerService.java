@@ -151,7 +151,8 @@ public class MoneyAccountLedgerService {
   public EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit){this(fingerprint,edit,null);}
  }
  public record FinancialType(UUID requestId,Long expectedVersion,String financialType,
-      @JsonInclude(NON_NULL) Boolean v4){
+      @JsonInclude(NON_NULL) Boolean v4, @JsonInclude(NON_NULL) Boolean requireApplied){
+  public FinancialType(UUID requestId,Long expectedVersion,String financialType,Boolean v4){this(requestId,expectedVersion,financialType,v4,null);}
   public FinancialType(UUID requestId,Long expectedVersion,String financialType){this(requestId,expectedVersion,financialType,null);}
  }
  public Map<String,Object> financialType(UUID id,FinancialType input){
@@ -159,8 +160,29 @@ public class MoneyAccountLedgerService {
   var receipt=commands.executeFinancialType(owner(),input.requestId(),List.of(id,input),()->{
    var decisions=new MoneyOwnerFinancialDecision(db,owner());
    var before=decisions.fact(id,true);
+   if(Boolean.TRUE.equals(input.requireApplied())){
+    MoneyMeaningService.version(((Number)before.get("version")).longValue(),input.expectedVersion());
+    require(Set.of("INCOME","EXPENSE").contains(input.financialType()),"이체는 원래 거래와 상대 계좌를 연결하세요.");
+    var fact=money.transaction(id);
+    var direction=MoneyFinancialEvidence.simpleDirection(fact);
+    require(direction!=null && fact.type().name().equals(input.financialType()),
+        "계좌 입출금 또는 기존 금융 관계와 다릅니다. 상세 정정에서 원본과 상대 계좌를 확인하세요.");
+    String conflict=MoneyFinancialEvidence.reviewConflict(db,owner(),fact);
+    require(conflict==null,MoneyAdmissionReasons.text(conflict));
+    if(!fact.manual() && "UNRESOLVED".equals(fact.meaningState())){
+     var accounts=money.accounts();
+     require(MoneyFinancialEvidence.transfer(db,owner(),money,fact,accounts)==null,"이체 후보가 있습니다. 검토 필요에서 상대 거래를 연결하세요.");
+     require(MoneyFinancialEvidence.ordinary(db,owner(),money,fact,accounts)!=null
+         || fact.sources().isEmpty() && MoneyObservedDirectionService.statementVerified(db,owner(),fact,direction),
+         "원본 또는 계좌 연결을 확인할 수 없습니다. 검토 필요에서 거래 근거를 확인하세요.");
+    }
+   }
    decisions.apply(id,input,before);
    var latest=clean(decisions.fact(id,false));
+   if(Boolean.TRUE.equals(input.requireApplied())){
+    require(Boolean.TRUE.equals(latest.get("meaningApplied")) && "NONE".equals(latest.get("relationStatus")),
+        "기존 금융 관계를 먼저 확인하세요. 상세 정정에서 이체·대출·환불 연결을 확인할 수 있습니다.");
+   }
    enrich(List.of(latest),null);
    String relation=latest.get("relationStatus").toString();
    var result=new LinkedHashMap<String,Object>();

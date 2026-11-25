@@ -17,7 +17,7 @@ public class MoneyProcessingService {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final Duration observationWindow,transferWindow;
-    private final boolean financialAutoConfirm;
+    private final boolean financialAutoConfirm, ordinaryAdmission;
     private final List<MoneyNotificationParser> parsers=List.of(new ShinhanNotificationParserV1(),new IbkNotificationParserV1(),
             new WooriNotificationParserV1(),new KakaoNotificationParserV1());
     @org.springframework.beans.factory.annotation.Autowired
@@ -25,7 +25,7 @@ public class MoneyProcessingService {
         @org.springframework.beans.factory.annotation.Value("${app.money.observation-window:PT10S}") Duration observationWindow,
         @org.springframework.beans.factory.annotation.Value("${app.money.transfer-window:PT60S}") Duration transferWindow,
         org.springframework.core.env.Environment environment){
-        this(db,json,manager,Clock.systemUTC(),observationWindow,transferWindow,MoneyFinancialEngineService.autoEnabled(environment));
+        this(db,json,manager,Clock.systemUTC(),observationWindow,transferWindow,MoneyFinancialEngineService.autoEnabled(environment),MoneyFinancialEngineService.ordinaryAdmissionEnabled(environment));
     }
     public MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager){this(db,json,manager,Clock.systemUTC());}
     MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock){
@@ -35,6 +35,10 @@ public class MoneyProcessingService {
         this(db,json,manager,clock,observationWindow,transferWindow,false);
     }
     MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock,Duration observationWindow,Duration transferWindow,boolean financialAutoConfirm){
+        this(db,json,manager,clock,observationWindow,transferWindow,financialAutoConfirm,true);
+    }
+    MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock,Duration observationWindow,Duration transferWindow,boolean financialAutoConfirm,boolean ordinaryAdmission){
+        this.ordinaryAdmission=ordinaryAdmission;
         this.db=db;this.json=json;this.transactions=new TransactionTemplate(manager);this.clock=clock;
         this.observationWindow=observationWindow;this.transferWindow=transferWindow;
         this.financialAutoConfirm=financialAutoConfirm;
@@ -118,7 +122,7 @@ public class MoneyProcessingService {
                     var input=p.transaction();
                     if(input.type()==TransactionType.EXPENSE||input.type()==TransactionType.INCOME){
                         UUID id=money.recordUnresolvedTransactionId(input);
-                        if(financialAutoConfirm)MoneyFinancialEngineService.autoConfirmNew(db,json,money,owner,id,clock.instant());
+                        if(ordinaryAdmission || financialAutoConfirm)MoneyFinancialEngineService.autoConfirmNew(db,json,money,owner,id,clock.instant(),ordinaryAdmission,financialAutoConfirm);
                     }else money.recordTransaction(input);
                     posted++;
                     for(var s:p.sources()){money.finishProcessing(s.rawEventId(),ProcessingState.PROCESSED,"POSTED");done.add(s.rawEventId());}}
