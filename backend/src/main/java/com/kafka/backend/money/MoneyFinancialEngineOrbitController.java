@@ -71,7 +71,7 @@ public class MoneyFinancialEngineOrbitController {
         return console.envelope(engine.candidates(limit, offset));
     }
 
-    public record Intent(UUID id, UUID requestId, Long expectedVersion, String financialType) {}
+    public record Intent(UUID id, UUID requestId, Long expectedVersion, String financialType, Boolean requireApplied) {}
 
     @PostMapping("/intent")
     public Object intent(@RequestBody Intent input) {
@@ -80,7 +80,7 @@ public class MoneyFinancialEngineOrbitController {
                 && input.financialType() != null && List.of("INCOME","EXPENSE","TRANSFER").contains(input.financialType()),
                 "거래와 버전, 수입·지출·이체 중 하나를 선택하세요.");
         var result = ledger.financialType(input.id(), new MoneyAccountLedgerService.FinancialType(
-            input.requestId(), input.expectedVersion(), input.financialType()));
+            input.requestId(), input.expectedVersion(), input.financialType(), null, input.requireApplied()));
         return console.envelope(intentReceipt(result));
     }
 

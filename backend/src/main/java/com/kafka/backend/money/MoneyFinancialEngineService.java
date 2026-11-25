@@ -49,7 +49,9 @@ public class MoneyFinancialEngineService {
             String currentType, String proposedType, String decision, String reason, Map<String, Object> evidence) {}
     public record RuleInput(UUID requestId, UUID basisId, Long expectedBasisVersion, Long expectedRuleVersion, Boolean active) {}
     public record Target(UUID id, Long expectedVersion, String type) {}
-    public record BatchInput(List<Target> items) {}
+    public record BatchInput(List<Target> items, Boolean eligibleOnly) {
+        public BatchInput(List<Target> items) { this(items,null); }
+    }
     public record BatchExecute(UUID requestId, UUID previewId, String fingerprint, boolean confirmed) {}
     private record ApprovedEdit(UUID id, MoneyAccountLedgerService.EditRequest draft) {}
     private record BatchSnapshot(String engineVersion, List<ApprovedEdit> edits, List<Candidate> items) {}
@@ -69,6 +71,10 @@ public class MoneyFinancialEngineService {
                 && environment.getProperty("app.money.financial-engine-auto-confirm", Boolean.class, false);
     }
 
+    static boolean ordinaryAdmissionEnabled(Environment environment) {
+        return environment.getProperty("app.money.verified-ordinary-admission", Boolean.class, true);
+    }
+
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Map<String, Object> status() {
         long unresolved = unresolvedCount();
@@ -84,7 +90,7 @@ public class MoneyFinancialEngineService {
                                    'FINANCIAL_ENGINE_QUICK_CONFIRM','FINANCIAL_ENGINE_RULE')
                  group by command,status,result->>'reason' order by command,status,reason
                 """, owner());
-        return Map.of("policy", "EVIDENCE_FIRST", "engineVersion", VERSION, "autoConfirmEnabled", autoEnabled(environment),
+        return Map.of("policy", "EVIDENCE_FIRST", "engineVersion", VERSION, "autoConfirmEnabled", autoEnabled(environment), "verifiedOrdinaryAdmissionEnabled", ordinaryAdmissionEnabled(environment),
                 "unresolvedCount", unresolved, "shadowLimit", SHADOW_MAX, "batchLimit", BATCH_MAX,
                 "decisionTotals", results, "commandOutcomes", outcomes);
     }
@@ -122,6 +128,8 @@ public class MoneyFinancialEngineService {
         if (fact.refundOf() != null || !SIMPLE_TYPES.contains(fact.type().name()) || fact.transferDestinationStatus() != null) {
             return decision(fact, null, "REVIEW_REQUIRED", "CANONICAL_FINANCIAL_REVIEW_REQUIRED", Map.of());
         }
+        String rawReason = MoneyFinancialEvidence.reviewConflict(db, owner(), fact);
+        if (rawReason != null) return decision(fact, null, "REVIEW_REQUIRED", rawReason, Map.of());
         var transfer = MoneyFinancialEvidence.transfer(db, owner(), money, fact, accounts);
         if (transfer != null) {
             if (transfer.counterpartId() == null || "TRANSFER_COUNTERPART_PROTECTED".equals(transfer.reason())) {
@@ -143,6 +151,10 @@ public class MoneyFinancialEngineService {
         refs.put("direction", proof.direction());
         refs.put("provider", proof.provider());
         if (rule == null) {
+            if (MoneyFinancialEvidence.externalActivity(fact, proof)) {
+                refs.put("meaningProof", "VERIFIED_EXTERNAL_ACTIVITY");
+                return decision(fact, fact.type().name(), "AUTO_CONFIRM_ELIGIBLE", "VERIFIED_EXTERNAL_ACTIVITY", refs);
+            }
             return decision(fact, fact.type().name(), "PROPOSE_ONLY", "NO_CURRENT_APPROVED_RULE", refs);
         }
         refs.put("ruleId", rule.id());
@@ -256,13 +268,21 @@ public class MoneyFinancialEngineService {
                 }
             }
         }
+        var eligible = items.stream().filter(i -> "AUTO_CONFIRM_ELIGIBLE".equals(i.decision())).toList();
+        var impact = admissionImpact(eligible);
         return Map.ofEntries(Map.entry("engineVersion", VERSION),
-                Map.entry("fingerprint", commands.fingerprint(List.of(VERSION, total, items, trackedTotals))),
+                Map.entry("eligibleAdmissionImpact",impact),
+                Map.entry("fingerprint", commands.fingerprint(List.of(VERSION, total, items, trackedTotals, impact))),
                 Map.entry("total", total), Map.entry("evaluated", items.size()), Map.entry("truncated", total > items.size()),
                 Map.entry("distribution", groups), Map.entry("reasons", reasons),
                 Map.entry("projectedGrossByCurrencyAndType", proposedTotals),
                 Map.entry("projectedTrackedGrossByCurrencyAndType", trackedTotals),
                 Map.entry("cashDelta", BigDecimal.ZERO), Map.entry("items", items));
+    }
+
+    private List<Map<String,Object>> admissionImpact(List<Candidate> items) {
+        return new MoneyV4ReadService(new org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate(db),users)
+                .admissionImpact(items);
     }
 
     @Transactional(readOnly = true)
@@ -279,6 +299,11 @@ public class MoneyFinancialEngineService {
         var snapshot = new LinkedHashMap<>(source);
         var items = (List<?>) snapshot.get("items");
         snapshot.put("items", items.subList(Math.min(offset, items.size()), Math.min(offset + limit, items.size())));
+        if (source.get("eligibleAdmissionImpact") instanceof List<?> impact) {
+            var pageIds = ((List<?>)snapshot.get("items")).stream().map(item -> item instanceof Candidate c ? c.id().toString()
+                    : ((Map<?,?>)item).get("id").toString()).collect(java.util.stream.Collectors.toSet());
+            snapshot.put("eligibleAdmissionImpact",impact.stream().filter(row->pageIds.contains(((Map<?,?>)row).get("id").toString())).toList());
+        }
         if (id != null) snapshot.put("id", id);
         return snapshot;
     }
@@ -298,6 +323,8 @@ public class MoneyFinancialEngineService {
             var fact = money.transaction(target.id());
             MoneyMeaningService.version(fact.version(), target.expectedVersion());
             var candidate = classify(fact, accounts);
+            require(!Boolean.TRUE.equals(input.eligibleOnly()) || "AUTO_CONFIRM_ELIGIBLE".equals(candidate.decision()),
+                    "자동 복구 근거가 충분한 거래만 선택하세요.");
             require(candidate.proposedType() != null && candidate.proposedType().equals(target.type())
                     && SIMPLE_TYPES.contains(target.type()), "보호·충돌·연결 거래는 일괄 확정할 수 없습니다.");
             var edit = MoneyAccountLedgerService.quickEdit(
@@ -316,7 +343,7 @@ public class MoneyFinancialEngineService {
                    values(?,?,?,cast(? as jsonb),now()+interval '10 minutes')
                 """, owner(), previewId, fingerprint, json.writeValueAsString(snapshot));
         return Map.of("previewId", previewId, "fingerprint", fingerprint, "engineVersion", VERSION,
-                "items", items, "approvalRequired", true, "expiresInSeconds", 600, "cashDelta", BigDecimal.ZERO);
+                "items", items, "admissionImpact", admissionImpact(items), "approvalRequired", true, "expiresInSeconds", 600, "cashDelta", BigDecimal.ZERO);
     }
 
     public Map<String, Object> batchExecute(BatchExecute input) {
@@ -367,18 +394,21 @@ public class MoneyFinancialEngineService {
 
     /** Called synchronously only for the newly inserted transaction inside the processing owner lock. */
     static void autoConfirmNew(JdbcTemplate db, ObjectMapper json, MoneyService money, UUID owner,
-            UUID transactionId, Instant now) {
+            UUID transactionId, Instant now, boolean ordinaryEnabled, boolean ruleEnabled) {
         var fact = money.transaction(transactionId);
         var accounts = money.accounts();
         var proof = MoneyFinancialEvidence.ordinary(db, owner, money, fact, accounts);
         if (proof == null || !"UNRESOLVED".equals(fact.meaningState())
-                || fact.occurredAt().isBefore(now.minus(Duration.ofMinutes(5)))
                 || fact.occurredAt().isAfter(now)
-                || money.notification(proof.rawId()).receivedAt().isBefore(now.minus(Duration.ofMinutes(5)))
+                || MoneyFinancialEvidence.reviewConflict(db, owner, fact) != null
                 || MoneyFinancialEvidence.ownerProtected(db, owner, fact.id())
                 || MoneyFinancialEvidence.transfer(db, owner, money, fact, accounts) != null) return;
         var rule = MoneyFinancialEvidence.approvedRule(db, owner, proof);
-        if (rule == null) return;
+        boolean verified = ordinaryEnabled && MoneyFinancialEvidence.externalActivity(fact, proof);
+        boolean eligibleRule = ruleEnabled && rule != null
+                && !fact.occurredAt().isBefore(now.minus(Duration.ofMinutes(5)))
+                && !money.notification(proof.rawId()).receivedAt().isBefore(now.minus(Duration.ofMinutes(5)));
+        if (!verified && !eligibleRule) return;
         int changed = db.update("""
                 update money_transactions set meaning_state='CONFIRMED',version=version+1
                    where user_id=? and id=? and version=? and meaning_state='UNRESOLVED'
@@ -386,8 +416,15 @@ public class MoneyFinancialEngineService {
         if (changed != 1) throw new OptimisticLockConflictException("새 거래의 금융 의미가 변경되었습니다.");
         if (fact.type() == TransactionType.EXPENSE) money.applyCategoryRule(fact.id());
         money.applyMeaningRules(fact.id());
+        var audit = new LinkedHashMap<String,Object>();
+        audit.put("origin", "AUTO");
+        audit.put("type", fact.type());
+        audit.put("version", fact.version() + 1);
+        audit.put("engineVersion", VERSION);
+        audit.put("proof", proof);
+        audit.put("reason", rule != null ? "EXACT_OWNER_RULE_AND_SOURCE" : "VERIFIED_EXTERNAL_ACTIVITY");
+        if (rule != null) audit.put("rule", rule);
         new MoneyMeaningService(db, () -> owner, json).audit(fact.id(), "FINANCIAL_ENGINE_AUTO_CONFIRM",
-                Map.of("version", fact.version()), Map.of("origin", "AUTO", "type", fact.type(),
-                        "version", fact.version() + 1, "engineVersion", VERSION, "proof", proof, "rule", rule));
+                Map.of("version", fact.version()), audit);
     }
 }

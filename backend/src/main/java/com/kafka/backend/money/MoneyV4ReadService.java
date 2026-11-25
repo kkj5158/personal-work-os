@@ -37,6 +37,7 @@ public class MoneyV4ReadService {
     }
 
     static String bookMembership(MapSqlParameterSource params, List<Object> args) {
+        params.addValue("previewAdmission",false);
         var sql = NamedParameterUtils.parseSqlStatement(facts + " SELECT id FROM contributions WHERE bucket=:bucket");
         args.addAll(Arrays.asList(NamedParameterUtils.buildValueArray(sql, params, null)));
         return " AND id IN (" + NamedParameterUtils.substituteNamedParameters(sql, params) + ")";
@@ -53,7 +54,43 @@ public class MoneyV4ReadService {
         return new MapSqlParameterSource("owner", users.getCurrentUserId())
             .addValue("start", Timestamp.from(from.atStartOfDay(SEOUL).toInstant()))
             .addValue("end", Timestamp.from(to.plusDays(1).atStartOfDay(SEOUL).toInstant()))
-            .addValue("currency", currency);
+            .addValue("currency", currency).addValue("previewAdmission",false);
+    }
+
+    /** Run the same historical tracking, category and exclusion projection before and after a meaning-only decision. */
+    List<Map<String,Object>> admissionImpact(List<MoneyFinancialEngineService.Candidate> eligible) {
+        var result = new ArrayList<Map<String,Object>>();
+        var currencies = eligible.stream().collect(java.util.stream.Collectors.groupingBy(MoneyFinancialEngineService.Candidate::currency));
+        var select = facts + """
+                select id, bucket, assigned_category as "effectiveCategoryId" from contributions
+                where id in (:ids) order by id
+                """;
+        for (var group : currencies.entrySet()) {
+            var items=group.getValue();
+            var dates=items.stream().map(i->java.time.Instant.parse(i.occurredAt()).atZone(SEOUL).toLocalDate()).sorted().toList();
+            var params=scope(dates.getFirst(),dates.getLast(),group.getKey())
+                    .addValue("ids",items.stream().map(MoneyFinancialEngineService.Candidate::id).toList());
+            var before=new HashMap<UUID,String>();
+            for (var row:db.queryForList(select,params)) before.put((UUID)row.get("id"),(String)row.get("bucket"));
+            var after=new HashMap<UUID,Map<String,Object>>();
+            for(var row:db.queryForList(select,params.addValue("previewAdmission",true))) after.put((UUID)row.get("id"),row);
+            for(var item:items){
+                var row=new LinkedHashMap<String,Object>();
+                var projected=after.get(item.id());
+                row.put("id",item.id());
+                row.put("version",item.version());
+                row.put("currency",item.currency());
+                row.put("amount",item.amount());
+                row.put("accountId",item.evidence().get("accountId"));
+                row.put("cashDelta",BigDecimal.ZERO);
+                row.put("beforeBucket",before.get(item.id()));
+                row.put("afterBucket",projected==null?null:projected.get("bucket"));
+                row.put("categoryPreserved",true);
+                row.put("effectiveCategoryId",projected==null?null:projected.get("effectiveCategoryId"));
+                result.add(row);
+            }
+        }
+        return result;
     }
 
     public record Slice(String bucket, UUID categoryId, UUID loanId, long count, BigDecimal amount) {}

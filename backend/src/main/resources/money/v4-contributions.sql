@@ -1,6 +1,6 @@
 WITH facts AS (
     SELECT t.id, t.currency, CASE WHEN t.type='REFUND' THEN -t.amount ELSE t.amount END AS amount, t.occurred_at, t.version,
-           t.type AS source_type, t.meaning_state, t.from_account_id, t.to_account_id,
+           t.type AS source_type, CASE WHEN :previewAdmission THEN 'CONFIRMED' ELSE t.meaning_state END AS meaning_state, t.from_account_id, t.to_account_id,
            t.title, t.memo, t.counterparty_text, t.occurrence_precision, src.display_name AS from_name, dest.display_name AS to_name,
            t.loan_id, t.principal, t.interest, t.fee, t.refund_of,
            original.from_account_id AS refund_tracking_account,
@@ -9,6 +9,9 @@ WITH facts AS (
                      ELSE coalesce((op.defaults->>'categoryId')::uuid,original.category_id) END
                 WHEN jsonb_exists(b.overrides, 'categoryId') THEN (b.overrides->>'categoryId')::uuid
                 ELSE coalesce((rp.defaults->>'categoryId')::uuid, t.category_id) END AS assigned_category,
+           (:previewAdmission OR EXISTS (SELECT 1 FROM money_meaning_audit a WHERE a.user_id=t.user_id AND a.subject_id=t.id
+                   AND a.action IN ('FINANCIAL_ENGINE_AUTO_CONFIRM','FINANCIAL_ENGINE_OWNER_CONFIRM')
+                   AND a.next_value->>'type'='INCOME')) AS admitted_income,
            t.observed_direction, d.declared_type, d.relation_status, d.semantic_category_id,
            fh.fund_group AS from_group, th.fund_group AS to_group,
            money_tracked_at(t.user_id,t.to_account_id,'INCOME',t.occurred_at) AS income_tracked,
@@ -51,7 +54,7 @@ WITH facts AS (
     SELECT classified.*, CASE
       WHEN meaning_state='UNRESOLVED' AND declared_type IS NULL AND observed_direction=source_type AND source_type='INCOME' AND income_tracked THEN 'PROVISIONAL_IN'
       WHEN meaning_state='UNRESOLVED' AND declared_type IS NULL AND observed_direction=source_type AND source_type='EXPENSE' AND expense_tracked THEN 'PROVISIONAL_OUT'
-      WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND' AND income_tracked AND (income_basis='QUALIFIED' OR (declared_type='INCOME' AND assigned_category IS NULL)) THEN 'I'
+      WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND' AND income_tracked AND (income_basis='QUALIFIED' OR ((declared_type='INCOME' OR (declared_type IS NULL AND admitted_income)) AND assigned_category IS NULL)) THEN 'I'
       WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND'
         AND declared_type IS DISTINCT FROM 'LOAN_RECEIPT' AND declared_type IS DISTINCT FROM 'TRANSFER'
         AND from_account_id IS NULL AND to_account_id IS NOT NULL AND income_tracked
