@@ -334,6 +334,40 @@ class MoneyFinancialEnginePostgresTest {
         });
     }
 
+    @Test void deterministicHistoricalPreviewAndRecoveryPreserveCashAndClassificationAndCanBeReversed() {
+        fixture.check(e -> {
+            var owner=MoneyPostgresIntegrationTest.OWNER;
+            var services=services(e,owner);
+            var account=account(e,"8557");
+            Instant at=Instant.now().minusSeconds(900).truncatedTo(ChronoUnit.SECONDS);
+            var raw=notification(e,false,84671,"8557","합성 급여",at);
+            var processing=new MoneyProcessingService(e.db(),JsonMapper.builder().build(),new DataSourceTransactionManager(e.db().getDataSource()),
+                    Clock.fixed(Instant.now().plusSeconds(30),ZoneOffset.UTC),VerifiedMoneyTransferMatcher.WAIT,VerifiedMoneyTransferMatcher.TRANSFER_WINDOW,false,false);
+            assertThat(processing.runOwner(owner)).isEqualTo(1);
+            UUID id=e.db().queryForObject("select transaction_id from money_transaction_sources where raw_event_id=?",UUID.class,raw.id());
+            var fact=e.money().transaction(id);
+            var balance=e.product().balance(account.id());
+            var reads=services.engine().backfillPreview(25,0);
+            assertThat(reads.get("distribution").toString()).contains("AUTO_CONFIRM_ELIGIBLE=1");
+            assertThat(reads.get("eligibleAdmissionImpact").toString()).contains(id.toString(),"categoryPreserved=true","cashDelta=0");
+            var target=new BatchInput(List.of(new Target(id,fact.version(),"INCOME")),true);
+            var preview=services.engine().batchPreview(target);
+            var approved=command(preview,true);
+            assertThat(services.engine().batchExecute(approved)).containsEntry("status","APPLIED");
+            assertThat(services.engine().batchExecute(approved)).containsEntry("status","APPLIED");
+            var admitted=e.money().transaction(id);
+            assertThat(admitted.meaningState()).isEqualTo("CONFIRMED");
+            assertThat(admitted.categoryId()).isEqualTo(fact.categoryId());
+            assertThat(admitted.sources()).isEqualTo(fact.sources());
+            assertThat(e.product().balance(account.id())).isEqualTo(balance);
+            var reverse=new MoneyAccountLedgerService.FinancialType(UUID.randomUUID(),admitted.version(),"UNRESOLVED");
+            services.ledger().financialType(id,reverse);
+            assertThat(e.money().transaction(id).meaningState()).isEqualTo("UNRESOLVED");
+            assertThat(e.product().balance(account.id())).isEqualTo(balance);
+            assertThat(services.engine().backfillPreview(25,0).get("reasons").toString()).contains("OWNER_DECISION_PROTECTED");
+        });
+    }
+
     private BatchExecute command(Map<String, Object> preview, boolean confirmed) {
         return new BatchExecute(UUID.randomUUID(), (UUID) preview.get("previewId"),
                 preview.get("fingerprint").toString(), confirmed);
