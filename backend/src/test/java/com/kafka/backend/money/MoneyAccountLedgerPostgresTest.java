@@ -37,14 +37,14 @@ class MoneyAccountLedgerPostgresTest {
       BigDecimal.TEN,MoneyUnifiedBookkeepingPostgresTest.AT,null,null,null,false,null,null));
   var day=java.time.LocalDate.of(2026,9,26);
   var both=first.id()+","+second.id();
-  var all=new MoneyBookkeepingWorkspace.Filter(day,day,null,both,null,null,null,"KRW",null,null,50,0);
+  var all=new MoneyBookkeepingWorkspace.Filter(day,day,null,both,null,null,null,"KRW",null,null,50,0,false);
   assertThat(items(workspace.confirmed(all))).extracting(row->row.get("id")).containsExactlyInAnyOrder(income.id(),movement.id());
-  var filtered=new MoneyBookkeepingWorkspace.Filter(day,day,"합성",both,null,"INCOME",true,"KRW",null,null,1,0);
+  var filtered=new MoneyBookkeepingWorkspace.Filter(day,day,"합성",both,null,"INCOME",true,"KRW",null,null,1,0,false);
   assertThat(items(workspace.confirmed(filtered))).singleElement().satisfies(row->{
    assertThat(row).containsEntry("id",income.id()).containsEntry("category_id",null);
    assertThat(row.get("book")).isInstanceOf(Map.class);
   });
-  var pageTwo=new MoneyBookkeepingWorkspace.Filter(day,day,null,both,null,null,null,"KRW",null,null,1,1);
+  var pageTwo=new MoneyBookkeepingWorkspace.Filter(day,day,null,both,null,null,null,"KRW",null,null,1,1,false);
   assertThat(workspace.confirmed(pageTwo)).containsEntry("total",2L);
   assertThat(items(workspace.confirmed(pageTwo))).hasSize(1);
   assertThat(items(workspace.review(MoneyBookkeepingWorkspace.Lane.UNRESOLVED,50,0))).singleElement()
