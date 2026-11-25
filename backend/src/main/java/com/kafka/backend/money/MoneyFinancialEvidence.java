@@ -184,7 +184,7 @@ final class MoneyFinancialEvidence {
         return result;
     }
 
-    private static VerifiedMoneyTransferMatcher.Resolved resolved(MoneyService money, MoneyTransaction fact, List<MoneyAccount> accounts) {
+    static VerifiedMoneyTransferMatcher.Resolved resolved(MoneyService money, MoneyTransaction fact, List<MoneyAccount> accounts) {
         Direction direction = simpleDirection(fact);
         if (direction == null || fact.transferDestinationStatus() != null || fact.refundOf() != null) return null;
         var attempt = primaryAttempt(money, fact);
