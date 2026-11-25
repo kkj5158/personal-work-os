@@ -19,7 +19,7 @@ import static com.kafka.backend.money.MoneyService.require;
 public class MoneyBookkeepingWorkspace {
     public record Filter(LocalDate from, LocalDate to, String search, String accountIds, String categoryIds,
             String baseDirection, Boolean uncategorized, String currency, BigDecimal minAmount, BigDecimal maxAmount,
-            Integer limit, Integer offset) {}
+            Integer limit, Integer offset, Boolean allPeriods) {}
     public enum Lane { UNRESOLVED, FOLLOWUP, FAILED }
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final String ACTIVE = " from money_transactions t" + MoneyOwnerFinancialDecision.JOIN
@@ -37,15 +37,24 @@ public class MoneyBookkeepingWorkspace {
     }
 
     public Map<String,Object> confirmed(Filter f) {
-        require(f.from()!=null && f.to()!=null && !f.to().isBefore(f.from()) && ChronoUnit.DAYS.between(f.from(),f.to())<=366,
-                "조회 기간은 1일부터 367일까지 선택하세요.");
+        boolean allPeriods=Boolean.TRUE.equals(f.allPeriods());
+        if(allPeriods) {
+            require(Boolean.TRUE.equals(f.uncategorized()) && f.from()==null && f.to()==null,
+                    "전체 기간 조회는 미분류 거래에 사용할 수 있습니다.");
+        } else {
+            require(f.from()!=null && f.to()!=null && !f.to().isBefore(f.from()) && ChronoUnit.DAYS.between(f.from(),f.to())<=366,
+                    "조회 기간은 1일부터 367일까지 선택하세요.");
+        }
         int limit=f.limit()==null?50:f.limit(), offset=f.offset()==null?0:f.offset();
         validatePage(limit,offset);
         UUID owner=users.getCurrentUserId();
         var args=new ArrayList<Object>(List.of(owner));
-        var where=new StringBuilder(ACTIVE).append(" and t.meaning_state='CONFIRMED' and t.occurred_at>=? and t.occurred_at<?");
-        args.add(Timestamp.from(f.from().atStartOfDay(SEOUL).toInstant()));
-        args.add(Timestamp.from(f.to().plusDays(1).atStartOfDay(SEOUL).toInstant()));
+        var where=new StringBuilder(ACTIVE).append(" and t.meaning_state='CONFIRMED'");
+        if(!allPeriods) {
+            where.append(" and t.occurred_at>=? and t.occurred_at<?");
+            args.add(Timestamp.from(f.from().atStartOfDay(SEOUL).toInstant()));
+            args.add(Timestamp.from(f.to().plusDays(1).atStartOfDay(SEOUL).toInstant()));
+        }
         if(f.accountIds()!=null) {
             var accounts=ids(f.accountIds());
             where.append(" and (t.from_account_id=any(?) or t.to_account_id=any(?))");

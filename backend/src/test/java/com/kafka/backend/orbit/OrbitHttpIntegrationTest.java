@@ -262,6 +262,13 @@ class OrbitHttpIntegrationTest {
             assertThat(db.queryForObject("select meaning_state from money_transactions where user_id=? and id=?",String.class,user,fact)).isEqualTo("UNRESOLVED");
             var fresh=console(user,"preview/financial-correction","POST",Map.of("id",fact,"expectedVersion",0,"action","TYPE","type","EXPENSE"));assertThat(fresh.statusCode()).as(fresh.body()).isEqualTo(200);fp=json.readTree(fresh.body()).get("data");var confirmed=Map.of("requestId",UUID.randomUUID(),"previewId",fp.get("previewId").asText(),"fingerprint",fp.get("fingerprint").asText(),"confirmed",true);
             var corrected=console(user,"execute/financial-correction","POST",confirmed);assertThat(corrected.statusCode()).as(corrected.body()).isEqualTo(200);assertThat(corrected.body()).contains("APPLIED");
+            String today=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString();
+            String query="unified-transactions?from="+today+"&to="+today+"&baseDirection=EXPENSE&accountIds="+account+"&limit=1";
+            var owned=console(user,query,"GET",null);
+            assertThat(owned.statusCode()).as(owned.body()).isEqualTo(200);
+            assertThat(json.readTree(owned.body()).at("/data/items/0/id").asText()).isEqualTo(fact.toString());
+            assertThat(json.readTree(console(other,query,"GET",null).body()).at("/data/total").asInt()).isZero();
+            assertThat(json.readTree(console(user,"workspace-review?lane=UNRESOLVED","GET",null).body()).at("/data/total").asInt()).isZero();
             assertThat(db.queryForObject("select meaning_state from money_transactions where user_id=? and id=?",String.class,user,fact)).isEqualTo("CONFIRMED");
             assertThat(db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,user)).isEqualTo(1);assertThat(db.queryForObject("select amount from money_transactions where user_id=? and id=?",Integer.class,user,fact)).isEqualTo(1200);
             UUID raw=UUID.randomUUID();db.update("insert into money_raw_notifications(id,user_id,posted_at,raw_payload,dedupe_key,content_hash,state) values(?,?,now(),'{}',?,?,'PROCESSED')",raw,user,raw.toString(),raw.toString());db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,relationship,evidence) values(?,?,?,'PRIMARY',cast(? as jsonb))",fact,user,raw,"{\"rawBody\":\"PRIVATE_SOURCE_BODY\",\"accountHint\":\"PRIVATE_ACCOUNT_HINT\",\"reason\":\"SOURCE_MATCH\"}");var privateEvidence=console(user,"financial-detail?id="+fact,"GET",null);assertThat(privateEvidence.statusCode()).as(privateEvidence.body()).isEqualTo(200);assertThat(privateEvidence.body()).contains("SOURCE_MATCH",raw.toString()).doesNotContain("PRIVATE_SOURCE_BODY","PRIVATE_ACCOUNT_HINT");
