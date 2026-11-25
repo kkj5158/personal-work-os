@@ -28,15 +28,16 @@ const eligible = (row: AiItem) => row.moveToBookkeepingEligible === true && !!ro
 type Command = StoredReviewCommand & {retryAllowed?: boolean; path: string; generation: number; skipped: ReviewOutcome['items']; snapshots: Record<string, ReviewPreviewRow>; applied: string[]};
 type Receipt = {action: ReviewAction; value: ReviewOutcome; snapshots: Command['snapshots']};
 
-export function NotificationReview(p: Props & {onPendingCount?: (count: number) => void; laneState?: 'PENDING'|'DEFERRED'|'COMPLETED'}) {
+export function NotificationReview(p: Props & {onPendingCount?: (count: number) => void; laneState?: 'PENDING_NOTIFICATION'|'FAILED_NOTIFICATION'|'DEFERRED'|'COMPLETED'}) {
   const tabsId = useId(), cache = useMoneyCache();
   const [tabState, setState] = useMoneyViewState('notice-review-state', () => 'PENDING');
-  const state=p.laneState??tabState;
+  const queryState=p.laneState??tabState;
+  const state=queryState==='PENDING_NOTIFICATION'||queryState==='FAILED_NOTIFICATION'?'PENDING':queryState;
   const [search, setSearch] = useMoneyViewState('notice-review-search', () => '');
   const [account, setAccount] = useMoneyViewState('notice-review-account', () => '');
   const [reason, setReason] = useMoneyViewState('notice-review-reason', () => '');
-  const [offset, setOffset] = useMoneyViewState('notice-review-offset-'+state, () => 0);
-  const [ids, setIds] = useMoneyViewState<string[]>('notice-review-ids-'+state, () => []);
+  const [offset, setOffset] = useMoneyViewState('notice-review-offset-'+queryState, () => 0);
+  const [ids, setIds] = useMoneyViewState<string[]>('notice-review-ids-'+queryState, () => []);
   const [requests, setRequests] = useMoneyViewState<Command[]>('notice-review-commands', () => []);
   const restored = useRef(false);
   useEffect(() => {
@@ -54,7 +55,7 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
   const [error, setError] = useState(''), [rowErrors, setRowErrors] = useState<Record<string,string>>({});
   const [working, setWorking] = useState<string[]>([]);
   const locks = useRef(new Set<string>()), network = useRef(new Set<string>()), preparingLock = useRef(false), epoch = useRef(0);
-  const q = new URLSearchParams({scope: 'GATE0', state, search, limit: '50', offset: String(offset)});
+  const q = new URLSearchParams({scope: 'GATE0', state:queryState, search, limit: '50', offset: String(offset)});
   if (account) q.set('accountId', account);
   if (reason) q.set('reason', reason);
   const path = '/ai/workbench?' + q;
@@ -167,7 +168,7 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
     const currentEpoch = epoch.current, generation = cache.scopeSnapshot();
     preparingLock.current = true; setPreparing(true); setPreview(null); setError('');
     try {
-      const value = await api.post<ReviewPreview>('/review/batches/preview', {gate0: true, state, search, accountId: account || null, reason: reason || null,
+      const value = await api.post<ReviewPreview>('/review/batches/preview', {gate0: true, state:queryState, search, accountId: account || null, reason: reason || null,
         scope: wholeFilter ? 'FILTER' : 'SELECTED', action, items: wholeFilter ? [] : ids.map(key => ({kind: 'RAW', id: key.slice(4)}))});
       if (currentEpoch !== epoch.current || generation !== cache.scopeSnapshot()) return;
       if (wholeFilter) select([...ids, ...value.items.map(reviewKey)]);

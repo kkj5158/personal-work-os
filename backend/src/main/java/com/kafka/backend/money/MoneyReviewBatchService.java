@@ -66,7 +66,7 @@ public class MoneyReviewBatchService {
      rows.addAll((List<Map<String,Object>>)page.get("items"));
      if(offset+50>=n(page.get("total")))break;
     }
-   }else{require(input.items()!=null&&!input.items().isEmpty()&&input.items().size()<=10000,"처리할 항목을 선택하세요.");var keys=new HashSet<String>();for(var target:input.items())require(target!=null&&target.id()!=null&&Set.of("RAW","TRANSACTION").contains(Objects.toString(target.kind(),""))&&keys.add(target.kind()+target.id()),"중복되거나 유효하지 않은 선택입니다.");rows.addAll(input.gate0()?new MoneyGateZeroReview(db,users,json,money).selected(input.items(),input.action()):ai.reviewItems(input.items()));}
+   }else{require(input.items()!=null&&!input.items().isEmpty()&&input.items().size()<=10000,"처리할 항목을 선택하세요.");var keys=new HashSet<String>();for(var target:input.items())require(target!=null&&target.id()!=null&&Set.of("RAW","TRANSACTION").contains(Objects.toString(target.kind(),""))&&keys.add(target.kind()+target.id()),"중복되거나 유효하지 않은 선택입니다.");rows.addAll(input.gate0()?new MoneyGateZeroReview(db,users,json,money).selected(input.items(),input.action(),input.state()):ai.reviewItems(input.items()));}
    var targets=new HashMap<String,Target>();
    if(input.items()!=null)for(var target:input.items())targets.put(target.kind()+target.id(),target);
    UUID previewId=UUID.randomUUID();var items=new ArrayList<Map<String,Object>>();
