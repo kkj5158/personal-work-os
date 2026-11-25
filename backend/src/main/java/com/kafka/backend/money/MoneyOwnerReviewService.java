@@ -151,7 +151,11 @@ public class MoneyOwnerReviewService {
    var v=input.financial();var ids=new ArrayList<UUID>();ids.add(id);if(v.partnerId()!=null){require(!id.equals(v.partnerId()),"서로 다른 원문을 선택하세요.");ids.add(v.partnerId());}
    db.queryForList("select id from money_raw_notifications where user_id=? and id=any(?) order by id for update",owner(),ids.toArray(UUID[]::new));
    require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transaction_sources where user_id=? and raw_event_id=any(?))",Boolean.class,owner(),ids.toArray(UUID[]::new))),"이미 금융 거래에 연결된 원문입니다. 기존 가계부 거래를 확인하세요.");
-   Evidence e;try{e=evidence(id);}catch(InvalidRequestException invalid){return manualFinancial(id,input,true);}var c=e.candidate();if(!fingerprint(e).equals(input.fingerprint()))throw new OptimisticLockConflictException("원문·후보·버전이 변경되었습니다. 초안을 유지하고 근거를 새로 확인하세요.");
+   Evidence e;try{e=evidence(id);}catch(InvalidRequestException invalid){
+    require(!"LATE_POSTED_TRANSFER_LINK_REQUIRED".equals(money.notification(id).processingReason()),"늦게 도착한 이체 원문의 은행 근거를 먼저 확인하세요.");
+    return manualFinancial(id,input,true);
+   }var c=e.candidate();if(!fingerprint(e).equals(input.fingerprint()))throw new OptimisticLockConflictException("원문·후보·버전이 변경되었습니다. 초안을 유지하고 근거를 새로 확인하세요.");
+   if("LATE_POSTED_TRANSFER_LINK_REQUIRED".equals(e.raw().processingReason()))return linkLateTransfer(e,input);
    if("LOAN_RECEIPT".equals(v.type()))return manualFinancial(id,input,false);
    require(!archived(id)||Boolean.TRUE.equals(v.approveArchived()),"제외 원문을 연결하려면 명시적으로 동의하세요.");checkAccount(input.accountId(),input.accountVersion());
    require(c.provider().equals(money.account(input.accountId()).provider()),"원문 은행과 같은 금융기관의 소유 계좌를 선택하세요.");
@@ -218,6 +222,88 @@ public class MoneyOwnerReviewService {
    return Map.of("transactionId",transaction,"transaction",money.transaction(transaction),"eventId",event,"sourceIds",ids);
   });
  }
+ /** This RAW already overlaps posted cash. Reuse the canonical two-leg link after the owner's graph-locked selection. */
+ @SuppressWarnings("unchecked")
+ private Map<String,Object> linkLateTransfer(Evidence e,Decision input){
+  UUID rawId=e.raw().id();
+  boolean modern=input.financial()!=null;
+  require(modern ? "REGISTER".equals(input.action()) && "TRANSFER".equals(input.financial().type())
+                   && input.financial().partnerId()==null && input.semanticCategoryId()==null
+                 : "TRANSFER".equals(input.action()),
+          "늦게 도착한 이체 근거입니다. 양쪽 계좌를 확인하고 이체로 연결하세요.");
+  require(!archived(rawId) || modern && Boolean.TRUE.equals(input.financial().approveArchived()),
+          "보류 원문은 직접 확인하고 연결을 승인하세요.");
+  checkAccount(input.accountId(),input.accountVersion());
+  checkAccount(input.otherAccountId(),input.otherAccountVersion());
+  var c=e.candidate();
+  if(modern){
+   var choice=input.financial();
+   require((choice.direction()==null || choice.direction()==c.direction())
+           && (choice.amount()==null || choice.amount().compareTo(c.amount())==0)
+           && (choice.occurredAt()==null || choice.occurredAt().equals(c.occurredAt()))
+           && (choice.currency()==null || choice.currency().equals(e.currency()))
+           && choice.categoryId()==null,"원본 금액·시각·방향을 변경하는 거래는 상세 정정에서 확인하세요.");
+  }
+  var accounts=money.accounts();
+  var resolver=new MoneyAccountResolver();
+  var latest=money.attempts(rawId).getLast();
+  var from=resolver.resolve(accounts,c.provider(),c.sourceAccountHint()).account();
+  var to=resolver.resolve(accounts,c.provider(),c.destinationAccountHint()).account();
+  var incoming=new VerifiedMoneyTransferMatcher.Resolved(latest,from,to);
+  require(incoming.own()!=null && incoming.own().id().equals(input.accountId())
+          && !input.accountId().equals(input.otherAccountId()),"원본에 일치하는 서로 다른 두 소유 계좌가 필요합니다.");
+  var graph=graph(e);
+  var facts=((List<Map<String,Object>>)graph.get("facts")).stream().filter(f->
+          c.amount().compareTo((BigDecimal)f.get("amount"))==0 && e.currency().equals(f.get("currency"))).toList();
+  require(facts.size()==1,"기존 거래가 없거나 같은 금액의 후보가 여러 건입니다. 검토 필요에서 근거를 확인하세요.");
+  for(var raw:(List<Map<String,Object>>)graph.get("raws")){
+   if(rawId.equals(raw.get("id")))continue;
+   var other=json.readTree(raw.get("candidate").toString());
+   require(other.get("amount")==null || other.get("amount").isNull()
+           || c.amount().compareTo(other.get("amount").decimalValue())!=0,
+           "아직 연결하지 않은 다른 원문 후보가 있습니다. 개별 원본을 확인하세요.");
+  }
+  var target=money.transaction((UUID)facts.getFirst().get("id"));
+  var side=MoneyFinancialEvidence.resolved(money,target,accounts);
+  require(side!=null && side.own().id().equals(input.otherAccountId()),"기존 반대편 거래의 은행·소유 계좌가 일치하지 않습니다.");
+  String proof=VerifiedMoneyTransferMatcher.pairEvidence(incoming,side);
+  require(proof!=null && !"UNIQUE_VERIFIED_OWNED_ACCOUNTS".equals(proof),
+          "같은 금액 외에 상대방·은행 시각 또는 동일 계좌 경로의 근거가 필요합니다.");
+  if(input.existingTransactionId()!=null){
+   require(target.id().equals(input.existingTransactionId()),"선택한 기존 거래와 맞지 않습니다.");
+   MoneyMeaningService.version(target.version(),input.existingTransactionVersion());
+  }
+  require("UNRESOLVED".equals(target.meaningState()) && target.categoryId()==null &&
+          !MoneyFinancialEvidence.ownerProtected(db,owner(),target.id()) &&
+          !MoneyStatementProtection.hasSource(db,owner(),target.id()) &&
+          !Boolean.TRUE.equals(db.queryForObject("""
+                  select exists(select 1 from money_transactions where user_id=? and id=? and loan_id is not null)
+                      or exists(select 1 from money_bookkeeping_overrides where user_id=? and transaction_id=?)
+                      or exists(select 1 from money_classification_state where user_id=? and transaction_id=? and direct_protected)
+                      or exists(select 1 from money_rule_projections where user_id=? and transaction_id=?)
+                  """,Boolean.class,owner(),target.id(),owner(),target.id(),owner(),target.id(),owner(),target.id())),
+          "기존 거래에 확정·분류 또는 명세서 근거가 있습니다. 상세 정정에서 확인하세요.");
+  var source=VerifiedMoneyTransferMatcher.source(latest,SourceRelationship.PRIMARY,proof);
+  boolean outgoing=c.direction()==Direction.OUT;
+  UUID added=money.recordUnresolvedTransactionId(new TransactionInput(outgoing?TransactionType.EXPENSE:TransactionType.INCOME,
+          outgoing?input.accountId():null,outgoing?null:input.accountId(),c.amount(),e.currency(),c.occurredAt(),c.counterpartyText(),List.of(source)));
+  // Use the existing transfer split/undo convention. The outgoing ID is canonical and the incoming ID is retained.
+  var newLeg=money.transaction(added);
+  var debit=outgoing?newLeg:target;
+  var credit=outgoing?target:newLeg;
+  var edit=new MoneyUnifiedBookkeepingService.Edit(input.requestId(),debit.version(),"LINK_TRANSFER",null,
+          credit.id(),credit.version(),null,null,null,null,null,null,null,null,null,"소유자 확인 · "+proof,null);
+  unified().applyValidatedEdit(debit.id(),edit);
+  long version=money.finishProcessingVersion(rawId,ProcessingState.PROCESSED,"USER_CONFIRMED_LATE_TRANSFER");
+  db.update("update money_raw_notifications set review_deferred=false where user_id=? and id=?",owner(),rawId);
+  UUID event=UUID.randomUUID();
+  db.update("insert into money_ai_events(id,user_id,subject_id,kind,payload) values(?,?,?,'MOVE_TO_BOOKKEEPING',cast(? as jsonb))",
+          event,owner(),rawId,json.writeValueAsString(Map.of("kind","RAW","transactionId",debit.id(),"requestId",input.requestId(),
+          "linkedTransactionId",target.id(),"sourceFingerprint",input.fingerprint(),"matchingRule",proof,
+          "after",Map.of("state","COMPLETED","version",version))));
+  return Map.of("transactionId",debit.id(),"transaction",money.transaction(debit.id()),"eventId",event,"sourceIds",List.of(rawId));
+ }
+
  private void bindCategory(Decision input,UUID transaction){
   if(input.semanticCategoryId()==null && input.semanticPolicyVersion()==null)return;
   require("REGISTER".equals(input.action()),"출처 연결은 기존 거래의 금융 의미를 변경할 수 없습니다.");
@@ -228,6 +314,7 @@ public class MoneyOwnerReviewService {
   if(input.financial()!=null)return decideFinancial(id,input);
   return commands.execute(owner(),input.requestId(),"OWNER_REVIEW_FINANCIAL",Arrays.asList(id,input),()->{
    db.queryForList("select id from money_raw_notifications where user_id=? and id=? for update",owner(),id);var e=evidence(id);if(!Objects.equals(fingerprint(e),input.fingerprint()))throw new OptimisticLockConflictException("표시 이후 원문 분석 또는 버전이 바뀌었습니다.");
+   if("LATE_POSTED_TRANSFER_LINK_REQUIRED".equals(e.raw().processingReason()))return linkLateTransfer(e,input);
    var c=e.candidate();require(input.accountId()!=null,"소유 계좌를 선택하세요.");var account=money.account(input.accountId());MoneyMeaningService.version(account.version(),input.accountVersion());require(!account.archived(),"활성 소유 계좌를 선택하세요.");require(Objects.equals(account.provider(),c.provider()),"원문 금융기관과 같은 소유 계좌를 선택하세요.");UUID transaction;
    var provenance=Map.<String,Object>of("rule","OWNER_ASSERTED_REVIEW","action",Objects.toString(input.action(),""),"sourceFingerprint",input.fingerprint(),"requestId",input.requestId());
    if("LINK_DUPLICATE".equals(input.action())){

@@ -368,6 +368,47 @@ class MoneyFinancialEnginePostgresTest {
         });
     }
 
+    @Test void ownerLinksCorroboratedLateRawAndLeavesAmountOnlyCandidateUntouched() {
+        fixture.check(e -> {
+            UUID owner=MoneyPostgresIntegrationTest.OWNER;
+            var service=services(e,owner);
+            var review=new MoneyOwnerReviewService(e.db(),()->owner,JsonMapper.builder().build(),e.money(),service.commands());
+            var payer=account(e,"8557");
+            var recipient=account(e,"8765");
+            for(boolean corroborated:List.of(true,false)){
+                int amount=corroborated?34671:5000;
+                Instant at=corroborated?AT:AT.plusSeconds(600);
+                var credit=admitted(e,recipient,false,amount,"8765","합성 소유자",at);
+                var raw=notification(e,true,amount,"8557",corroborated?"합성 소유자":"다른 상대방",at.plusSeconds(1));
+                e.money().process(raw.id(),new KakaoNotificationParserV1());
+                e.money().finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"LATE_POSTED_TRANSFER_LINK_REQUIRED");
+                var request=new MoneyOwnerReviewService.Decision(UUID.randomUUID(),review.context(raw.id()).get("fingerprint").toString(),
+                        "TRANSFER",payer.id(),recipient.id(),null,payer.version(),recipient.version(),null);
+                var balance=e.product().balance(recipient.id()).amount();
+                var outcome=review.decide(raw.id(),request);
+                if(!corroborated){
+                    assertThat(outcome).containsEntry("status","NOT_APPLIED");
+                    assertThat(e.money().notification(raw.id()).state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);
+                    assertThat(e.money().transaction(credit.id()).meaningState()).isEqualTo("UNRESOLVED");
+                    continue;
+                }
+                assertThat(outcome).containsEntry("status","APPLIED");
+                assertThat(review.decide(raw.id(),request)).isEqualTo(outcome);
+                var result=(Map<?,?>)outcome.get("result");
+                var transfer=e.money().transaction(UUID.fromString(result.get("transactionId").toString()));
+                assertThat(transfer.type()).isEqualTo(TransactionType.TRANSFER);
+                assertThat(transfer.fromAccountId()).isEqualTo(payer.id());
+                assertThat(transfer.toAccountId()).isEqualTo(recipient.id());
+                assertThat(transfer.sources()).hasSize(2);
+                assertThat(e.money().transaction(credit.id()).mergedInto()).isEqualTo(transfer.id());
+                assertThat(e.product().balance(recipient.id()).amount()).isEqualByComparingTo(balance);
+                assertThat(e.product().balance(payer.id()).amount()).isEqualByComparingTo(-amount+"");
+                assertThat(e.db().queryForObject("select count(*) from money_transactions where user_id=? and not excluded and merged_into is null",Integer.class,owner)).isEqualTo(1);
+                assertThat(e.money().notification(raw.id()).state()).isEqualTo(ProcessingState.PROCESSED);
+            }
+        });
+    }
+
     private BatchExecute command(Map<String, Object> preview, boolean confirmed) {
         return new BatchExecute(UUID.randomUUID(), (UUID) preview.get("previewId"),
                 preview.get("fingerprint").toString(), confirmed);
