@@ -44,10 +44,10 @@ test('a live evidence refresh cannot silently replace the financial draft baseli
  api.get=async<T,>(path:string)=>(path.startsWith('/account-ledger/rows/')?current:page(path)) as T;
  try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><Capture/><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
   await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="Expense 상세 편집"]')!.click());await tick();
-  const select=document.querySelector<HTMLSelectElement>('[aria-label="편집 금융 유형"]')!;
-  await act(()=>{select.value='TRANSFER';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});await tick();
+  const amount=document.querySelector<HTMLInputElement>('[aria-label="정정 실제 금액"]')!;
+  await act(()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(amount,'250');amount.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});await tick();
   current={...expense,version:2,fingerprint:'changed-evidence',amount:200};await act(()=>cache!.invalidate(key=>key==='/account-ledger/rows/expense'));await tick();
-  assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal([...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='방향·카테고리 저장')!.disabled,true);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'TRANSFER');
+  assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal(amount.disabled||!!amount.closest('fieldset:disabled'),true);assert.equal(amount.value,'250');
  }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
 });
 
@@ -154,7 +154,7 @@ test('ordinary outgoing and incoming decisions each send one versioned PATCH, en
  await withDecisions(async({choose,calls,reads,records})=>{
   await choose('debit','EXPENSE');await choose('credit','INCOME');
   assert.equal(calls.length,2);assert.equal(calls[0].command.expectedVersion,1);
-  assert.deepEqual(Object.keys(calls[0].command).sort(),['expectedVersion','financialType','requestId']);
+  assert.deepEqual(Object.keys(calls[0].command).sort(),['expectedVersion','financialType','requestId','requireApplied']);
   assert.ok(!reads.some(path=>path.startsWith('/account-ledger/rows/')));
   assert.ok(document.querySelector('[aria-label="Debit 생활 카테고리"]'));assert.ok(document.querySelector('[aria-label="Credit 생활 카테고리"]'));
   assert.equal(document.querySelector('.al-editor'),null);
@@ -177,8 +177,8 @@ test('W01/W02 explicit same-direction choices on unresolved declarations work in
   records.set('credit',{...records.get('credit')!,declaredFinancialType:'INCOME',meaningApplied:false});
   await reload();
   await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="Debit 상세 편집"]')!.click());await tick();
-  assert.equal(document.querySelector<HTMLSelectElement>('[aria-label="편집 금융 유형"]')!.value,'EXPENSE');
-  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='방향·카테고리 저장')!.click());await tick();
+  await act(()=>document.querySelector<HTMLButtonElement>('.al-editor .al-type-trigger')!.click());
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="거래 방향"] button[aria-pressed="true"]')!.click());await tick();
   assert.equal(calls[0].command.financialType,'EXPENSE');
   await act(()=>document.querySelector<HTMLInputElement>('[aria-label="Credit 분류 선택"]')!.click());
   const select=document.querySelector<HTMLSelectElement>('[aria-label="일괄 금융유형"]')!;
@@ -191,14 +191,14 @@ test('W03 filtered-out decision reports pending from the durable receipt',async(
  await withDecisions(async({choose})=>{
   await choose('expense','TRANSFER');
   await act(()=>[...document.querySelectorAll<HTMLButtonElement>('nav button')].find(b=>b.textContent==='미처리 알림')!.click());await tick();
-  assert.match(document.querySelector('.al-pending')!.textContent!,/금융 반영 대기.*상대 거래 연결 대기/);
+  assert.match(document.querySelector('.al-pending')!.textContent!,/상대 거래 연결 대기/);
  });
 });
 test('unmatched relationship persists on confirmed row and is discoverable under follow-up',async()=>{
  await withDecisions(async({choose,calls,reads})=>{
   await choose('expense','TRANSFER');
   const row=document.querySelector('[data-transaction-id=expense]')!;
-  assert.match(row.textContent!,/상대 거래 연결 대기/);assert.match(row.textContent!,/금융 반영 대기/);
+  assert.match(row.textContent!,/상대 거래 연결 대기/);assert.doesNotMatch(row.textContent!,/직접 확정/);
   assert.equal(row.querySelector('[aria-label="Expense 생활 카테고리"]'),null);
   await act(()=>[...document.querySelectorAll<HTMLButtonElement>('nav button')].find(b=>b.textContent==='후속 연결 대기')!.click());await tick();
   assert.equal(document.querySelectorAll('.al-row').length,1);

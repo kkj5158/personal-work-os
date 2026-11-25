@@ -7,9 +7,9 @@ export type ReviewResult = {id: string; kind: string; status: string; eventId?: 
 export type ReviewOutcome = {requestId: string; completed: boolean; items: ReviewResult[]};
 export type ReviewPage = {items: AiItem[]; total: number; reasons?: string[]; counts?: Record<'PENDING' | 'DEFERRED' | 'COMPLETED', number>};
 export const REVIEW_BATCH_LIMIT = 10000;
-export const reviewLedgerHref = (id: string) => '/money/ledger?transactionId=' + encodeURIComponent(id);
+export const reviewLedgerHref = (id: string) => '/money/bookkeeping?transactionId=' + encodeURIComponent(id);
 export const reviewKey = (row: {id: string; kind: string}) => row.kind + ':' + row.id;
-export const reviewActionLabel = (action: ReviewAction) => ({MOVE_TO_BOOKKEEPING: '거래장 이동', DEFER: '제외', NON_TRANSACTION: '비거래 처리', REOPEN: '복원'})[action];
+export const reviewActionLabel = (action: ReviewAction) => ({MOVE_TO_BOOKKEEPING: '거래 등록', DEFER: '제외', NON_TRANSACTION: '비거래 처리', REOPEN: '복원'})[action];
 
 /** Only the server can establish a domestic currency default from financial evidence. */
 export function reviewCurrency(row: {currency?: string | null; effectiveCurrency?: string | null}) {

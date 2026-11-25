@@ -11,7 +11,7 @@ import {baseDirection,activeCategories,protectedMeaning,type BaseDirection} from
 import {loanAllocation} from '@/lib/money/unified';
 import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
 import {useLedgerCategories} from './MoneyLedgerCategory';
-import {relationLabel,useFinancialDecisions,decisionDescription} from './MoneyLedgerFinancialType';
+import {relationLabel,useFinancialDecisions,decisionDescription,FinancialTypePicker} from './MoneyLedgerFinancialType';
 
 function auditType(snapshot:unknown){
  try{
@@ -46,32 +46,25 @@ export function AccountLedgerEditor({id,initialType,initialCategoryId,accounts,c
  const ownerDecision=decisions.entries[id],categoryChange=categoryChanges.entries[id];
  const awaiting=ownerDecision?.phase==='unknown'||categoryChange?.phase==='unknown';
  const disabled=locked||busy||!!pending||conflict||stale||awaiting;
- async function saveOwner(){
+ async function chooseDirection(next:string){
   if(!row||disabled||guard.current)return;
-  guard.current=true;setBusy(true);setError('');setMessage('');setPreview(null);
-  let savedRow=row;
+  guard.current=true;setBusy(true);setError('');setPreview(null);
   try{
-   const categoryChosen=!!selection&&(draft.categoryId!==undefined||!!initialCategoryId);
-   if(!categoryChosen||draft.direction!==undefined){
-    const outcome=await decisions.save(row,direction,true,updated=>{savedRow=updated;});
-    if(outcome!=='saved'&&outcome!=='pending')return;
-    setMessage(outcome==='pending'?'방향 선택을 저장했습니다. 금융 반영 또는 관계 확인이 필요합니다.':'거래 방향을 저장했습니다.');
-   }
-   if(savedRow!==row){
-    // A decision receipt has the ledger list shape. Detail includes the source evidence and fingerprint.
-    const detail=await api.get<LedgerRow>(ACCOUNT_LEDGER+'/rows/'+id);
-    if(detail.version!==savedRow.version){setConflict(true);setError('방향 저장 후 거래가 다시 변경되었습니다. 현재 값을 확인하세요.');return;}
-    savedRow=detail;setBaseline(detail);
-   }
-   if(categoryChosen){
-    const updated=await categoryChanges.save(savedRow,selection,direction);
-    if(!updated)return;
-    setBaseline(updated);
-    setMessage(updated.meaningApplied===false?'카테고리를 저장했습니다. 금융 반영 대기 중입니다.':('카테고리를 저장했습니다. '+relationLabel(updated)).trim());
-   }
-   setDraft({});
-  }catch(error){
-   setError(error instanceof Error?error.message:'저장 결과를 확인할 수 없습니다. 최신 거래를 확인하세요.');
+   let version:number|undefined;
+   const outcome=await decisions.save(row,next,true,updated=>{version=updated.version;});
+   if(outcome!=='saved'&&outcome!=='pending')return;
+   const detail=await api.get<LedgerRow>(ACCOUNT_LEDGER+'/rows/'+id);
+   if(detail.version!==version){setConflict(true);setError('거래가 다시 변경되었습니다. 최신 근거를 확인하세요.');return;}
+   setBaseline(detail);setDraft({});setMessage(relationLabel(detail)||'금융 유형을 확정했습니다.');
+  }catch(e){setError(e instanceof Error?e.message:'최신 거래 조회 실패');}
+  finally{guard.current=false;setBusy(false);}
+ }
+ async function saveCategory(){
+  if(!row||!selection||disabled||guard.current)return;
+  guard.current=true;setBusy(true);setError('');setMessage('');setPreview(null);
+  try{
+   const updated=await categoryChanges.save(row,selection,direction);
+   if(updated){setBaseline(updated);setDraft({});setMessage(relationLabel(updated)||'카테고리를 저장했습니다.');}
   }finally{guard.current=false;setBusy(false);}
  }
  function field(key:string,value:string){if(disabled)return;setDraft(old=>({...old,[key]:value}));setPreview(null);setError('');}
@@ -100,7 +93,7 @@ export function AccountLedgerEditor({id,initialType,initialCategoryId,accounts,c
  async function prepare(action:string){if(guard.current||disabled)return;guard.current=true;setBusy(true);setError('');setMessage('');try{const operation=command(action),result=await api.post<LedgerPreview>(ACCOUNT_LEDGER+'/rows/'+id+'/preview',operation);if(result.status!=='APPLIED')throw Error(result.result?.message??'안전 검증을 통과하지 못했습니다.');if(!result.previewToken)throw Error('서버의 확정 근거를 받지 못했습니다. 다시 미리보기를 확인하세요.');setPreview({operation:{...operation,previewToken:result.previewToken},result});}catch(e){setError(e instanceof Error?e.message:'금융 영향 확인 실패');}finally{guard.current=false;setBusy(false);}}
  async function confirm(){if(!preview||guard.current||disabled)return;guard.current=true;setBusy(true);setError('');const operation=preview.operation;onPending(operation);try{const result=await recoverLedgerOperation(id,operation,(path,body)=>api.post(path,body),path=>api.get(path));accept(result);}finally{guard.current=false;setBusy(false);}}
  function accept(result:UnifiedOutcome){if(result.status==='UNKNOWN'){setMessage('저장 결과 확인 필요 · 원래 요청 ID와 초안을 보존합니다.');return;}onPending(null);setPreview(null);if(result.status==='NOT_APPLIED'){setError(result.result?.message??'변경되지 않았습니다. 최신 근거와 초안을 비교하세요.');setConflict(true);return;}setDraft({});setConflict(true);cache.mutate('transaction');cache.mutate('loan');cache.mutate('book');setMessage('금융 변경이 확정되었습니다. 가계부·계좌·검토·잔액 점검을 갱신합니다.');}
- return <section id={'ledger-editor-'+id} className="al-editor" aria-label="행 아래 금융 편집"><header><div><strong>거래 상세 및 후속 검증</strong><small>계좌·금액 정정 및 관계 연결에는 근거를 기록합니다.</small></div><button disabled={busy} onClick={onClose}>닫기</button></header><LoadState loading={current.loading} error={current.error}/>{row&&<><div className="al-editor-body"><div><fieldset disabled={disabled}>{metadataEditor}<div className="al-edit-grid"><label>거래 방향<select aria-label="편집 금융 유형" value={direction} disabled={!!systemRow} onChange={e=>{setDraft(old=>({...old,direction:e.target.value,categoryId:'',loanId:'',principal:'',interest:'',fee:'',otherId:'',refundOf:''}));setPreview(null);setError('');}}>{(['INCOME','EXPENSE','TRANSFER'] as const).map((key,i)=><option key={key} value={key}>{['입금','출금','이체'][i]}</option>)}</select></label><label>발생 시각 (한국 시각)<input aria-label="정정 발생 시각" type="datetime-local" step="1" value={value('occurredAt',seoul(row.occurred_at).slice(0,19))} onChange={e=>field('occurredAt',e.target.value)}/></label><label>실제 금액<input aria-label="정정 실제 금액" type="number" min="0.01" step="0.01" value={value('amount',row.amount)} onChange={e=>field('amount',e.target.value)}/></label><label>정정 계좌<select aria-label="정정 계좌" disabled={linked} value={value('accountId',row.from_account_id??row.to_account_id)} onChange={e=>field('accountId',e.target.value)}><option value="">계좌 선택</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.displayName}</option>)}</select></label><label>출금 계좌<span className="al-read-value">{accounts.find(a=>a.id===row.from_account_id)?.displayName??'—'}</span></label><label>입금 계좌<span className="al-read-value">{accounts.find(a=>a.id===row.to_account_id)?.displayName??'—'}</span></label></div>
+ return <section id={'ledger-editor-'+id} className="al-editor" aria-label="행 아래 금융 편집"><header><div><strong>거래 상세 및 후속 검증</strong><small>계좌·금액 정정 및 관계 연결에는 근거를 기록합니다.</small></div><button disabled={busy} onClick={onClose}>닫기</button></header><LoadState loading={current.loading} error={current.error}/>{row&&<><div className="al-editor-body"><div><fieldset disabled={disabled}>{metadataEditor}<div className="al-edit-grid"><div>거래 방향<FinancialTypePicker row={row} disabled={!!systemRow||disabled} onChoose={next=>void chooseDirection(next)}/></div><label>발생 시각 (한국 시각)<input aria-label="정정 발생 시각" type="datetime-local" step="1" value={value('occurredAt',seoul(row.occurred_at).slice(0,19))} onChange={e=>field('occurredAt',e.target.value)}/></label><label>실제 금액<input aria-label="정정 실제 금액" type="number" min="0.01" step="0.01" value={value('amount',row.amount)} onChange={e=>field('amount',e.target.value)}/></label><label>정정 계좌<select aria-label="정정 계좌" disabled={linked} value={value('accountId',row.from_account_id??row.to_account_id)} onChange={e=>field('accountId',e.target.value)}><option value="">계좌 선택</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.displayName}</option>)}</select></label><label>출금 계좌<span className="al-read-value">{accounts.find(a=>a.id===row.from_account_id)?.displayName??'—'}</span></label><label>입금 계좌<span className="al-read-value">{accounts.find(a=>a.id===row.to_account_id)?.displayName??'—'}</span></label></div>
    {!systemRow&&direction!=='TRANSFER'&&<div className="al-editor-category">
     <CategoryPicker label="편집 카테고리" categories={options} value={categoryId} onChange={id=>{setDraft(old=>{
        if(selection?.semanticCode===options.find(c=>c.id===id)?.semanticCode)return {...old,categoryId:id};
@@ -114,7 +107,7 @@ export function AccountLedgerEditor({id,initialType,initialCategoryId,accounts,c
    {type==='UNRESOLVED'&&<p className="al-finance-note">확인된 입출금은 계좌 이동에 남기고, 확정 소비·수입·저축·대출·환불 의미 집계에서 제외합니다.</p>}
    <label>금융 판단·정정 근거<textarea aria-label="금융 판단 정정 근거" maxLength={500} value={draft.reason??''} onChange={e=>field('reason',e.target.value)} placeholder="은행 거래와 연결 근거를 확인한 사유"/></label>
    {linked&&<p className="al-finance-note">연결된 이체의 금액·계좌·시각은 직접 정정할 수 없습니다. 원문을 확인하고 연결 해제 영향을 먼저 검증하세요.</p>}
-   <div className="al-editor-buttons"><button type="button" disabled={disabled||!!systemRow||invalidSelection} onClick={()=>void saveOwner()}>방향·카테고리 저장</button>{(type==='LOAN_PAYMENT'||type==='LOAN_RECEIPT'||type==='REFUND')&&<button type="button" disabled={disabled||!!systemRow||linked||differentMeaning||invalidSelection||(!!selection&&!selection.semanticCode&&type===originalType)} onClick={()=>void prepare('TYPE')}>관계·배분 영향 확인</button>}<button type="button" disabled={disabled||linked} onClick={()=>void prepare('CORRECT')}>금액·시각·계좌 정정 확인</button>{!linked&&['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL'].includes(type)&&<button type="button" disabled={disabled||!draft.otherId} onClick={()=>void prepare('LINK_TRANSFER')}>양쪽 거래 연결 영향 확인</button>}{linked&&<button type="button" disabled={disabled} onClick={()=>void prepare('UNLINK_TRANSFER')}>이체 연결 해제 영향 확인</button>}</div></fieldset>
+   <div className="al-editor-buttons"><button type="button" disabled={disabled||!!systemRow||invalidSelection||!selection} onClick={()=>void saveCategory()}>카테고리 저장</button>{(type==='LOAN_PAYMENT'||type==='LOAN_RECEIPT'||type==='REFUND')&&<button type="button" disabled={disabled||!!systemRow||linked||differentMeaning||invalidSelection||(!!selection&&!selection.semanticCode&&type===originalType)} onClick={()=>void prepare('TYPE')}>관계·배분 영향 확인</button>}<button type="button" disabled={disabled||linked} onClick={()=>void prepare('CORRECT')}>금액·시각·계좌 정정 확인</button>{!linked&&['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL'].includes(type)&&<button type="button" disabled={disabled||!draft.otherId} onClick={()=>void prepare('LINK_TRANSFER')}>양쪽 거래 연결 영향 확인</button>}{linked&&<button type="button" disabled={disabled} onClick={()=>void prepare('UNLINK_TRANSFER')}>이체 연결 해제 영향 확인</button>}</div></fieldset>
    {ownerDecision?.phase==='saved'&&ownerDecision.receipt&&<p role="status">{decisionDescription(ownerDecision.receipt)}</p>}
    {ownerDecision?.message&&ownerDecision.phase!=='saved'&&<p role="alert">{ownerDecision.message} {ownerDecision.phase==='unknown'&&<button onClick={()=>void decisions.retry(ownerDecision)}>원래 방향 요청 재확인</button>}</p>}
    {categoryChange?.message&&categoryChange.phase!=='saved'&&<p role="alert">{categoryChange.message} {categoryChange.phase==='unknown'&&<button onClick={()=>void categoryChanges.retry(id)}>원래 분류 요청 재확인</button>}</p>}

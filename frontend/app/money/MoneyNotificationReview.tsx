@@ -21,21 +21,22 @@ import './money-notification-review.css';
 
 const tabs = [{value: 'PENDING', label: '검토 대기', icon: Inbox}, {value: 'DEFERRED', label: '제외', icon: Archive}, {value: 'COMPLETED', label: '처리 이력', icon: History}] as const;
 const move = 'MOVE_TO_BOOKKEEPING';
-const historyLabels: Record<string, string> = {MOVE_TO_BOOKKEEPING: '거래장 이동', NON_TRANSACTION: '비거래 처리', DEFER: '제외', REOPEN: '복원', UNDO: '실행 취소'};
-const reasonLabel = (reason: string) => historyLabels[reason] ?? reviewReasons[reason] ?? ignoredReasons[reason] ?? '알림 근거 확인';
+const historyLabels: Record<string, string> = {MOVE_TO_BOOKKEEPING: '거래 등록', NON_TRANSACTION: '비거래 처리', DEFER: '제외', REOPEN: '복원', UNDO: '실행 취소'};
+const reasonLabel = (reason: string) => historyLabels[reason] ?? reviewReasons[reason] ?? ignoredReasons[reason] ?? reason;
 const errorText = (error: unknown) => error instanceof Error ? error.message : '처리하지 못했습니다.';
 const eligible = (row: AiItem) => row.moveToBookkeepingEligible === true && !!row.admissionFingerprint;
 type Command = StoredReviewCommand & {retryAllowed?: boolean; path: string; generation: number; skipped: ReviewOutcome['items']; snapshots: Record<string, ReviewPreviewRow>; applied: string[]};
 type Receipt = {action: ReviewAction; value: ReviewOutcome; snapshots: Command['snapshots']};
 
-export function NotificationReview(p: Props & {onPendingCount?: (count: number) => void}) {
+export function NotificationReview(p: Props & {onPendingCount?: (count: number) => void; laneState?: 'PENDING'|'DEFERRED'|'COMPLETED'}) {
   const tabsId = useId(), cache = useMoneyCache();
-  const [state, setState] = useMoneyViewState('notice-review-state', () => 'PENDING');
+  const [tabState, setState] = useMoneyViewState('notice-review-state', () => 'PENDING');
+  const state=p.laneState??tabState;
   const [search, setSearch] = useMoneyViewState('notice-review-search', () => '');
   const [account, setAccount] = useMoneyViewState('notice-review-account', () => '');
   const [reason, setReason] = useMoneyViewState('notice-review-reason', () => '');
-  const [offset, setOffset] = useMoneyViewState('notice-review-offset', () => 0);
-  const [ids, setIds] = useMoneyViewState<string[]>('notice-review-ids', () => []);
+  const [offset, setOffset] = useMoneyViewState('notice-review-offset-'+state, () => 0);
+  const [ids, setIds] = useMoneyViewState<string[]>('notice-review-ids-'+state, () => []);
   const [requests, setRequests] = useMoneyViewState<Command[]>('notice-review-commands', () => []);
   const restored = useRef(false);
   useEffect(() => {
@@ -190,11 +191,11 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
   const allChecked = rows.length > 0 && rows.every(row => ids.includes(reviewKey(row)));
   const singleResult = receipt?.value.items.length === 1 ? receipt.value.items[0] : null;
   return <section className="money-notice-review" aria-label="검토 필요 알림 작업함">
-    <div className="money-notice-stats">{tabs.map(({value, label, icon: Icon}) => <div key={value}><span>{label}</span><strong>{page?.counts?.[value]?.toLocaleString('ko-KR') ?? '—'}</strong><Icon aria-hidden="true" size={21}/></div>)}</div>
-    <p className="money-notice-guide"><CircleHelp size={17} aria-hidden="true"/><span><b>거래장 이동</b>은 확인된 입출금을 계좌 거래장에 기록합니다. 금융유형은 거래장에서, 생활 카테고리는 가계부에서 정할 수 있습니다.</span></p>
+    {!p.laneState&&<div className="money-notice-stats">{tabs.map(({value, label, icon: Icon}) => <div key={value}><span>{label}</span><strong>{page?.counts?.[value]?.toLocaleString('ko-KR') ?? '—'}</strong><Icon aria-hidden="true" size={21}/></div>)}</div>}
+    <p className="money-notice-guide"><CircleHelp size={17} aria-hidden="true"/><span><b>거래 등록</b>으로 원본 알림을 등록합니다. 금융 의미가 확정된 거래는 가계부에 표시됩니다.</span></p>
     <section className="money-notice-inbox" aria-label="알림 분류함"><h2>알림 분류함</h2>
-    <MoneyNavigationTabs id={tabsId} label="검토 상태" items={tabs.map(({value,label}) => ({value,label}))} selected={state} onSelect={value => change(() => setState(value))}/>
-    <div id={tabsId+'-panel'} role="tabpanel" aria-labelledby={tabsId+'-tab-'+state} tabIndex={0}>
+    {!p.laneState&&<MoneyNavigationTabs id={tabsId} label="검토 상태" items={tabs.map(({value,label}) => ({value,label}))} selected={state} onSelect={value => change(() => setState(value))}/>}
+    <div id={tabsId+'-panel'} role={p.laneState?undefined:'tabpanel'} aria-labelledby={p.laneState?undefined:tabsId+'-tab-'+state} tabIndex={0}>
     <div className="money-notice-filters"><label><Search size={16} aria-hidden="true"/><input type="search" aria-label="거래처·알림 검색" placeholder="거래처·알림 검색" value={search} onChange={e => change(() => setSearch(e.target.value))}/></label>
       <select aria-label="검토 계좌" value={account} onChange={e => change(() => setAccount(e.target.value))}><option value="">전체 계좌</option>{p.accounts.map(a => <option key={a.id} value={a.id}>{a.displayName}</option>)}</select>
       <select aria-label="검토 사유" value={reason} onChange={e => change(() => setReason(e.target.value))}><option value="">전체 검토 사유</option>{[...new Set([...(page?.reasons ?? []), ...(reason ? [reason] : [])])].map(v => <option key={v} value={v}>{reasonLabel(v)}</option>)}</select>
@@ -208,7 +209,7 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
     {preparing && <p className="money-notice-message" role="status">처리 범위 확인 중…</p>}
     {requests.map(command => <div key={command.requestId} className="money-notice-recovery" role="status">{reviewActionLabel(command.action)} · {command.keys.length}건 {working.includes(command.requestId) ? '처리 중…' : <><span>결과 확인 필요</span><button onClick={() => void run(command, () => api.get('/review/batches/outcomes/' + command.requestId), true)}>원래 요청 결과 조회</button>{command.retryAllowed && <button onClick={() => void run(command, () => send(command))}>같은 요청으로 재시도</button>}</>}</div>)}
     {preview && <BatchPreview value={preview} p={p} close={() => setPreview(null)} busy={preview.items.some(r => hasPendingCommand(reviewKey(r)))} execute={() => submit(preview.action, preview.items, {kind:'batch', previewId:preview.previewId})}/>}
-    {receipt && <div className="money-notice-results">{singleResult ? <div className="money-notice-receipt" role="status"><strong>{reviewActionLabel(receipt.action)} · {singleResult.status === 'SAVED' ? '완료' : singleResult.status === 'UNDONE' ? '취소 완료' : singleResult.message || '처리 결과 확인 필요'}</strong>{singleResult.transactionId && <a href={reviewLedgerHref(singleResult.transactionId)}>거래장에서 보기</a>}{singleResult.status === 'SAVED' && singleResult.canUndo && singleResult.eventId && <button disabled={working.includes(singleResult.eventId)} onClick={() => void undo(singleResult.eventId!)}>실행 취소</button>}</div> :
+    {receipt && <div className="money-notice-results">{singleResult ? <div className="money-notice-receipt" role="status"><strong>{reviewActionLabel(receipt.action)} · {singleResult.status === 'SAVED' ? '완료' : singleResult.status === 'UNDONE' ? '취소 완료' : singleResult.message || '처리 결과 확인 필요'}</strong>{singleResult.transactionId && <a href={reviewLedgerHref(singleResult.transactionId)}>가계부에서 보기</a>}{singleResult.status === 'SAVED' && singleResult.canUndo && singleResult.eventId && <button disabled={working.includes(singleResult.eventId)} onClick={() => void undo(singleResult.eventId!)}>실행 취소</button>}</div> :
       <details open><summary>처리 결과 · 성공 {receipt.value.items.filter(r => r.status === 'SAVED').length}건 / 전체 {receipt.value.items.length}건</summary><ReviewResults outcome={receipt.value} snapshots={receipt.snapshots} accounts={p.accounts} disabled={!!working.length} onRecover={()=>{const c=requests.find(c=>c.requestId===receipt.value.requestId);if(c)void run(c,()=>api.get('/review/batches/outcomes/'+c.requestId),true);}} onUndo={id=>void undo(id)}/></details>}</div>}
     <table className="money-notice-ledger"><thead><tr><th scope="col"><span className="sr-only">선택</span></th><th scope="col">거래처·알림</th><th scope="col">금액</th><th scope="col">내 계좌·방향</th><th scope="col">검토 사유</th><th scope="col">처리</th></tr></thead><tbody>{rows.map(row => {
       const key = reviewKey(row), locked = hasPendingCommand(key), blocked = !eligible(row), open = expanded === key, detailId = tabsId + '-detail-' + row.id;
@@ -220,7 +221,7 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
         <td className="notice-amount">{row.amount == null ? '금액 정보 없음' : (direction === '출금' ? '−' : direction === '입금' ? '+' : '')+moneyAmount(row.amount, reviewCurrency(row))}</td>
         <td className="notice-account">{p.accounts.find(a => a.id === row.accountId)?.displayName || '계좌 미지정'}<small>{direction}</small></td>
         <td className="notice-reason">{reasonLabel(row.reason)}{!history && state === 'PENDING' && blocked && <small>거래 근거 확인</small>}</td>
-        <td className="notice-actions"><div className="money-notice-row-actions">{history ? <><span>{row.transactionId ? '거래장 등록' : historyLabels[row.reason] ?? '처리됨'}</span>{row.transactionId && <a href={reviewLedgerHref(row.transactionId)}>거래장에서 보기</a>}{row.canUndo && row.eventId && <button disabled={working.includes(row.eventId)} onClick={() => void undo(row.eventId!)}>실행 취소</button>}</> :
+        <td className="notice-actions"><div className="money-notice-row-actions">{history ? <><span>{row.transactionId ? '거래 등록' : historyLabels[row.reason] ?? '처리됨'}</span>{row.transactionId && <a href={reviewLedgerHref(row.transactionId)}>가계부에서 보기</a>}{row.canUndo && row.eventId && <button disabled={working.includes(row.eventId)} onClick={() => void undo(row.eventId!)}>실행 취소</button>}</> :
         <RowActions actions={actions} locked={locked} blocked={blocked} row={row} onAction={single}/>}
         {state==='PENDING'&&row.kind==='RAW'&&row.lane==='FORMAT'&&<button disabled={locked} id={detailId+"-manual"} aria-expanded={manualId===row.id} onClick={()=>setManualId(manualId===row.id?null:row.id)}>직접 확인하여 등록</button>}
         <button className="notice-detail-button" aria-controls={detailId} aria-expanded={open} onClick={() => setExpanded(open ? null : key)}>{open ? '접기' : '상세'}</button></div>
@@ -250,5 +251,5 @@ function RowEvidence({row}: {row: AiItem}) {
 function BatchPreview({value, p, busy, close, execute}: {value: ReviewPreview; p: Props; busy: boolean; close: () => void; execute: () => void}) {
   return <section className="money-notice-preview" aria-label="선택 항목 일괄 처리 미리보기"><header><div><h3>선택 {reviewActionLabel(value.action)} · 최종 확인</h3><p>선택 {value.selectedCount}건 · 적격 {value.eligibleCount}건 · 제외 {value.excludedCount}건</p></div><button onClick={close}>닫기</button></header>
     <ul>{value.items.map(row => <li key={reviewKey(row)}><span><strong>{reviewMerchant(row)}</strong> · {row.title || '알림 제목 없음'}<small>{seoul(row.occurredAt)} · {moneyAmount(row.amount, reviewCurrency(row))} · {p.accounts.find(a=>a.id===row.accountId)?.displayName || '계좌 미지정'}</small></span><span>{row.eligible ? '처리 가능' : row.exclusionReason || '거래 근거 확인'}</span></li>)}</ul>
-    <footer><small>{value.action === move ? '확인된 현금만 거래장에 반영하며 금융유형은 미확정으로 둡니다.' : value.action === 'REOPEN' ? '선택한 알림을 검토 대기로 복원합니다. 원장과 잔액은 유지됩니다.' : '선택한 알림을 제외합니다. 원문은 보존되며 복원할 수 있습니다.'}</small><button className="money-primary" disabled={busy || !value.eligibleCount} onClick={execute}>{value.eligibleCount}건 {reviewActionLabel(value.action)}</button></footer></section>;
+    <footer><small>{value.action === move ? '원본 근거를 확인한 입출금만 등록합니다. 금융 의미가 미확정인 거래는 검토 필요에 표시됩니다.' : value.action === 'REOPEN' ? '선택한 알림을 검토 대기로 복원합니다. 원장과 잔액은 유지됩니다.' : '선택한 알림을 제외합니다. 원문은 보존되며 복원할 수 있습니다.'}</small><button className="money-primary" disabled={busy || !value.eligibleCount} onClick={execute}>{value.eligibleCount}건 {reviewActionLabel(value.action)}</button></footer></section>;
 }

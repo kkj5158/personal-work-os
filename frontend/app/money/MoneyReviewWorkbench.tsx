@@ -34,7 +34,7 @@ import { Field, EntryForm, AccountOptions } from "./MoneyForms";
 import { MoneyPanel, PanelContext } from "./MoneyPanel";
 import { useSearchParams } from "next/navigation";
 import { AiTransfers } from "./MoneyAiWorkspace";
-import {NotificationReview} from './MoneyNotificationReview';
+import {MoneyReviewLanes} from './MoneyReviewLanes';
 type Draft = {
   title?: string;
   memo?: string | null;
@@ -48,7 +48,7 @@ const laneLabels: Record<Lane, string> = {
 };
 export function ReviewWorkbench(p: Props & {onPendingCount?: (count: number) => void}) {
   const query=useSearchParams();
-  return query.get("ai")==="transfers"?<><button onClick={()=>p.navigate?.("/money/review")}>검토 목록으로 돌아가기</button><AiTransfers {...p}/></>:<NotificationReview {...p}/>;
+  return query.get("ai")==="transfers"?<><button onClick={()=>p.navigate?.("/money/review")}>검토 목록으로 돌아가기</button><AiTransfers {...p}/></>:<MoneyReviewLanes {...p}/>;
 }
 export function LegacyReviewWorkbench(p: Props) {
   const cache = useMoneyCache();

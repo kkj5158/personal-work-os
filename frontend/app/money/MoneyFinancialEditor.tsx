@@ -9,13 +9,14 @@ import {baseDirection,activeCategories,type BaseDirection} from '@/lib/money/cat
 import {CategoryPicker} from './MoneyCategoryPicker';
 import {AccountLedgerEditor} from './MoneyAccountLedgerEditor';
 import {useLedgerCategories} from './MoneyLedgerCategory';
-import {relationLabel} from './MoneyLedgerFinancialType';
+import {relationLabel,useFinancialDecisions} from './MoneyLedgerFinancialType';
 import {ACCOUNT_LEDGER,recoverLedgerOperation,type LedgerOperation,type LedgerRow} from '@/lib/money/accountLedger';
 import {MoneyAnchoredPopover} from './MoneyCategoryTree';
 
 export function UnifiedFinancialAction({id,accounts,label,categories=[]}:{id:string;accounts:Account[];label?:string;categories?:Category[]}){
  const cache=useMoneyCache(),inFlight=useRef(false),saving=useRef(false);
- const categoryChanges=useLedgerCategories();
+ const categoryChanges=useLedgerCategories(),decisions=useFinancialDecisions();
+ const decision=decisions.entries[id];
  const [open,setOpen]=useState(false),[row,setRow]=useState<UnifiedRow|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [draft,setDraft]=useMoneyViewState<Record<string,unknown>>('unified-draft-'+id,()=>({}));
  const [baseVersion,setBaseVersion]=useMoneyViewState<number|null>('unified-draft-version-'+id,()=>null);
@@ -40,12 +41,12 @@ export function UnifiedFinancialAction({id,accounts,label,categories=[]}:{id:str
  const loanReady=!!loan&&loan.status!=='INACTIVE'&&!loans.loading&&!loans.error&&(!row?.loan_id||row.type!=='LOAN_PAYMENT'||loanId===row.loan_id);
  const editable=!!row&&!['INITIAL_BALANCE','BALANCE_ADJUSTMENT'].includes(row.type);
  const explicitBase=typeof draft.type==='string'&&['INCOME','EXPENSE','TRANSFER'].includes(draft.type)?draft.type:null;
- const ownerDirection=explicitBase??(row?.meaning_state==='UNRESOLVED'&&!Object.keys(draft).length?selectedDirection:null);
+ const ownerDirection=explicitBase==='TRANSFER'?explicitBase:null;
  const editingAllocation=['principal','interest','fee','loanId'].some(key=>Object.hasOwn(draft,key));
  const typeReady=editable&&((!!ownerDirection&&!draft.otherId&&!draft.transferIntent)||
    (type==='LOAN_PAYMENT'&&editingAllocation&&loanReady&&allocation.valid));
  const categoryChange=categoryChanges.entries[id];
- const disabled=busy||!!pending||!!conflict||categoryChange?.phase==='saving'||categoryChange?.phase==='unknown';
+ const disabled=busy||decision?.phase==='saving'||decision?.phase==='unknown'||!!pending||!!conflict||categoryChange?.phase==='saving'||categoryChange?.phase==='unknown';
  const close=()=>{if(!saving.current&&!pending&&!ledgerRequest)setOpen(false);};
  function stage(update:(old:Record<string,unknown>)=>Record<string,unknown>){
   if(!row||disabled)return;
@@ -80,7 +81,7 @@ export function UnifiedFinancialAction({id,accounts,label,categories=[]}:{id:str
   if(result.result?.row)setRow(result.result.row);
   else{setRow(null);try{setRow(await api.get<LedgerRow>(ACCOUNT_LEDGER+'/rows/'+id));}catch{setError('저장은 완료되었지만 최신 거래 조회에 실패했습니다. 다시 열어 확인하세요.');}}
   const relation=relationLabel(result.result??{});
-  setMessage([result.result?.meaningApplied===false?'선택을 저장했습니다. 금융 반영 대기 중입니다.':'서버에 저장했습니다.',relation].filter(Boolean).join(' · '));
+  setMessage([result.result?.meaningApplied===false?'거래 상세에서 연결 관계를 확인하세요.':'서버에 저장했습니다.',relation].filter(Boolean).join(' · '));
  }
  async function run(action:string,extra:Record<string,unknown>={}){
   if(!row||disabled||inFlight.current||action==='TYPE'&&!typeReady)return;
@@ -118,7 +119,9 @@ export function UnifiedFinancialAction({id,accounts,label,categories=[]}:{id:str
      {editable?<div className="money-financial-choice-grid" role="group" aria-label="금융 유형 선택">
       {financialDirections.map(option=><button type="button" key={option.id} aria-pressed={activeDirection===option.id} className={'money-financial-choice '+(activeDirection===option.id?'selected':'')} onClick={()=>{
        const next=option.id==='incoming'?'INCOME':option.id==='outgoing'?'EXPENSE':'TRANSFER';
-       stage(old=>selectFinancialOption(row,old,next));
+       if(next==='TRANSFER'){stage(old=>selectFinancialOption(row,old,next));return;}
+       if(row.type===next&&row.meaning_state==='CONFIRMED'&&(!row.declaredFinancialType||row.declaredFinancialType===next)&&!(row.relationStatus&&row.relationStatus!=='NONE'))return;
+       void decisions.save(row,next,true,updated=>{setRow(updated);setDraft({});setBaseVersion(null);setMessage('금융 유형을 확정했습니다.');});
       }}><span className="money-financial-icon" aria-hidden="true">{option.icon}</span><strong>{option.label}</strong></button>)}
      </div>:<p>현재 유형: {financialLabel(row)} · {linked?"거래 발생 시점 자금 구역 기준":"별도 정정이 필요한 거래입니다."}</p>}
      {selectedDirection!=='TRANSFER'&&!['INITIAL_BALANCE','BALANCE_ADJUSTMENT'].includes(row.type)&&<CategoryPicker label="금융 카테고리" categories={activeCategories(categories,selectedDirection)} value={(row as LedgerRow).semanticCategoryId??row.book?.categoryId??''} onChange={async categoryId=>{
@@ -164,7 +167,8 @@ export function UnifiedFinancialAction({id,accounts,label,categories=[]}:{id:str
     </details>
    </fieldset>
      {categoryChange?.message&&categoryChange.phase!=='saved'&&<p role="alert">{categoryChange.message} {categoryChange.phase==='unknown'&&<button type="button" onClick={async()=>{const recovered=await categoryChanges.retry(id);if(recovered){setRow(recovered);setDraft({});setBaseVersion(null);}}}>원래 분류 요청 재확인</button>}</p>}
-   <div className="money-financial-footer"><span>원본 거래는 유지됩니다.</span><button type="button" disabled={busy||!!pending} onClick={close}>취소</button>{editable&&<button type="button" disabled={disabled||!typeReady} onClick={()=>void run('TYPE')}>변경 저장</button>}</div>
+   {decision?.message&&decision.phase!=='saved'&&<p role="alert">{decision.message} {decision.phase==='unknown'&&<button type="button" onClick={()=>void decisions.retry(decision)}>원래 방향 요청 재확인</button>}</p>}
+   <div className="money-financial-footer"><span>원본 거래는 유지됩니다.</span><button type="button" disabled={busy||!!pending} onClick={close}>취소</button>{editable&&(ownerDirection||type==='LOAN_PAYMENT')&&<button type="button" disabled={disabled||!typeReady} onClick={()=>void run('TYPE')}>변경 저장</button>}</div>
    {undo&&<button type="button" disabled={disabled} onClick={()=>void run('UNDO_UNLINK',{undoId:undo})}>연결 해제 Undo</button>}
    {conflict&&<div role="alert"><strong>다른 기기에서 변경되었습니다.</strong><p>서버 최신: {typeLabels[conflict.type]} · {moneyAmount(conflict.amount,conflict.currency)} · 버전 {conflict.version}{type==='LOAN_PAYMENT'&&loan?' · 대출 '+loan.name+' 버전 '+loan.version:''}</p><p>내 제안: {JSON.stringify(draft)}</p><button type="button" disabled={busy||type==='LOAN_PAYMENT'&&loans.loading} onClick={()=>{setRow(conflict);setBaseVersion(conflict.version);if(type==='LOAN_PAYMENT')setDraft(old=>({...old,loanVersion:loan?.version}));setConflict(null);setError('최신 버전을 확인했습니다. 제안을 검토한 뒤 다시 저장하세요.');}}>최신 값과 비교 후 재적용 준비</button></div>}
   </>}
