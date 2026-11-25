@@ -402,7 +402,8 @@ class MoneyFinancialEnginePostgresTest {
                 assertThat(transfer.sources()).hasSize(2);
                 assertThat(e.money().transaction(credit.id()).mergedInto()).isEqualTo(transfer.id());
                 assertThat(e.product().balance(recipient.id()).amount()).isEqualByComparingTo(balance);
-                assertThat(e.product().balance(payer.id()).amount()).isEqualByComparingTo(-amount+"");
+                assertThat(e.db().queryForObject("select sum(amount) from money_transactions where user_id=? and from_account_id=? and not excluded and merged_into is null",
+                        java.math.BigDecimal.class,owner,payer.id())).isEqualByComparingTo(Integer.toString(amount));
                 assertThat(e.db().queryForObject("select count(*) from money_transactions where user_id=? and not excluded and merged_into is null",Integer.class,owner)).isEqualTo(1);
                 assertThat(e.money().notification(raw.id()).state()).isEqualTo(ProcessingState.PROCESSED);
             }
