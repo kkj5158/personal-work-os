@@ -1,0 +1,9 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>대화 학습 연결</title>
+<style>body{width:300px;font:14px system-ui;padding:10px}label,button,input,select{display:block;margin:8px 0}input,select{width:95%}output{overflow-wrap:anywhere}</style>
+<h1>대화 학습 연결</h1>
+<label>POS 환경<select id="env"><option value="dev">DEV</option><option value="prod">PROD</option></select></label>
+<button id="prepare">이 대화를 연결할 기기 코드 받기</button>
+<label>기기 코드 · POS 학습 기록에 입력<input readonly id="device"></label>
+<label>POS에서 발급한 일회용 확인 코드<input id="challenge" autocomplete="off"></label>
+<button id="bind">이 대화에서 측정 시작</button><button id="stop">측정 해제</button><output id="status" aria-live="polite"></output>
+<script src="popup.js"></script></html>

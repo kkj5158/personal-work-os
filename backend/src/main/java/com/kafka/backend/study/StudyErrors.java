@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 @RestControllerAdvice(
     assignableTypes = {
       StudyController.class,
+      LearningController.class,
+      LearningActivityController.class,
       StudyEngineController.class,
       StudyWorkerController.class
     })

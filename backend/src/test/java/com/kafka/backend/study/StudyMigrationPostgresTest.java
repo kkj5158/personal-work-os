@@ -36,7 +36,8 @@ class StudyMigrationPostgresTest {
           for (Path p : files)
             if (!p.getFileName().toString().startsWith("V104__")
                 && !p.getFileName().toString().startsWith("V106__")
-                && !p.getFileName().toString().startsWith("V125__"))
+                && !p.getFileName().toString().startsWith("V125__")
+                && !p.getFileName().toString().startsWith("V135__"))
               Files.copy(p, migrations.resolve(p.getFileName()));
         }
         String location = "filesystem:" + migrations.toAbsolutePath().toString().replace('\\', '/');
@@ -60,7 +61,7 @@ class StudyMigrationPostgresTest {
         }
         for (String file :
             java.util.List.of("V104__study_foundation.sql", "V106__study_learning_engine.sql",
-                "V125__study_versioned_hints.sql"))
+                "V125__study_versioned_hints.sql", "V135__study_conversation_log.sql"))
           Files.copy(Path.of("src/main/resources/db/migration", file), migrations.resolve(file));
         var upgrade =
             Flyway.configure()
@@ -69,7 +70,7 @@ class StudyMigrationPostgresTest {
                 .outOfOrder(true)
                 .cleanDisabled(true)
                 .load();
-        assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(3);
+        assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(4);
         var normal =
             Flyway.configure()
                 .dataSource(target, "study_test", "")
@@ -88,7 +89,7 @@ class StudyMigrationPostgresTest {
                 "select count(*) from pg_tables where schemaname='public' and tablename like"
                     + " 'study_%'")) {
           r.next();
-          assertThat(r.getInt(1)).isEqualTo(8);
+          assertThat(r.getInt(1)).isEqualTo(15);
         }
         try (var r = s.executeQuery("select body from unrelated_release_sentinel where id=1")) {
           r.next();

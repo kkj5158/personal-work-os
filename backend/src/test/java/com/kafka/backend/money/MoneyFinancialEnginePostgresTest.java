@@ -80,6 +80,38 @@ class MoneyFinancialEnginePostgresTest {
         return result;
     }
 
+    @Test void deterministicSourceRegistrationIsProvisionalReversibleAndOwnerConfirmationSupersedesIt() {
+        fixture.check(e -> {
+            var owner=MoneyPostgresIntegrationTest.OWNER;
+            var services=services(e,owner);
+            var account=account(e,"8847");
+            var fact=admitted(e,account,true,900,"8847","오픈 송금",AT);
+            var engine=new MoneyObservedDirectionService(e.db(),()->owner,e.money(),services.commands());
+            var balance=e.product().balance(account.id());
+            var candidate=engine.inventory().stream().filter(c->c.id().equals(fact.id())).findFirst().orElseThrow();
+            assertThat(candidate.disposition()).isEqualTo("REGISTER_OBSERVED_DIRECTION");
+            var request=new MoneyObservedDirectionService.Register(UUID.randomUUID(),fact.version(),candidate.fingerprint());
+            assertThat(engine.register(fact.id(),request)).containsEntry("status","APPLIED");
+            assertThat(engine.register(fact.id(),request)).containsEntry("status","APPLIED");
+            assertThat(services.ledger().row(fact.id())).containsEntry("meaning_state","UNRESOLVED").containsEntry("provisionalDirection","EXPENSE");
+            assertThat(e.web().accountLedgerBookkeepingRow(fact.id())).containsEntry("interpretationStatus","PROVISIONAL");
+            var reversal=new MoneyObservedDirectionService.Reverse(UUID.randomUUID(),fact.version()+1,request.requestId());
+            assertThat(engine.reverse(fact.id(),reversal)).containsEntry("status","APPLIED");
+            assertThat(engine.reverse(fact.id(),reversal)).containsEntry("status","APPLIED");
+            assertThat(services.ledger().row(fact.id()).get("provisionalDirection")).isNull();
+            var command=new MoneyAccountLedgerService.FinancialType(UUID.randomUUID(),fact.version()+2,"EXPENSE",true);
+            var receipt=services.ledger().financialType(fact.id(),command);
+            assertThat(receipt).containsEntry("meaningApplied",true);
+            assertThat(e.web().accountLedgerBookkeepingRow(fact.id())).containsEntry("interpretationStatus","CONFIRMED");
+            assertThat(engine.inventory()).noneMatch(c->c.id().equals(fact.id()));
+            var undo=new MoneyAccountLedgerService.UndoDirection(UUID.randomUUID(),fact.version()+3,command.requestId());
+            assertThat(services.ledger().undoDirection(fact.id(),undo)).containsEntry("status","UNDONE");
+            assertThat(services.ledger().row(fact.id())).containsEntry("meaning_state","UNRESOLVED");
+            assertThat(e.product().balance(account.id())).isEqualTo(balance);
+            assertThat(e.money().transaction(fact.id()).sources()).isEqualTo(fact.sources());
+        });
+    }
+
     @Test void quickConfirmationPreservesCashSourcesAndOwnerProtectsIt() {
         fixture.check(e -> {
             var s = services(e, MoneyPostgresIntegrationTest.OWNER);
@@ -104,7 +136,7 @@ class MoneyFinancialEnginePostgresTest {
         });
     }
 
-    @Test void inlineCategoryConfirmsOnlyVerifiedOneSidedCashAndReplaysExactly() {
+    @Test void inlineOwnerCategoryAcceptsOneSidedCashWithoutAutomatedProofAndReplaysExactly() {
         fixture.check(e -> {
             var s = services(e, MoneyPostgresIntegrationTest.OWNER);
             var account = account(e, "8557");
@@ -118,23 +150,19 @@ class MoneyFinancialEnginePostgresTest {
                 var command = new MoneyAccountLedgerService.Category(UUID.randomUUID(), fact.version(),
                         row.get("fingerprint").toString(), category.id(),
                         ((Number)row.get("classificationVersion")).longValue(), true, null, "EXPENSE");
+                if (fact.equals(unverified)) assertThat(row.get("quickConfirmAvailable")).isEqualTo(false);
                 var receipt = s.ledger().category(fact.id(), command);
                 assertThat(s.ledger().category(fact.id(), command)).isEqualTo(receipt);
                 assertThat(s.commands().outcome(MoneyPostgresIntegrationTest.OWNER, command.requestId())).isEqualTo(receipt);
-                if (fact.equals(proven)) {
-                    assertThat(receipt).containsEntry("status", "APPLIED");
-                    var updated = e.money().transaction(fact.id());
-                    assertThat(updated.meaningState()).isEqualTo("CONFIRMED");
-                    assertThat(updated.sources()).isEqualTo(fact.sources());
-                    assertThat(updated.amount()).isEqualByComparingTo(fact.amount());
-                    assertThat(e.web().accountLedgerBookkeepingRow(fact.id())).containsEntry("categoryId", category.id());
-                    var stale = new MoneyAccountLedgerService.Category(UUID.randomUUID(), command.expectedVersion(),
-                            command.fingerprint(), category.id(), command.expectedClassificationVersion(), true, null, "EXPENSE");
-                    assertThat(s.ledger().category(fact.id(), stale).get("result").toString()).contains("VERSION_CONFLICT");
-                } else {
-                    assertThat(receipt).containsEntry("status", "NOT_APPLIED");
-                    assertThat(e.money().transaction(fact.id())).isEqualTo(fact);
-                }
+                assertThat(receipt).containsEntry("status", "APPLIED");
+                var updated = e.money().transaction(fact.id());
+                assertThat(updated.meaningState()).isEqualTo("CONFIRMED");
+                assertThat(updated.sources()).isEqualTo(fact.sources());
+                assertThat(updated.amount()).isEqualByComparingTo(fact.amount());
+                assertThat(e.web().accountLedgerBookkeepingRow(fact.id())).containsEntry("categoryId", category.id());
+                var stale = new MoneyAccountLedgerService.Category(UUID.randomUUID(), command.expectedVersion(),
+                        command.fingerprint(), category.id(), command.expectedClassificationVersion(), true, null, "EXPENSE");
+                assertThat(s.ledger().category(fact.id(), stale).get("result").toString()).contains("VERSION_CONFLICT");
             }
             assertThat(e.product().balance(account.id()).amount()).isEqualByComparingTo(balance);
         });

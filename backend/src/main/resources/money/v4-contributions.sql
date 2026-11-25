@@ -9,7 +9,7 @@ WITH facts AS (
                      ELSE coalesce((op.defaults->>'categoryId')::uuid,original.category_id) END
                 WHEN jsonb_exists(b.overrides, 'categoryId') THEN (b.overrides->>'categoryId')::uuid
                 ELSE coalesce((rp.defaults->>'categoryId')::uuid, t.category_id) END AS assigned_category,
-           d.declared_type, d.relation_status, d.semantic_category_id,
+           t.observed_direction, d.declared_type, d.relation_status, d.semantic_category_id,
            fh.fund_group AS from_group, th.fund_group AS to_group,
            money_tracked_at(t.user_id,t.to_account_id,'INCOME',t.occurred_at) AS income_tracked,
            money_tracked_at(t.user_id,t.from_account_id,'EXPENSE',t.occurred_at) AS expense_tracked,
@@ -39,7 +39,7 @@ WITH facts AS (
       AND t.type NOT IN ('INITIAL_BALANCE','BALANCE_ADJUSTMENT')
 ), classified AS (
     SELECT f.*, coalesce(cp.basis, pp.basis) AS income_basis,
-           CASE WHEN f.declared_type='LOAN_PAYMENT' AND f.relation_status='LOAN_SPLIT_PENDING' AND f.semantic_category_id IS NULL
+           CASE WHEN f.declared_type='LOAN_PAYMENT' AND f.relation_status='LOAN_SPLIT_PENDING'
                      AND f.source_type='EXPENSE' AND f.meaning_state='UNRESOLVED'
                      AND f.from_account_id IS NOT NULL AND f.to_account_id IS NULL THEN 'LOAN_PAYMENT'
                 WHEN f.meaning_state='CONFIRMED' THEN f.source_type END AS applied_type
@@ -49,7 +49,9 @@ WITH facts AS (
     LEFT JOIN money_v4_income_categories pp ON pp.user_id=c.user_id AND pp.category_id=c.parent_id
 ), contributions AS (
     SELECT classified.*, CASE
-      WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND' AND income_tracked AND income_basis='QUALIFIED' THEN 'I'
+      WHEN meaning_state='UNRESOLVED' AND declared_type IS NULL AND observed_direction=source_type AND source_type='INCOME' AND income_tracked THEN 'PROVISIONAL_IN'
+      WHEN meaning_state='UNRESOLVED' AND declared_type IS NULL AND observed_direction=source_type AND source_type='EXPENSE' AND expense_tracked THEN 'PROVISIONAL_OUT'
+      WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND' AND income_tracked AND (income_basis='QUALIFIED' OR (declared_type='INCOME' AND assigned_category IS NULL)) THEN 'I'
       WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND'
         AND declared_type IS DISTINCT FROM 'LOAN_RECEIPT' AND declared_type IS DISTINCT FROM 'TRANSFER'
         AND from_account_id IS NULL AND to_account_id IS NOT NULL AND income_tracked

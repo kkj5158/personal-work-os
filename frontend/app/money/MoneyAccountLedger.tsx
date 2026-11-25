@@ -5,7 +5,7 @@ import {baseDirection} from '@/lib/money/categorySemantics';
 import {useSearchParams} from 'next/navigation';
 import {moneyApi as api,seoul,type Category,type Account} from '@/lib/money/model';
 import {moneyAmount} from '@/lib/money/accounts';
-import {balanceEvidenceLabels,compositionPath,type StatisticalBalances} from '@/lib/money/monthly';
+import {stockAmount,stockMemberEvidence,stockWon,compositionPath,type StatisticalBalances} from '@/lib/money/monthly';
 import {ACCOUNT_LEDGER,ledgerTypes,ledgerPath,categoryEligible,ledgerDisplayType,changeLedgerScope,type LedgerFilters,type LedgerPage,type LedgerRow,type PendingPage,type LedgerOperation,recoverLedgerOperation} from '@/lib/money/accountLedger';
 import type {UnifiedOutcome} from '@/lib/money/unified';
 import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
@@ -14,7 +14,7 @@ import {Pagination,type Props} from './MoneyWebViews';
 import {RecommendationProvider,useRecommendations,type SavePreview} from './MoneyBookkeepingRecommendations';
 import {AccountLedgerEditor} from './MoneyAccountLedgerEditor';
 import {MoneyFinancialEngine} from './MoneyFinancialEngine';
-import {DecisionStatus,FinancialTypePicker,directionHint,useFinancialDecisions} from './MoneyLedgerFinancialType';
+import {DecisionStatus,FinancialTypePicker,decisionDescription,useFinancialDecisions} from './MoneyLedgerFinancialType';
 import {LedgerCategory,ledgerClassificationVersion,useLedgerCategories} from './MoneyLedgerCategory';
 import './money-account-ledger.css';
 
@@ -53,6 +53,7 @@ export function AccountLedger(p:Props){
  const evidence=useMoneyData<StatisticalBalances>(linkedPeriod&&requestedAsOf&&filters.accountId===requestedAccount
   ?compositionPath('statistical-balances',periodFrom,periodTo,[requestedAccount],{asOf:requestedAsOf}):null);
  const member=evidence.data&&[...evidence.data.savings.members,...evidence.data.installment.members].find(row=>row.accountId===requestedAccount);
+ const stockBalance=member?stockAmount(member):null;
  const page=useMoneyData<LedgerPage>(filters.view!=='pending'?ledgerPath(periodFrom,periodTo,filters):null),raw=useMoneyData<PendingPage>(filters.view==='pending'?ledgerPath(periodFrom,periodTo,filters):null);
  const result=filters.view==='pending'?raw:page,data=result.data,counts=new Map(data?.accountCounts.map(a=>[a.accountId,a.count])??[]);
  const active=p.accounts.find(a=>a.id===filters.accountId),scope=active?.displayName??'전체 계좌';
@@ -98,7 +99,8 @@ export function AccountLedger(p:Props){
   async function worker(){
    while(next<targets.length){
     const row=targets[next++];
-    if((!categoryEligible(row)&&row.meaning_state!=="UNRESOLVED")||row.declaredFinancialType&&row.declaredFinancialType!==row.type||rowBusy(row.id)||directionHint(row,bulkType)||ledgerDisplayType(row)===bulkType){totals.skipped++;continue;}
+    if(['INITIAL_BALANCE','BALANCE_ADJUSTMENT'].includes(row.type)||rowBusy(row.id)||
+       (row.meaning_state==='CONFIRMED'&&row.meaningApplied!==false&&baseDirection(row)===bulkType)){totals.skipped++;continue;}
     const outcome=await decisions.save(row,bulkType,false);
     if(outcome==='saved'||outcome==='pending')totals[outcome]++;
     else{totals.failed++;remaining.push(row);}
@@ -106,18 +108,17 @@ export function AccountLedger(p:Props){
   }
   try{
    await Promise.all(Array.from({length:Math.min(4,targets.length)},worker));
-   const message='금융유형 일괄 결과 · 저장 '+totals.saved+'건 · 연결 대기 '+totals.pending+'건 · 제외 '+totals.skipped+'건 · 확인 필요 '+totals.failed+'건';
+   const message='금융유형 일괄 결과 · 저장 '+totals.saved+'건 · 반영·연결 대기 '+totals.pending+'건 · 제외 '+totals.skipped+'건 · 확인 필요 '+totals.failed+'건';
    setBatch(current=>current.generation===batch.generation?{...current,selection:remaining,message}:current);
    cache.mutate('transaction');
   }finally{setBulkBusy(false);}
  }
  return <RecommendationProvider filters={{}} selected={selected} visible={visible} categories={p.categories} accounts={p.accounts} workbench={false}><section className="money-account-ledger" aria-label="계좌 거래장">
   {requestedAsOf&&linkedPeriod&&filters.accountId===requestedAccount&&<section className="al-summary" aria-label="기준일 잔액 근거">
-   <div><small>기준일 잔액 근거</small><strong>{member?.balance==null?"확인 필요":(member.status==="LEDGER_ESTIMATE"?"추정 ":"")+moneyAmount(member.balance)}</strong></div>
+   <div><small>기준일 잔액 근거</small><strong>{stockBalance!=null?stockWon(stockBalance):"확인 필요"}</strong></div>
    <div className="al-summary-note"><span>{periodFrom} ~ {periodTo}</span>
     {evidence.data&&<span>기준 시각 {seoul(evidence.data.asOfCutoff)}</span>}
-    {member&&balanceEvidenceLabels[member.reason??member.status]&&<span>{balanceEvidenceLabels[member.reason??member.status]}</span>}
-    {member?.observedAt&&<span>최근 관측 {seoul(member.observedAt)}</span>}
+    {member&&stockMemberEvidence(member).map(label=><span key={label}>{label}</span>)}
     {evidence.error&&<span role="alert">{evidence.error}</span>}
    </div><Link href={"/money/reconciliation?account="+requestedAccount}>계좌 잔액 점검</Link>
   </section>}
@@ -131,7 +132,7 @@ export function AccountLedger(p:Props){
   </section>}
   <div className="al-engine-switch"><button type="button" aria-expanded={engineOpen} onClick={()=>setEngineOpen(open=>!open)}>{engineOpen?'계좌 거래장으로 돌아가기':'금융유형 자동분류'}</button></div>
   {engineOpen?<MoneyFinancialEngine rows={rows}/>:<>
-  <div className="al-summary" aria-label="조회 요약">{filters.accountId&&filters.view!=='pending'?<><div><small>선택 계좌 입금 · 필터 기준</small><strong>{data?.summary.incoming!=null?moneyAmount(data.summary.incoming,data.summary.currencies[0]??'KRW'):'—'}</strong></div><div><small>선택 계좌 출금 · 필터 기준</small><strong>{data?.summary.outgoing!=null?moneyAmount(data.summary.outgoing,data.summary.currencies[0]??'KRW'):'—'}</strong></div></>:<div><small>{filters.view==='pending'?'금융 이동 집계':'금융 의미 미확정'}</small><strong>{filters.view==='pending'?'집계 제외':data?.summary.unresolved??'—'}</strong></div>}{filters.view!=='pending'&&data?.summary.relationPending!=null&&<div><small>후속 연결 대기</small><strong>{data.summary.relationPending}<span>건</span></strong></div>}<div><small>조회 거래</small><strong>{data?.total??'—'}<span>건</span></strong></div><div className="al-summary-note">{filters.accountId?<><strong>{scope}</strong><span>해당 계좌 입출금 · 잔액 — / 확인 근거 없음</span></>:<><strong>전체 계좌 잔액 합산은 제공하지 않습니다</strong><span>이체 한 건은 한 행 · 원본 연결 보존</span></>}</div></div>
+  <div className="al-summary" aria-label="조회 요약">{filters.accountId&&filters.view!=='pending'?<><div><small>선택 계좌 입금 · 필터 기준</small><strong>{data?.summary.incoming!=null?moneyAmount(data.summary.incoming,data.summary.currencies[0]??'KRW'):'—'}</strong></div><div><small>선택 계좌 출금 · 필터 기준</small><strong>{data?.summary.outgoing!=null?moneyAmount(data.summary.outgoing,data.summary.currencies[0]??'KRW'):'—'}</strong></div></>:<div><small>{filters.view==='pending'?'금융 이동 집계':'유형 미선택'}</small><strong>{filters.view==='pending'?'집계 제외':data?.summary.unresolved??'—'}</strong></div>}{filters.view!=='pending'&&data?.summary.relationPending!=null&&<div><small>후속 연결 대기</small><strong>{data.summary.relationPending}<span>건</span></strong></div>}<div><small>조회 거래</small><strong>{data?.total??'—'}<span>건</span></strong></div><div className="al-summary-note">{filters.accountId?<><strong>{scope}</strong><span>해당 계좌 입출금 · 잔액 — / 확인 근거 없음</span></>:<><strong>전체 계좌 잔액 합산은 제공하지 않습니다</strong><span>이체 한 건은 한 행 · 원본 연결 보존</span></>}</div></div>
   <div className="al-panel">
    <div className="al-filters"><div className="al-account-filter" role="group" aria-label="조회 계좌 단일 선택"><div className="al-filter-heading"><strong>계좌 선택</strong><small>단일 선택 · 버튼을 누르면 해당 계좌만 표시</small></div><div className="al-account-controls"><button type="button" className="al-account-all" aria-label="전체 계좌 보기" aria-pressed={filters.accountId===null} onClick={()=>account(null)}>{filters.accountId===null&&<span aria-hidden="true">✓ </span>}전체 계좌 보기</button><div className="al-account-buttons">{p.accounts.map(a=><button type="button" key={a.id} className="al-account-chip" aria-pressed={filters.accountId===a.id} onClick={()=>account(a.id)}>{filters.accountId===a.id&&<span aria-hidden="true">✓ </span>}{a.displayName}{a.archived&&<small>보관</small>}<span className="al-count" aria-label="전체 필터 거래 수">{counts.get(a.id)??(data?0:'—')}</span></button>)}</div></div></div>
     <label>조회 기간<span className="al-period">{p.period.from} ~ {p.period.to}</span></label><label>금융 유형<select aria-label="금융 유형 필터" value={filters.baseDirection??''} onChange={e=>change({baseDirection:e.target.value,type:''})}><option value="">모든 금융 유형</option>{Object.entries({INCOME:"입금",EXPENSE:"출금",TRANSFER:"이체"}).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label>상태<select aria-label="금융 상태 필터" value={filters.state} onChange={e=>change({state:e.target.value})}><option value="ALL">모든 상태</option><option value="CONFIRMED">확정</option><option value="UNRESOLVED">금융 의미 미확정</option></select></label><label>거래 검색<input aria-label="계좌 거래 검색" placeholder="거래처·제목·메모 검색" value={filters.search} onChange={e=>change({search:e.target.value})}/></label>
@@ -143,7 +144,7 @@ export function AccountLedger(p:Props){
    {Object.values(pendingRows).map(pending=><div key={pending.id} className="al-pending" role="status"><strong>금융 저장 결과 확인 필요</strong><span>요청 ID {pending.operation.edit.requestId}</span><button disabled={recovering} onClick={()=>void recover(pending)}>원래 요청 결과 확인</button><button disabled={recovering} onClick={()=>void recover(pending,true)}>원래 요청으로 재시도</button></div>)}
    {Object.values(decisions.entries).filter(entry=>entry.phase==='unknown'&&!visible.includes(entry.id)).map(entry=><div className="al-pending" key={entry.id} role="status"><strong>{entry.title} · 금융유형 저장 결과 확인 필요</strong><span>{entry.command.requestId}</span><button onClick={()=>void decisions.retry(entry)}>원래 요청 재확인</button></div>)}
    {Object.values(decisions.entries).filter(entry=>(entry.phase==='conflict'||entry.phase==='failed')&&!visible.includes(entry.id)).map(entry=><div className="al-pending" key={entry.id} role="status">{entry.title} · {ledgerTypes[entry.command.financialType]} · {entry.message}<Link href={'/money/ledger?transactionId='+entry.id}>거래에서 확인</Link></div>)}
-   {Object.values(decisions.entries).filter(entry=>entry.phase==='saved' &&entry.receipt&&!visible.includes(entry.id)).slice(-1).map(entry=><div className="al-pending" key={entry.id} role="status">{entry.title} · {ledgerTypes[entry.command.financialType]} 저장됨 <button onClick={()=>void decisions.undo(entry)}>실행 취소</button></div>)}
+   {Object.values(decisions.entries).filter(entry=>entry.phase==='saved' &&entry.receipt&&!visible.includes(entry.id)).slice(-1).map(entry=><div className="al-pending" key={entry.id} role="status">{entry.title} · {ledgerTypes[entry.command.financialType]} · {decisionDescription(entry.receipt!)} {!entry.command.decisionRequestId&&<button onClick={()=>void decisions.undo(entry)}>실행 취소</button>}</div>)}
    {filters.view==='pending'?<div className="al-raw"><p>미처리 알림은 금융 거래와 별도입니다. 계좌 잔액·수입·소비에 포함하지 않습니다.</p>{raw.data?.items.map(item=><article key={item.id}><div><strong>{item.title??item.merchant??'은행 알림 확인'}</strong><small>{item.occurredAt?seoul(item.occurredAt):'시각 확인 필요'} · {p.accounts.find(a=>a.id===item.accountId)?.displayName??'계좌 미확인'}</small><small>{item.reason}</small></div><span>{item.amount!=null?moneyAmount(item.amount,'KRW'):'금액 확인 필요'}</span><Link href="/money/review" onClick={e=>{e.preventDefault();p.navigate?.('/money/review');}}>기존 검토 필요에서 확인 →</Link></article>)}{!raw.loading&&!raw.data?.items.length&&<p className="al-empty">조건에 맞는 미처리 알림이 없습니다.</p>}</div>:<>
     {selected.length>0&&<section className="al-bulk" aria-label="선택 거래 금융유형 변경"><strong>현재 페이지 {selected.length}건 선택</strong><select aria-label="일괄 금융유형" disabled={bulkBusy} value={bulkType} onChange={e=>setBulkType(e.target.value)}><option value="">금융유형 선택</option>{Object.entries({INCOME:"입금",EXPENSE:"출금",TRANSFER:"이체"}).map(([type,label])=><option key={type} value={type}>{label}</option>)}</select><button disabled={!bulkType||bulkBusy} onClick={()=>void applyBulk()}>{bulkBusy?'저장 중…':'선택 거래에 적용'}</button><button disabled={bulkBusy} onClick={()=>setSelection([])}>선택 해제</button></section>}
     {bulkMessage&&<p className="al-batch-result" role="status">{bulkMessage}</p>}

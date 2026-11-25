@@ -51,6 +51,7 @@ export type BookFields = {
 export type BookRow = BookFields & {
   occurrencePrecision?: "SECOND" | "DAY";
   financialType?: string;
+  interpretationStatus?: "PROVISIONAL" | "CONFIRMED";
   sourceRawEventIds?: string[];
   classificationVersion?:number;classificationOrigin?:string|null;classificationEventId?:string|null;directProtected?:boolean;futureReferenceExcluded?:boolean;classificationJobStatus?:string|null;classificationJobResult?:string|null;
   projectionVersion: number; ruleDefaults: Partial<BookFields>; ruleEvidence: Record<string,{ruleId:string;version:number}>;

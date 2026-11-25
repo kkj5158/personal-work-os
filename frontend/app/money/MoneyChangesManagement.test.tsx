@@ -89,16 +89,18 @@ test('installment KPI and donut distinguish bank observation, partial coverage, 
  const {MoneyMonthlySummary}=await import('./MoneyMonthlySummary');
  const bank={accountId:'bank',displayName:'관측 적금',balance:4700,status:'BANK_OBSERVED',known:true,reason:null};
  const absent={accountId:'absent',displayName:'미확인 적금',balance:null,status:'UNKNOWN',known:false,reason:'NO_ANCHOR'};
- const estimate={accountId:'estimate',displayName:'계산 적금',balance:7900,status:'LEDGER_ESTIMATE',known:false,reason:'NO_OBSERVATION_AT_CUTOFF'};
+ const estimate={accountId:'estimate',displayName:'계산 적금',balance:7900,status:'LEDGER_ESTIMATE',known:false,
+  confidence:'ESTIMATED',displayable:true,displayBalance:'7900',reason:null,source:'OWNER_CHECKPOINT'};
  const cases=[
   {name:'bank',members:[bank],total:4700,partial:null,amount:'4,700원',note:'은행 명세 확인',legend:'4,700원'},
   {name:'partial',members:[bank,absent],total:null,partial:4700,amount:'확인 필요',note:'확인된 부분 합계 4,700원',legend:'확인된 부분 합계 4,700원'},
   {name:'absent',members:[absent],total:null,partial:null,amount:'확인 필요',note:'잔액 근거 없음',legend:'잔액 근거 없음'},
-  {name:'estimate',members:[estimate],total:null,partial:null,amount:'확인 필요',note:'장부 기준 추정',legend:'추정 7,900원'},
+  {name:'estimate',members:[estimate],total:null,partial:null,amount:'7,900원',note:'장부 기준 추정',legend:'7,900원 · 추정'},
  ];
  for(const item of cases){
   const knownCount=item.members.filter(member=>member.known).length;
-  const group={members:item.members,knownCount,memberCount:item.members.length,total:item.total,confirmedPartialSum:item.partial};
+  const group={members:item.members,knownCount,memberCount:item.members.length,total:item.total,confirmedPartialSum:item.partial,
+   ...(item.name==='estimate'?{confidence:'ESTIMATED',estimatedCount:1,unknownCount:0,displayTotal:'7900',estimatedSubtotal:'7900'}:{})};
   api.get=async<T,>(path:string)=>(path.includes('/statistical-balances?')?{asOfCutoff:'2026-11-30T14:59:59Z',unresolved:[],savings:{...group,members:[]},installment:group}:null) as T;
   await act(()=>root.render(<MoneyDataProvider key={item.name}><MoneyMonthlySummary from="2026-11-01" to="2026-11-30" categories={[]} scope={null} loanAccounts={null} filter={null} onFilter={()=>true}/></MoneyDataProvider>));
   const kpi=document.querySelector('.money-month-kpis section:last-child')!;

@@ -8,6 +8,11 @@ type CashRow = {
 };
 export function baseDirection(row: CashRow): BaseDirection {
   const type = row.declaredFinancialType || row.financialType || row.type;
+  if (row.declaredFinancialType && row.declaredFinancialType !== 'UNRESOLVED') {
+    if (['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL'].includes(type)) return 'TRANSFER';
+    if (['EXPENSE','LOAN_PAYMENT'].includes(type)) return 'EXPENSE';
+    if (['INCOME','REFUND','LOAN_RECEIPT'].includes(type)) return 'INCOME';
+  }
   if (row.from_account_id && row.to_account_id || ['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL'].includes(type)) return 'TRANSFER';
   if (row.from_account_id) return 'EXPENSE';
   if (row.to_account_id) return 'INCOME';

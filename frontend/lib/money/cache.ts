@@ -20,7 +20,7 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   if (family === "ai") return true;
   switch (mutation) {
     case "ai": return financial.includes(family) || accountDetail || ["notifications", "meaning-history", "classification-rules", "category-rules", "categories", "loans"].includes(family);
-    case "transaction": return financial.includes(family) || accountDetail || family === "loans";
+    case "transaction": return financial.includes(family) || accountDetail || ["loans","financial-engine","meaning-history"].includes(family);
     case "book": return ["bookkeeping", "review", "meaning-history"].includes(family)||path.includes('/reconciliation-snapshot'); // Meaning changes affect evidence visibility, never financial KPIs.
     case "account": return family === "tracking" || family === "accounts" || financial.includes(family) || family === "notifications";
     case "loan": return family === "loans" || family === "overview" || family === "flow" || path === "/bookkeeping/unified/loan-repayments";

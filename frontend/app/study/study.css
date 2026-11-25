@@ -14,3 +14,11 @@
 .study-hints ol{margin:8px 0 0;padding-inline-start:24px}
 .study-hints li+li{margin-top:6px}
 .study-hints button[aria-disabled=true]{opacity:.65;cursor:default}
+.learning-bars {display:flex;align-items:end;gap:2px;overflow-x:auto;margin:1rem 0;padding:.2rem}
+.learning-bars button {display:grid;align-content:end;justify-items:center;flex:1;min-width:1.35rem;height:5rem;border:0;background:transparent;padding:0}
+.learning-bars button i {display:block;width:76%;background:var(--study-accent,#386950);border-radius:3px 3px 0 0}
+.learning-bars button[aria-pressed=true] {outline:2px solid currentColor;outline-offset:-2px}
+.learning-bars button:focus-visible {outline:3px solid currentColor}
+.learning-editor fieldset {display:grid;gap:.55rem;border:0;padding:0;min-width:0}
+.learning-editor label {display:grid;gap:.2rem}
+.learning-editor textarea,.learning-editor input,.learning-editor select {max-width:100%;min-width:0}

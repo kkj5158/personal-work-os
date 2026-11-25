@@ -23,7 +23,9 @@ public class MoneyOrbitConsoleService {
  private final MoneyProcessingReadService processing;private final MoneyReconciliationReadService reconciliation;
  private final MoneySavingsReadService savings;private final MoneyStatisticalAccountService statistical;private final MoneyMerchantLinkService merchants;private final MoneyCommandService commands;
  private final TransactionTemplate tx,dry;
+ private final MoneyAccountLedgerService ledger;
  public MoneyOrbitConsoleService(CurrentUserProvider users,JdbcTemplate db,ObjectMapper json,MoneyService money,MoneyProductService product,MoneyWebService web,MoneyMeaningService meaning,MoneyClassificationService classification,MoneyReviewService review,MoneyReviewBatchService batches,MoneyAiService ai,MoneyUnifiedBookkeepingService unified,MoneyFinancialService financial,MoneyProcessingReadService processing,MoneyReconciliationReadService reconciliation,MoneySavingsReadService savings,MoneyMerchantLinkService merchants,MoneyCommandService commands,PlatformTransactionManager manager,MoneyStatisticalAccountService statistical){
+  this.ledger=new MoneyAccountLedgerService(db,users,json,money,unified,web,commands,manager);
   this.users=users;this.db=db;this.json=json;this.money=money;this.product=product;this.web=web;this.meaning=meaning;this.classification=classification;this.review=review;this.batches=batches;this.ai=ai;this.unified=unified;this.financial=financial;this.processing=processing;this.reconciliation=reconciliation;this.savings=savings;this.statistical=statistical;this.merchants=merchants;this.commands=commands;tx=new TransactionTemplate(manager);dry=new TransactionTemplate(manager);dry.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
  }
  private UUID owner(){return users.getCurrentUserId();}
@@ -39,7 +41,7 @@ public class MoneyOrbitConsoleService {
  /** Strip private evidence containers before recursively returning minimally needed business values. */
  public Object safe(Object value){return scrub(json.convertValue(value,Object.class),value instanceof MoneyStatisticalAccountService.Snapshot);}
  private static final Set<String> PRIVATE=Set.of("userid","ownerid","rawpayload","rawsources","rawbody","notificationbody","text","bigtext","notificationkey","deviceid","dedupekey","raw","rawnotification","rawnotifications","sourcepayload","maskedreference","suffix","accountreference","accounthint","sourceaccounthint","destinationaccounthint","accountsuffixhints","imagedata","imageurl","password","token","accesstoken","refreshtoken","secret","credentials","metadata");
- private static final Set<String> STATISTICAL_DECIMALS=Set.of("displayBalance","displayDifference","displayTotal","verifiedSubtotal","estimatedSubtotal");
+ private static final Set<String> STATISTICAL_DECIMALS=Set.of("displayBalance","displayDifference","displayTotal","displaySubtotal","verifiedSubtotal","estimatedSubtotal");
  static Object scrub(Object v){return scrub(v,false);}
  private static Object scrub(Object v,boolean statistical){if(v instanceof Map<?,?> m){var r=new LinkedHashMap<String,Object>();for(var e:m.entrySet()){String k=e.getKey().toString();if(!PRIVATE.contains(k.replace("_","").toLowerCase(Locale.ROOT)))r.put(k,statistical&&STATISTICAL_DECIMALS.contains(k)?e.getValue():scrub(e.getValue(),statistical));}return r;}if(v instanceof Collection<?> c)return c.stream().map(entry->scrub(entry,statistical)).toList();if(v instanceof String s){if(s.matches("(?i)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}|[0-9a-f]{64}|#[0-9a-f]{6}"))return s;if(s.matches("\\d{4}-\\d{2}-\\d{2}(?:T[0-9:.+Z-]+)?"))try{if(s.length()==10)LocalDate.parse(s);else java.time.format.DateTimeFormatter.ISO_DATE_TIME.parse(s);return s;}catch(DateTimeException ignored){}return s.replaceAll("(?<![0-9])(?:[0-9][ -]?){7,}[0-9](?![0-9])","[REDACTED]");}return v;}
  public Object read(String route,Query q){require(READ.contains(route),"지원하지 않는 조회입니다.");int limit=q.limit()==null?25:q.limit(),offset=q.offset()==null?0:q.offset();require(limit>=1&&limit<=50&&offset>=0&&offset<=10000,"조회 범위를 줄이세요.");MoneyService.text(q.search(),200,false,"Search");String[] p=period(q);
@@ -53,8 +55,8 @@ public class MoneyOrbitConsoleService {
    case "review-candidates" -> reviewCandidates(needed(q.id()),s(q.kind(),"RAW"));
    case "processing-events" -> processing.processing(p[0],p[1]);
    case "review-history" -> history(q.id(),limit,offset,true);
-   case "bookkeeping" -> web.bookkeeping(p[0],p[1],s(q.kind(),"EXPENSE"),q.search(),limit,offset,false,q.accountIds(),q.categoryIds(),q.minAmount(),q.maxAmount(),s(q.classificationState(),"ALL"),q.classificationOrigin(),q.currency());
-   case "bookkeeping-item" -> Map.of("book",web.bookkeepingRow(needed(q.id())),"classification",classification.state(q.id()),"financial",financialDetail(q.id()),"willChangeFinancialFacts",false);
+   case "bookkeeping" -> web.bookkeeping(p[0],p[1],s(q.kind(),"EXPENSE"),q.search(),limit,offset,false,q.accountIds(),q.categoryIds(),q.minAmount(),q.maxAmount(),s(q.classificationState(),"ALL"),q.classificationOrigin(),q.currency(),false,true,false,true);
+   case "bookkeeping-item" -> Map.of("book",web.v4Book(needed(q.id()),true),"classification",classification.state(q.id()),"financial",financialDetail(q.id()),"willChangeFinancialFacts",false);
    case "classification-candidates" -> classificationCandidates(needed(q.id()),p);
    case "classification-history" -> classification.history(offset,q.id(),null,q.search(),q.accountId(),p[0],p[1],q.state());
    case "merchants" -> merchants.list(s(q.search(),""),offset,q.accountId(),q.type());
@@ -118,7 +120,7 @@ public class MoneyOrbitConsoleService {
  public record Meaning(UUID requestId,UUID id,Long transactionVersion,Long overrideVersion,Long projectionVersion,Long classificationVersion,String title,String memo,List<String> fields){}
  public record RuleChange(UUID ruleId,MoneyMeaningService.RuleInput rule){}
  public record Structure(UUID categoryId,String action,UUID parentId,Long expectedVersion,Long expectedParentVersion){}
- public record Financial(UUID id,Long expectedVersion,String action,String type,UUID otherId,Long otherVersion,UUID loanId,Long loanVersion,BigDecimal principal,BigDecimal interest,BigDecimal fee,UUID refundOf,UUID accountId,String reason,UUID undoId){}
+ public record Financial(UUID id,Long expectedVersion,String action,String type,UUID otherId,Long otherVersion,UUID loanId,Long loanVersion,BigDecimal principal,BigDecimal interest,BigDecimal fee,UUID refundOf,UUID accountId,String reason,UUID undoId,UUID categoryId,Long semanticPolicyVersion,Long expectedClassificationVersion){}
  public record AccountSettings(UUID id,Long expectedVersion,String displayName,String emoji,Boolean includeInAssets,Boolean includeInStatistics){}
  public record UndoPlan(List<UUID> eventIds){}
  public record ReviewPlan(String action,List<MoneyReviewBatchService.Target> items){}
@@ -147,7 +149,7 @@ public class MoneyOrbitConsoleService {
  private double contrast(String color){require(color!=null&&color.matches("#[0-9a-fA-F]{6}"),"#RRGGBB 색상이 필요합니다.");double l=0;double[] w={.2126,.7152,.0722};for(int i=0;i<3;i++){double c=Integer.parseInt(color.substring(1+i*2,3+i*2),16)/255.0;l+=w[i]*(c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4));}return 1.05/(l+.05);}
  public Object preview(String action,Object payload){require(PLAN.contains(action),"지원하지 않는 미리보기입니다.");needed(payload);
   // Run canonical financial validation in a completely rolled-back transaction BEFORE taking the preview-storage lock.
-  Object financialProposal=action.equals("financial-correction")?dry.execute(status->{try{lock();var before=evidence(action,payload);var v=(Financial)payload;validateFinancial(v);var validated=unified.edit(v.id(),financialEdit(v,UUID.randomUUID()));require("APPLIED".equals(validated.get("status")),"NOT_SUPPORTED: 금융 명령의 안전 전제조건을 충족하지 않습니다.");return Map.of("dryRun",true,"persistedBusinessChanges",false,"canonicalResult",safe(validated),"proposed",v,"validatedEvidenceFingerprint",commands.fingerprint(before));}finally{status.setRollbackOnly();}}):null;
+  Object financialProposal=action.equals("financial-correction")?dry.execute(status->{try{lock();var before=evidence(action,payload);var v=(Financial)payload;validateFinancial(v);var validated=applyFinancial(v,UUID.randomUUID());require("APPLIED".equals(validated.get("status")),"NOT_SUPPORTED: 금융 명령의 안전 전제조건을 충족하지 않습니다.");return Map.of("dryRun",true,"persistedBusinessChanges",false,"canonicalResult",safe(validated),"proposed",v,"validatedEvidenceFingerprint",commands.fingerprint(before));}finally{status.setRollbackOnly();}}):null;
   // Canonical Review previews commit their own independent transaction and must not wait on an outer owner lock.
   Object reviewProposal=action.equals("review-batch")?proposal(action,payload):null;
   return tx.execute(status->{lock();Object evidence=evidence(action,payload);if(financialProposal instanceof Map<?,?> validated)require(Objects.equals(validated.get("validatedEvidenceFingerprint"),commands.fingerprint(evidence)),"PREVIEW_STALE: 금융 검증 이후 근거가 변경되었습니다.");Object proposal=financialProposal!=null?financialProposal:reviewProposal!=null?reviewProposal:proposal(action,payload);UUID key=UUID.randomUUID();var value=new LinkedHashMap<String,Object>();value.put("previewId",key);value.put("action",action);value.put("payload",payload);value.put("evidenceFingerprint",commands.fingerprint(evidence));value.put("proposal",proposal);value.put("expiresAt",Instant.now().plusSeconds(600).toString());value.put("fingerprint",commands.fingerprint(Arrays.asList(action,payload,evidence)));db.update("insert into money_ai_events(id,user_id,subject_id,kind,payload) values(?,?,?,'ORBIT_CONSOLE_PREVIEW',cast(? as jsonb))",key,owner(),key,json.writeValueAsString(value));var out=new LinkedHashMap<String,Object>(value);out.remove("payload");out.put("confirmationRequired",!action.equals("category-color-plan"));return out;});}
@@ -157,7 +159,7 @@ public class MoneyOrbitConsoleService {
   case "rule-change" -> Arrays.asList(meaning.rules(),product.categories());
   case "rule-history" -> meaning.preview((MoneyMeaningService.HistoryRequest)value);
   case "category-structure" -> {var v=(Structure)value;yield Arrays.asList(product.categoryImpact(needed(v.categoryId())),v.parentId()==null?null:product.categoryImpact(v.parentId()));}
-  case "financial-correction" -> {var v=(Financial)value;yield Arrays.asList(unified.row(needed(v.id())),v.otherId()==null?null:unified.row(v.otherId()),v.refundOf()==null?null:unified.row(v.refundOf()),web.loans(),money.accounts(),meaning.rules(),product.categories());}
+  case "financial-correction" -> {var v=(Financial)value;yield Arrays.asList(ledger.row(needed(v.id())).get("fingerprint"),unified.row(v.id()),v.otherId()==null?null:unified.row(v.otherId()),v.refundOf()==null?null:unified.row(v.refundOf()),web.loans(),money.accounts(),meaning.rules(),product.categories());}
   case "account-settings" -> money.account(needed(((AccountSettings)value).id()));
   case "undo-classification" -> {var v=(UndoPlan)value;require(v.eventIds()!=null&&!v.eventIds().isEmpty()&&v.eventIds().size()<=50,"1–50개 이력이 필요합니다.");yield classification.undoPreview(v.eventIds());}
   case "review-batch" -> {var v=(ReviewPlan)value;require(v.items()!=null&&!v.items().isEmpty()&&v.items().size()<=50,"1–50개 고정 항목이 필요합니다.");yield v.items().stream().map(i->ai.item(i.id(),i.kind(),false)).toList();}
@@ -171,7 +173,7 @@ public class MoneyOrbitConsoleService {
   case "financial-correction" -> {var v=(Financial)payload;validateFinancial(v);yield Map.of("proposed",v,"current",safe(financial.detail(v.id())),"policy","GUARDED_CANONICAL_COMMAND; same cash movement, no raw/amount/time rewrite; execution revalidates evidence","financialImpact","Canonical projection recomputed; no additional cash posting");}
   default -> Map.of("exactPlan",payload,"current",safe(evidence(action,payload)),"scope",action.equals("rule-change")?"FUTURE_ONLY":"EXACT_SELECTED_IDS","willChangeFinancialFacts",false);
  };}
- private void validateFinancial(Financial v){require(Set.of("TYPE","CORRECT","LINK_TRANSFER","UNLINK_TRANSFER","UNDO_UNLINK").contains(s(v.action(),"")),"지원하지 않는 금융 명령입니다.");needed(v.expectedVersion());if(v.action().equals("TYPE"))require(Set.of("INCOME","EXPENSE","REFUND","TRANSFER","LOAN_PAYMENT").contains(s(v.type(),"")),"금융 유형을 확인하세요.");if(v.refundOf()!=null)require(v.otherVersion()!=null,"원구매 버전이 필요합니다.");if(v.action().equals("LINK_TRANSFER")){needed(v.otherId());needed(v.otherVersion());MoneyService.text(v.reason(),500,true,"Reason");}if(v.action().equals("CORRECT")){needed(v.accountId());MoneyService.text(v.reason(),500,true,"Reason");}}
+ private void validateFinancial(Financial v){require(Set.of("TYPE","CATEGORY","CORRECT","LINK_TRANSFER","UNLINK_TRANSFER","UNDO_UNLINK").contains(s(v.action(),"")),"지원하지 않는 금융 명령입니다.");needed(v.expectedVersion());if(v.action().equals("TYPE"))require(Set.of("INCOME","EXPENSE","REFUND","TRANSFER","LOAN_PAYMENT").contains(s(v.type(),"")),"금융 유형을 확인하세요.");if(v.refundOf()!=null)require(v.otherVersion()!=null,"원구매 버전이 필요합니다.");if(v.action().equals("LINK_TRANSFER")){needed(v.otherId());needed(v.otherVersion());MoneyService.text(v.reason(),500,true,"Reason");}if(v.action().equals("CORRECT")){needed(v.accountId());MoneyService.text(v.reason(),500,true,"Reason");}}
  private Class<?> type(String action){return switch(action){case "category-color-plan"->ColorPlan.class;case "classification-batch"->Classify.class;case "rule-change"->RuleChange.class;case "rule-history"->MoneyMeaningService.HistoryRequest.class;case "category-structure"->Structure.class;case "financial-correction"->Financial.class;case "account-settings"->AccountSettings.class;case "undo-classification"->UndoPlan.class;case "review-batch"->ReviewPlan.class;default->throw new InvalidRequestException("Unsupported preview");};}
  public Object execute(String action,Execute input){require(input!=null&&input.previewId()!=null&&input.requestId()!=null&&input.confirmed(),"정확한 미리보기 승인이 필요합니다.");
   // Review executes independent canonical transactions; never wrap its REQUIRES_NEW writes in the owner lock.
@@ -185,12 +187,25 @@ public class MoneyOrbitConsoleService {
    case "rule-change" -> {var v=(RuleChange)payload;yield result(meaning.saveRule(v.ruleId(),needed(v.rule())));}
    case "rule-history" -> {var v=(MoneyMeaningService.HistoryRequest)payload;var p=(Map<?,?>)plan.get("proposal");yield meaning.applyHistory(new MoneyMeaningService.HistoryRequest(v.from(),v.to(),p.get("fingerprint").toString()));}
    case "category-structure" -> {var v=(Structure)payload;var old=category(v.categoryId());if("MOVE".equals(v.action()))yield result(product.moveCategory(old.id(),new MoneyCategories.Move(needed(v.parentId()),v.expectedVersion(),v.expectedParentVersion(),product.categoryImpact(old.id()),true)));require("ARCHIVE".equals(v.action()),"이동·보관만 가능합니다.");yield result(product.saveCategory(old.id(),new MoneyProductService.CategoryInput(old.name(),old.color(),true,v.expectedVersion(),old.kind(),old.emoji(),old.sortOrder(),old.parentId(),true,old.iconType(),old.iconValue())));}
-   case "financial-correction" -> {var v=(Financial)payload;validateFinancial(v);yield unified.edit(v.id(),financialEdit(v,child(input.requestId(),"financial")));}
+   case "financial-correction" -> {var v=(Financial)payload;validateFinancial(v);yield applyFinancial(v,child(input.requestId(),"financial"));}
    case "account-settings" -> {var v=(AccountSettings)payload;var old=money.account(v.id());var next=money.updateAccount(old.id(),new MoneyTypes.AccountUpdate(v.expectedVersion(),new MoneyTypes.AccountInput(old.provider(),needed(v.displayName()),old.role(),old.maskedReference(),old.suffix(),v.emoji(),old.imageData(),old.fundingAccountId(),v.includeInAssets()==null?old.includeInAssets():v.includeInAssets(),v.includeInStatistics()==null?old.includeInStatistics():v.includeInStatistics(),old.memo())));yield result(next);}
    case "undo-classification" -> {var v=(UndoPlan)payload;var p=(Map<?,?>)plan.get("proposal");yield classification.undo(new MoneyClassificationService.Undo(child(input.requestId(),"undo"),v.eventIds(),p.get("fingerprint").toString()));}
    default -> throw new InvalidRequestException("지원하지 않는 명령입니다.");
   };});
  }
- private MoneyUnifiedBookkeepingService.Edit financialEdit(Financial v,UUID request){return new MoneyUnifiedBookkeepingService.Edit(request,v.expectedVersion(),v.action(),v.type(),v.otherId(),v.otherVersion(),v.loanId(),v.loanVersion(),v.principal(),v.interest(),v.fee(),v.refundOf(),v.accountId(),null,null,v.reason(),v.undoId());}
+ private Map<String,Object> applyFinancial(Financial v,UUID request){
+  if("CATEGORY".equals(v.action())){
+   needed(v.categoryId());needed(v.expectedClassificationVersion());
+   var row=ledger.row(v.id());
+   String base=row.get("from_account_id")!=null?"EXPENSE":"INCOME";
+   return ledger.category(v.id(),new MoneyAccountLedgerService.Category(request,v.expectedVersion(),row.get("fingerprint").toString(),
+       v.categoryId(),v.expectedClassificationVersion(),true,v.semanticPolicyVersion(),base));
+  }
+  return unified.edit(v.id(),financialEdit(v,request));
+ }
+ private MoneyUnifiedBookkeepingService.Edit financialEdit(Financial v,UUID request){
+  boolean intent="TYPE".equals(v.action()) && v.otherId()==null && v.refundOf()==null
+      && v.loanId()==null && v.principal()==null && v.interest()==null && v.fee()==null;
+  return new MoneyUnifiedBookkeepingService.Edit(request,v.expectedVersion(),intent?"OWNER_INTENT":v.action(),v.type(),v.otherId(),v.otherVersion(),v.loanId(),v.loanVersion(),v.principal(),v.interest(),v.fee(),v.refundOf(),v.accountId(),null,null,v.reason(),v.undoId());}
  private Map<String,Object> plan(String action,Execute input){require(PLAN.contains(action),"Unsupported preview");var found=db.queryForList("select payload::text from money_ai_events where user_id=? and id=? and kind='ORBIT_CONSOLE_PREVIEW'",owner(),input.previewId());if(found.isEmpty())throw new ResourceNotFoundException("Preview not found");var p=json.readValue(found.getFirst().get("payload").toString(),Map.class);require(action.equals(p.get("action"))&&Objects.equals(input.fingerprint(),p.get("fingerprint")),"미리보기 범위가 다릅니다.");require(Instant.parse(p.get("expiresAt").toString()).isAfter(Instant.now()),"PREVIEW_STALE: 미리보기가 만료되었습니다.");return p;}
 }
