@@ -78,7 +78,7 @@ public class MoneyAccountLedgerService {
   args.add(limit);args.add(offset);var items=db.queryForList("select t.*,"+MoneyOwnerFinancialDecision.FIELDS+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
   enrich(items,accountId);return Map.of("items",items,"total",summary.get("total"),"accountCounts",accountCounts,"summary",summary);
  }
- private void enrich(List<Map<String,Object>> items,UUID accountId){
+ void enrich(List<Map<String,Object>> items,UUID accountId){
   if(items.isEmpty())return;UUID[] ids=items.stream().map(row->(UUID)row.get("id")).toArray(UUID[]::new);
   var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.V4_BOOK+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
   var classificationVersions=new HashMap<UUID,Long>();

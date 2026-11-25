@@ -48,3 +48,17 @@ test('statistical balances uses the owner read scope and preserves exact values'
    },fetcher:async()=>Response.json({data})});
  assert.deepEqual(result.data,data);
 });
+
+test('confirmed workspace query preserves filters, page and the legacy bookkeeping route',async()=>{
+ const filters={from:'2026-11-01',to:'2026-11-30',baseDirection:'INCOME',uncategorized:true,currency:'KRW',limit:1,offset:2,search:'합성'};
+ const result=await callMoney('money_list_unified_transactions',filters,{origin:'https://workflow-api-development-development.up.railway.app',token:'synthetic',proof:async({method,path})=>{
+  const url=new URL(path,'https://example.test');
+  assert.equal(method,'GET');
+  assert.equal(url.pathname,'/api/orbit/money/v1/unified-transactions');
+  for(const [key,value] of Object.entries(filters))assert.equal(url.searchParams.get(key),String(value));
+  return 'signed';
+ },fetcher:async()=>Response.json({data:{items:[],total:0}})});
+ assert.deepEqual(result.data,{items:[],total:0});
+ assert.equal(validateMoney('money_search_bookkeeping',{}).route,'bookkeeping');
+ assert.throws(()=>validateMoney('money_list_workspace_review',{lane:'ALL'}));
+});

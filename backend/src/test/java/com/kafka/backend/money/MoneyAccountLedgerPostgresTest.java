@@ -22,6 +22,36 @@ class MoneyAccountLedgerPostgresTest {
  }
  @SuppressWarnings("unchecked") private List<Map<String,Object>> items(Map<String,Object> response){return (List<Map<String,Object>>)response.get("items");}
  private Map<String,Object> read(MoneyAccountLedgerService ledger,UUID account,int limit,int offset){return ledger.read("2026-09-01","2026-09-30",account,null,"ALL",null,limit,offset);}
+ @Test void workspacePagesOneTransferAndKeepsUntrackedUncategorizedIncomeSeparateFromExceptions(){base.check(e->{
+  var ledger=ledger(e);
+  var owner=MoneyPostgresIntegrationTest.OWNER;
+  var engine=new MoneyFinancialEngineService(e.db(),()->owner,JsonMapper.builder().build(),e.money(),ledger,null,null);
+  var workspace=new MoneyBookkeepingWorkspace(e.db(),()->owner,ledger,engine,e.money());
+  var first=base.account(e,AccountRole.SPENDING);
+  var second=base.account(e,AccountRole.SAVINGS);
+  var income=base.tx(e,first.id(),false,370,false);
+  var undecided=base.tx(e,first.id(),true,280,true);
+  var followup=base.tx(e,first.id(),true,310,true);
+  decision(ledger,followup,"TRANSFER");
+  var movement=e.product().save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,first.id(),second.id(),
+      BigDecimal.TEN,MoneyUnifiedBookkeepingPostgresTest.AT,null,null,null,false,null,null));
+  var day=java.time.LocalDate.of(2026,9,26);
+  var both=first.id()+","+second.id();
+  var all=new MoneyBookkeepingWorkspace.Filter(day,day,null,both,null,null,null,"KRW",null,null,50,0);
+  assertThat(items(workspace.confirmed(all))).extracting(row->row.get("id")).containsExactlyInAnyOrder(income.id(),movement.id());
+  var filtered=new MoneyBookkeepingWorkspace.Filter(day,day,"합성",both,null,"INCOME",true,"KRW",null,null,1,0);
+  assertThat(items(workspace.confirmed(filtered))).singleElement().satisfies(row->{
+   assertThat(row).containsEntry("id",income.id()).containsEntry("category_id",null);
+   assertThat(row.get("book")).isInstanceOf(Map.class);
+  });
+  var pageTwo=new MoneyBookkeepingWorkspace.Filter(day,day,null,both,null,null,null,"KRW",null,null,1,1);
+  assertThat(workspace.confirmed(pageTwo)).containsEntry("total",2L);
+  assertThat(items(workspace.confirmed(pageTwo))).hasSize(1);
+  assertThat(items(workspace.review(MoneyBookkeepingWorkspace.Lane.UNRESOLVED,50,0))).singleElement()
+      .satisfies(row->assertThat(row).containsEntry("id",undecided.id()).containsKey("reviewReason"));
+  assertThat(items(workspace.review(MoneyBookkeepingWorkspace.Lane.FOLLOWUP,50,0))).singleElement()
+      .satisfies(row->assertThat(row).containsEntry("id",followup.id()).containsEntry("reviewReason","TRANSFER_PAIR_PENDING"));
+ });}
  private EditRequest draft(MoneyAccountLedgerService ledger,MoneyTransaction tx,String type){return new EditRequest(ledger.row(tx.id()).get("fingerprint").toString(),new MoneyUnifiedBookkeepingService.Edit(UUID.randomUUID(),tx.version(),"TYPE",type,null,null,null,null,null,null,null,null,null,null,null,"합성 금융 의미 확인",null));}
  private EditRequest approved(MoneyAccountLedgerService ledger,UUID id,EditRequest draft){var preview=ledger.preview(id,draft);assertThat(preview.get("status")).isEqualTo("APPLIED");return new EditRequest(draft.fingerprint(),draft.edit(),preview.get("previewToken").toString());}
  private FinancialType command(long version,String type){return new FinancialType(UUID.randomUUID(),version,type);}

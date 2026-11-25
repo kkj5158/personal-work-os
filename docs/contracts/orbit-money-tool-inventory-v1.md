@@ -1,6 +1,6 @@
 # ORBIT MONEY exact tool inventory
 
-Existing 20 tools in server.mjs are preserved unchanged. 91 additions; 111 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
+Existing 20 tools in server.mjs are preserved unchanged. 93 additions; 113 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
 
 | Tool | Backend route | Required scopes | Tier | Effect |
 |---|---|---|---|---|
@@ -13,6 +13,8 @@ Existing 20 tools in server.mjs are preserved unchanged. 91 additions; 111 hoste
 | `money_get_review_candidates` | GET `review-candidates` | orbit:read | READ | Read |
 | `money_list_processing_events` | GET `processing-events` | orbit:read | READ | Read |
 | `money_get_review_history` | GET `review-history` | orbit:read | READ | Read |
+| `money_list_unified_transactions` | GET `unified-transactions` | orbit:read | READ | Read |
+| `money_list_workspace_review` | GET `workspace-review` | orbit:read | READ | Read |
 | `money_search_bookkeeping` | GET `bookkeeping` | orbit:read | READ | Read |
 | `money_get_bookkeeping_item` | GET `bookkeeping-item` | orbit:read | READ | Read |
 | `money_get_classification_candidates` | GET `classification-candidates` | orbit:read | READ | Read |

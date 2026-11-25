@@ -112,7 +112,7 @@ public class MoneyFinancialEngineService {
         return Map.of("engineVersion", VERSION, "total", unresolvedCount(), "items", items);
     }
 
-    private Candidate classify(MoneyTransaction fact, List<MoneyAccount> accounts) {
+    Candidate classify(MoneyTransaction fact, List<MoneyAccount> accounts) {
         if (MoneyFinancialEvidence.ownerProtected(db, owner(), fact.id())) {
             return decision(fact, null, "REVIEW_REQUIRED", "OWNER_DECISION_PROTECTED", Map.of());
         }
