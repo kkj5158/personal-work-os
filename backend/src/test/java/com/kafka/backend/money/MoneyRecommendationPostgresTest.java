@@ -166,6 +166,25 @@ class MoneyRecommendationPostgresTest {
   assertThatThrownBy(()->review().complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(pair,0L,0L,0L,Map.of("categoryId",category.toString())))))).isInstanceOf(InvalidRequestException.class);
   assertThat(db.queryForList("select to_jsonb(t)::text from money_transactions t order by id")).isEqualTo(facts);assertThat(db.queryForObject("select count(*) from money_review_decisions",Long.class)).isZero();
  }
+ @Test void noticeAndFailureLanesPartitionActiveRawsAndScopeSelections(){
+  var gate=new MoneyGateZeroReview(db,()->owner,json,money);
+  UUID notice=UUID.randomUUID(),failed=UUID.randomUUID(),held=UUID.randomUUID();
+  for(UUID id:List.of(notice,failed,held)){
+   db.update("insert into money_raw_notifications(id,user_id,posted_at,raw_payload,dedupe_key,content_hash,state,processing_reason,review_deferred) values(?,?,now(),'{}',?,?,?,'UNRECOGNIZED_SHAPE',?)",
+    id,owner,id.toString(),id.toString(),id.equals(notice)?"REVIEW_REQUIRED":"FAILED",id.equals(held));
+  }
+  assertThat(gate.list("PENDING",null,null,null,50,0,null)).containsEntry("total",2L);
+  assertThat(gate.list("DEFERRED",null,null,null,50,0,null)).containsEntry("total",1L);
+  for(var entry:Map.of("PENDING_NOTIFICATION",notice,"FAILED_NOTIFICATION",failed).entrySet()){
+   var page=gate.list(entry.getKey(),null,null,null,50,0,null);
+   assertThat(page).containsEntry("total",1L);
+   var rows=(List<Map<String,Object>>)page.get("items");
+   assertThat(rows).singleElement().satisfies(row->assertThat(row).containsEntry("id",entry.getValue()).containsEntry("state","PENDING"));
+   var targets=List.of(new MoneyReviewBatchService.Target(notice,"RAW"),new MoneyReviewBatchService.Target(failed,"RAW"),new MoneyReviewBatchService.Target(held,"RAW"));
+   assertThat(gate.selected(targets,"DEFER",entry.getKey())).filteredOn(row->"PENDING".equals(row.get("state")))
+    .singleElement().satisfies(row->assertThat(row).containsEntry("id",entry.getValue()));
+  }
+ }
  @Test void obsoleteCategoryReviewCommandsCannotCreateIndependentDecisions(){
   UUID id=expense("오래된 분류 검토");var book=web.bookkeepingRow(id);var review=review();
   assertThatThrownBy(()->review.complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(id,0L,0L,0L,Map.of("categoryId",category.toString())))))).isInstanceOf(InvalidRequestException.class);

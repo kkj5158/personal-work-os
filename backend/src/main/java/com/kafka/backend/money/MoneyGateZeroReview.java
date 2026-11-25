@@ -22,6 +22,9 @@ final class MoneyGateZeroReview {
  private static final String UNLINKED="not exists(select 1 from money_transaction_sources s where s.user_id=r.user_id and s.raw_event_id=r.id)";
  private static final String IGNORED="(r.state='PROCESSED' and r.processing_reason in ('IGNORED_NON_FINANCIAL','USER_EXCLUDED','USER_IGNORED_NON_FINANCIAL'))";
  private static final String PENDING=OPEN+" and not r.review_deferred and "+UNLINKED;
+ private static final String PENDING_NOTICE="PENDING_NOTIFICATION";
+ private static final String FAILED_NOTICE="FAILED_NOTIFICATION";
+ private static boolean splitPending(String state){return PENDING_NOTICE.equals(state)||FAILED_NOTICE.equals(state);}
  private static final String DEFERRED="(("+OPEN+" and r.review_deferred) or "+IGNORED+") and "+UNLINKED;
  static final String PENDING_COUNT="select count(*) from money_raw_notifications r where r.user_id=? and "+PENDING;
  static boolean actionable(JdbcTemplate db,UUID owner,UUID id,String action){
@@ -39,7 +42,7 @@ final class MoneyGateZeroReview {
 
  Map<String,Object> list(String state,String type,String search,UUID accountId,int limit,int offset,String reason){
   page(limit,offset);text(reason,100,false,"검토 사유");text(search,200,false,"검색");
-  require(Set.of("PENDING","DEFERRED","COMPLETED").contains(state),"검토 상태를 확인하세요.");
+  require(Set.of("PENDING","DEFERRED","COMPLETED",PENDING_NOTICE,FAILED_NOTICE).contains(state),"검토 상태를 확인하세요.");
   require(type==null||Set.of("CLASSIFICATION","NOISE","TRANSFER").contains(type),"검토 유형을 확인하세요.");
   boolean history="COMPLETED".equals(state);
   String base=records(state,false);
@@ -50,16 +53,19 @@ final class MoneyGateZeroReview {
   if(accountId!=null){where+=" and \"accountId\"=?";args.add(accountId);}
   if(search!=null&&!search.isBlank()){where+=" and position(lower(?) in lower(concat_ws(' ',title,merchant,\"sourcePackage\")))>0";args.add(search.strip());}
   var counts=counts(db,owner);
-  long total=args.size()==1?((Number)counts.get(state)).longValue():db.queryForObject(base+"select count(*)"+where,Long.class,args.toArray());
+  long total=args.size()==1&&!splitPending(state)?((Number)counts.get(state)).longValue():db.queryForObject(base+"select count(*)"+where,Long.class,args.toArray());
   args.add(limit);args.add(offset);
   var items=db.queryForList(base+"select *"+where+" order by "+(history?"\"decisionAt\"":"\"occurredAt\"")+" desc,id limit ? offset ?",args.toArray());
-  enrich(items,"PENDING".equals(state));
+  enrich(items,"PENDING".equals(state)||splitPending(state));
   var reasons=db.queryForList(base+"select distinct reason from records order by reason",String.class,owner);
   return Map.of("items",items,"total",total,"counts",counts,"reasons",reasons,"bounded",false);
  }
  /** Restrict the source read before joins. A missing or processed selection never broadens the command. */
  List<Map<String,Object>> selected(List<MoneyReviewBatchService.Target> targets,String action){
-  String state="REOPEN".equals(action)?"DEFERRED":"PENDING";
+  return selected(targets,action,null);
+ }
+ List<Map<String,Object>> selected(List<MoneyReviewBatchService.Target> targets,String action,String requestedState){
+  String state=splitPending(requestedState)?requestedState:"REOPEN".equals(action)?"DEFERRED":"PENDING";
   UUID[] ids=targets.stream().filter(t->"RAW".equals(t.kind())).map(MoneyReviewBatchService.Target::id).toArray(UUID[]::new);
   var rows=db.queryForList(records(state,true)+" select * from records",users.getCurrentUserId(),ids);
   enrich(rows,"MOVE_TO_BOOKKEEPING".equals(action));
@@ -74,7 +80,15 @@ final class MoneyGateZeroReview {
  }
  private String records(String state,boolean selected){
   boolean history="COMPLETED".equals(state);
-  String sourceWhere=history?HISTORY:"PENDING".equals(state)?PENDING:DEFERRED;
+  String sourceWhere=switch(state){
+   case PENDING_NOTICE -> PENDING+" and r.state='REVIEW_REQUIRED'";
+   case FAILED_NOTICE -> PENDING+" and r.state='FAILED'";
+   case "PENDING" -> PENDING;
+   case "COMPLETED" -> HISTORY;
+   case "DEFERRED" -> DEFERRED;
+   default -> throw new IllegalArgumentException("Unknown review lane");
+  };
+  String rowState=splitPending(state)?"PENDING":state;
   if(selected)sourceWhere+=" and r.id=any(?)";
   String reasonColumn=history?"event_kind":"processing_reason";
   return """
@@ -101,7 +115,7 @@ final class MoneyGateZeroReview {
      case when q.processing_reason in (%s) then 'FORMAT' else 'DECISION' end as lane,
      case when q.processing_reason in (%s) then 'NOISE' when q.processing_reason like '%%TRANSFER%%' then 'TRANSFER' else 'CLASSIFICATION' end as "reviewType"
     from source q
-   """.formatted(EVENT_FILTER,sourceWhere,state,reasonColumn,formatReasons(),formatReasons())+MoneyReviewService.RAW_ACCOUNT_JOIN+") ";
+   """.formatted(EVENT_FILTER,sourceWhere,rowState,reasonColumn,formatReasons(),formatReasons())+MoneyReviewService.RAW_ACCOUNT_JOIN+") ";
  }
  private void enrich(List<Map<String,Object>> items,boolean assessCash){
   var checks=assessCash?admission.assess(items.stream().map(r->(UUID)r.get("id")).toList()):Map.<UUID,MoneyReviewAdmission.Assessment>of();

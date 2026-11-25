@@ -25,6 +25,7 @@ test('the review workspace confirms a matching direction in one request and refr
   moneyApi.get=async<T,>(path:string)=>{
     calls.push(path);
     if(path.includes('lane=UNRESOLVED'))return {items:applied?[]:[row],total:applied?0:1} as T;
+    if(path.startsWith('/ai/workbench?'))return {items:[],total:0,counts:{PENDING:0,DEFERRED:0,COMPLETED:0}} as T;
     return {items:[],total:0} as T;
   };
   moneyApi.patch=async<T,>(path:string,input:unknown)=>{
@@ -45,5 +46,17 @@ test('the review workspace confirms a matching direction in one request and refr
     assert.equal(applied,true);assert.equal(document.querySelector('[data-transaction-id="synthetic"]'),null);
     assert.ok(calls.filter(path=>path.includes('lane=UNRESOLVED')).length>=2);
     assert.match(document.body.textContent!,/검토할 거래가 없습니다/);
+    async function openLane(label:string){
+      const tab=[...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(t=>t.textContent===label)!;
+      await act(async()=>tab.click());
+    }
+    await openLane('미처리 알림');
+    assert.ok(calls.some(url=>url.includes('state=PENDING_NOTIFICATION')));
+    await openLane('처리 오류');
+    assert.ok(calls.some(url=>url.includes('state=FAILED_NOTIFICATION')));
+    assert.ok(calls.some(url=>url.includes('lane=FAILED')));
+    await openLane('보류');
+    assert.ok(calls.some(url=>url.includes('state=DEFERRED')));
+
   }finally{moneyApi.get=get;moneyApi.patch=patch;await act(()=>root.unmount());dom.window.close();}
 });

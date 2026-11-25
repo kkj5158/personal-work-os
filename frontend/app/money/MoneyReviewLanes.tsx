@@ -35,7 +35,8 @@ export function MoneyReviewLanes(p:Props & {onPendingCount?:(count:number)=>void
       onSelect={value=>{if(p.changeContext?.()!==false)setLane(value as Lane);}}/>
     <div role="tabpanel" id={tabs+'-panel'} aria-labelledby={tabs+'-tab-'+lane}>
       {lane==='UNRESOLVED'||lane==='FOLLOWUP'?<FinancialLane key={lane} {...p} lane={lane}/>:
-       lane==='FAILED'?<FailureLane/>:<NotificationReview key={lane} {...p} laneState={lane}/>}
+       lane==='FAILED'?<><NotificationReview key={lane} {...p} laneState="FAILED_NOTIFICATION"/><FailureLane/></>:
+       <NotificationReview key={lane} {...p} laneState={lane==='PENDING'?'PENDING_NOTIFICATION':lane}/>}
     </div>
   </section>;
 }
@@ -67,7 +68,7 @@ function FinancialLane(p:Props&{lane:'UNRESOLVED'|'FOLLOWUP'}){
 function FailureLane(){
   const [offset,setOffset]=useState(0);
   const result=useMoneyData<Page<Failure>>(UNIFIED+'/review?'+new URLSearchParams({lane:'FAILED',offset:String(offset),limit:'50'}));
-  return <section className="money-card"><h2>처리 오류 이력</h2><LoadState loading={result.loading} error={result.error}/>
+  return <section className="money-card"><h2>적용되지 않은 명령 이력</h2><LoadState loading={result.loading} error={result.error}/>
     <div className="money-table-wrap"><table className="money-table"><thead><tr><th>요청 시각</th><th>작업</th><th>실패 사유</th><th>요청 ID</th></tr></thead>
     <tbody>{result.data?.items.map(row=><tr key={row.id}><td>{seoul(row.occurredAt)}</td><td>{row.command}</td><td>{row.message||reviewReasons[row.reason]||row.reason}</td><td>{row.id}</td></tr>)}</tbody></table></div>
     {result.data&&!result.data.total&&<p>처리 오류가 없습니다.</p>}<Pagination offset={offset} total={result.data?.total??0} onChange={setOffset}/>

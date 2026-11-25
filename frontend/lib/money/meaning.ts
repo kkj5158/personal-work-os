@@ -73,7 +73,6 @@ export const reviewReasons: Record<string, string> = {
   POSSIBLE_INTERNAL_TRANSFER: "내 계좌 간 이체로 보임",
   UNMATCHED_OR_EXTERNAL_UNPROVEN: "일반 입출금 등록에 필요한 금융 근거 부족",
   ACCOUNT_RESOLUTION_REQUIRED: "등록된 계좌와 연결되지 않음",
-  AMBIGUOUS_TRANSFER_PAIR: "이체 짝 후보가 여러 건",
   POSSIBLE_ALREADY_POSTED_ROUTE: "이미 기록된 거래와 알림 근거가 겹침",
   MISSING_REQUIRED_FINANCIAL_FACTS: "금액·방향·통화 등 필수 금융 정보 부족",
   UNRESOLVED_TRANSFER_CANDIDATE: "계좌 간 이체 후보의 연결 근거 확인 필요",
