@@ -180,7 +180,7 @@ public class MoneyAccountLedgerService {
    decisions.apply(id,input,before);
    var latest=clean(decisions.fact(id,false));
    if(Boolean.TRUE.equals(input.requireApplied())){
-    require(Boolean.TRUE.equals(latest.get("meaningApplied")) && "NONE".equals(latest.get("relationStatus")),
+    require(MoneyOwnerFinancialDecision.meaningApplied(latest) && "NONE".equals(latest.get("relationStatus")),
         "기존 금융 관계를 먼저 확인하세요. 상세 정정에서 이체·대출·환불 연결을 확인할 수 있습니다.");
    }
    enrich(List.of(latest),null);
