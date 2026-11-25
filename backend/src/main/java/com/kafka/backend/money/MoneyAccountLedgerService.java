@@ -288,7 +288,7 @@ public class MoneyAccountLedgerService {
     var old=money.transaction(id);
     var proof=MoneyFinancialEvidence.requireQuick(db,owner(),money,old,edit.type());
     var canonical=quickEdit(edit.requestId(),old,"TYPE");
-    var result=unified.applyValidatedEdit(id,canonical);
+    var result=unified.applyValidatedEdit(id,canonical,true);
     audit(id,"FINANCIAL_ENGINE_OWNER_CONFIRM",Map.of("version",old.version()),Map.of(
         "requestId",edit.requestId(),"origin","OWNER","type",old.type(),"version",old.version()+1,
         "engineVersion",MoneyFinancialEvidence.VERSION,"proof",proof));

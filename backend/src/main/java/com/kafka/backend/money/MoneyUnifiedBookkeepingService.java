@@ -209,6 +209,9 @@ public class MoneyUnifiedBookkeepingService {
  public Map<String,Object> edit(UUID id,Edit input){require(input!=null&&input.action()!=null,"변경 내용이 필요합니다.");return commands.execute(owner(),input.requestId(),"UNIFIED_"+input.action(),Arrays.asList(id,input),()->applyValidatedEdit(id,input));}
  /** Shared by the ledger's rollback-only preview and guarded execution under the owner lock. */
  Map<String,Object> applyValidatedEdit(UUID id,Edit input){
+  return applyValidatedEdit(id,input,false);
+ }
+ Map<String,Object> applyValidatedEdit(UUID id,Edit input,boolean preserveClassification){
   var before=fact(id);version(before,input.expectedVersion());active(before);require(before.get("transfer_destination_status")==null||Set.of("ATTACH_SOURCE","OWNER_INTENT").contains(input.action()),"관리 제외 본인 계좌 이체는 은행 대사 변경 이력으로 먼저 복구하세요.");UUID undo=null;
   switch(input.action()){
    case "OWNER_INTENT" -> {
@@ -217,7 +220,7 @@ public class MoneyUnifiedBookkeepingService {
     var fact=decisions.fact(id,true);
     decisions.apply(id,new MoneyAccountLedgerService.FinancialType(input.requestId(),input.expectedVersion(),input.type(),true),fact);
    }
-   case "TYPE" -> {type(id,input,before);new MoneyOwnerFinancialDecision(db,owner()).supersede(id,input.requestId(),input.type());}
+   case "TYPE" -> {type(id,input,before,preserveClassification);new MoneyOwnerFinancialDecision(db,owner()).supersede(id,input.requestId(),input.type());}
    case "CORRECT" -> correct(id,input,before);
    case "LINK_TRANSFER" -> link(id,input,before);
    case "UNLINK_TRANSFER" -> undo=unlink(id,before);
@@ -233,7 +236,7 @@ public class MoneyUnifiedBookkeepingService {
  }
  /** Reuse the same financial validation inside an enclosing atomic owner-review command. */
  void resolveReviewType(UUID id,Edit v){type(id,v,fact(id));}
- private void type(UUID id,Edit v,Map<String,Object> before){
+ private void type(UUID id,Edit v,Map<String,Object> before,boolean preserveClassification){
   require(v.type()!=null,"금융 유형을 선택하세요.");TransactionType type;try{type=TransactionType.valueOf(v.type());}catch(IllegalArgumentException e){throw new InvalidRequestException("지원하지 않는 금융 유형입니다.");}
   var old=money.transaction(id);boolean out=old.fromAccountId()!=null&&old.toAccountId()==null,in=old.toAccountId()!=null&&old.fromAccountId()==null;
   require(out||in,"연결된 이체는 먼저 연결을 해제하세요.");
@@ -249,6 +252,7 @@ public class MoneyUnifiedBookkeepingService {
   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=? and not excluded)",Boolean.class,owner(),id))||type==TransactionType.EXPENSE,"연결된 환불을 먼저 해제하세요.");
   if(type==TransactionType.REFUND&&v.refundOf()!=null){var original=money.transaction(v.refundOf());if(v.otherVersion()!=null)MoneyMeaningService.version(original.version(),v.otherVersion());require(original.type()==TransactionType.EXPENSE&&state(original.id()).equals("CONFIRMED")&&!original.excluded()&&original.mergedInto()==null,"확정 소비 원거래가 필요합니다.");require(original.currency().equals(old.currency())&&!old.occurredAt().isBefore(original.occurredAt()),"환불 통화·발생일을 확인하세요.");BigDecimal refunded=db.queryForObject("select coalesce(sum(amount),0) from money_transactions where user_id=? and refund_of=? and not excluded and id<>?",BigDecimal.class,owner(),original.id(),id);require(refunded.add(old.amount()).compareTo(original.amount())<=0,"구매액을 초과하는 환불은 연결할 수 없습니다. 실제 입금은 보존됩니다.");}
   db.update("update money_transactions set type=?,meaning_state='CONFIRMED',refund_of=?,category_id=case when ? then category_id else null end,version=version+1 where user_id=? and id=?",type.name(),type==TransactionType.REFUND?v.refundOf():null,type==old.type()||type==TransactionType.EXPENSE&&old.type()==TransactionType.EXPENSE,owner(),id);
+  if(preserveClassification)return; // A reviewed meaning-only recovery never reapplies lifestyle classification.
   if(type==TransactionType.EXPENSE)money.applyCategoryRule(id);
   if(type==TransactionType.EXPENSE||type==TransactionType.INCOME)money.applyMeaningRules(id);
  }
