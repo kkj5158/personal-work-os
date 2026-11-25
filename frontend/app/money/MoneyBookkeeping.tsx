@@ -6,7 +6,6 @@ import {recoverLedgerOperation,type LedgerOperation} from "@/lib/money/accountLe
 import {type UnifiedOutcome} from "@/lib/money/unified";
 import {UnifiedLedger,UnifiedFinancialAction} from "./MoneyUnifiedLedger";
 import {typeLabels} from "@/lib/money/unified";
-import {UNIFIED} from "@/lib/money/unified";
 import {ManualBulkClassification} from "./MoneyManualBulkClassification";
 import {useDurableMoneySelection} from "./MoneyDurableSelection";
 import {CancellationHistory,RegistrationAction,RegistrationUndoNotice} from "./MoneyRegistration";
@@ -41,29 +40,30 @@ export type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
   currencies?: string[]; hasMixedCurrencies?: boolean; analyticsUnavailable?: boolean;
 };
 
-export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialAll?:boolean }) {
+export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench" }) {
   const mode=p.mode??"monthly";
   const query=useSearchParams();
-  const [view,setView]=useMoneyViewState<'legacy'|'all'>('book-unified-view',()=>p.initialAll||query.get('view')==='all'||!!query.get('transactionId')?'all':'legacy');
-  const [unresolved,setUnresolved]=useState(false);
-  const lastLinkedContext=useRef('');
-  useEffect(()=>{const signature=String(p.initialAll)+':'+query.toString();if(lastLinkedContext.current===signature)return;lastLinkedContext.current=signature;if(p.initialAll||query.get('view')==='all'||query.get('transactionId'))setView('all');},[p.initialAll,query,setView]);
-  const pending=useMoneyData<{count:number;canonicalUnresolved?:number;outgoing:number;incoming:number;loanSplitPending:number}>(mode==='monthly'?UNIFIED+'/pending':null);
   const [tab,setTab]=useMoneyViewState("book-workbench-tab",()=>"classification");
   const [monthFilter,setMonthFilter]=useMoneyViewState<MonthlyFilter|null>("book-month-installment-filter-v1-"+p.period.from+":"+p.period.to,()=>null);
+  const focusedId=query.get('transactionId');
+  const lastFocus=useRef<string|null>(null);
+  useEffect(()=>{
+    if(focusedId&&focusedId!==lastFocus.current)setMonthFilter(null);
+    lastFocus.current=focusedId;
+  },[focusedId,setMonthFilter]);
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
     "book-kind-"+mode,
     () => "EXPENSE",
   );
-  const [legacyAccounts]=useMoneyViewState<string[]|null>("book-monthly-"+kind+"-accounts",()=>null);
-  const linkedAccounts=query.get("accountIds")?.split(",").filter(Boolean)??(query.get("accountId")?[query.get("accountId")!]:null);
+  const linkedAccount=query.get("accountId")??query.get("account");
+  const linkedAccounts=query.get("accountIds")?.split(",").filter(Boolean)??(linkedAccount?[linkedAccount]:null);
   const [unifiedAccounts]=useMoneyViewState<string[]|null>("unified-accounts-false",()=>linkedAccounts);
   const [drilldownAccounts,setDrilldownAccounts]=useMoneyViewState<{ids:string[]|null}|null>("book-loan-accounts-"+p.period.from+":"+p.period.to,()=>null);
   const [ledgerScroll,setLedgerScroll]=useState(0);
   const loanFilter=monthFilter?.kind==="LOAN_PAYMENT"?monthFilter:null;
   const installmentFilter=monthFilter?.kind==="INSTALLMENT"||monthFilter?.kind==="SAVINGS"||monthFilter?.kind==="FAMILY_SUPPORT"?monthFilter:null;
   const categoryFilter=monthFilter?.kind==="INCOME"||monthFilter?.kind==="EXPENSE"?monthFilter:null;
-  const accountScope=view==="all"?unifiedAccounts:legacyAccounts??linkedAccounts;
+  const accountScope=unifiedAccounts??linkedAccounts;
   const tracking = useMoneyData<Tracking>("/tracking");
   const temporaryAccounts=loanFilter&&drilldownAccounts?drilldownAccounts.ids:accountScope;
   const loanAccounts=tracking.data?(temporaryAccounts??p.accounts.map(a=>a.id)):null;
@@ -73,10 +73,8 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
       if(!loanFilter)setDrilldownAccounts({ids:accountScope});
       setLedgerScroll(value=>value+1);
     }else if(filter){
-      setView("legacy");
       if(filter.kind==="INCOME"||filter.kind==="EXPENSE")setKind(filter.kind);
     }
-    if(filter)setUnresolved(false);
     setMonthFilter(filter);
     return true;
   }
@@ -85,11 +83,12 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
     <>
       {mode==="workbench"&&<nav className="money-actions" aria-label="AI 작업대 내부 탭"><button aria-pressed={tab==="classification"} onClick={()=>setTab("classification")}>AI 분류 작업대</button><button aria-pressed={tab==="cancelled"} onClick={()=>setTab("cancelled")}>등록 취소 내역</button></nav>}
       {mode==="monthly"&&<MoneyMonthlySummary key={p.period.from+":"+p.period.to} from={p.period.from} to={p.period.to} categories={p.categories} scope={temporaryAccounts} loanAccounts={loanAccounts} filter={monthFilter} onFilter={selectMonthFilter} navigate={p.navigate}/>}
-      {mode==='monthly'&&<div className="money-unified-view-tabs">{view!=="all"&&!unresolved&&<button onClick={()=>p.select({kind:"transaction",value:null})}>+ 거래 추가</button>}<button aria-pressed={view==='legacy'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('all');setUnresolved(false);}}}>거래 등록·정정</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setUnresolved(true);}}}>유형 미선택 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">{pending.data.canonicalUnresolved!=null&&<>원장 의미 미확정 전체 {pending.data.canonicalUnresolved}건 · </>}유형 미선택 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
+      {mode==="monthly"&&<button type="button" className="money-book-tracking" onClick={()=>setOpen(true)}>추적 계좌 설정</button>}
+      {mode==="monthly"&&monthFilter&&<button onClick={()=>setMonthFilter(null)}>전체 거래로 돌아가기</button>}
       <RegistrationUndoNotice/>
-      <LoadState error={tracking.error||pending.error} loading={tracking.loading} />
-      {mode==="monthly"&&monthFilter?.kind==="STOCK"?<StockLedger key={monthFilter.accountId+monthFilter.asOf} {...p} filter={monthFilter}/>:mode==="monthly"&&loanFilter?<UnifiedLedger key={`loan:${loanFilter.part??loanFilter.loanId??"unlinked"}:${p.period.from}:${p.period.to}`} {...p} unresolved={false} onExit={()=>setMonthFilter(null)} repayment={{filter:loanFilter,accounts:loanAccounts,availableAccounts:p.accounts,onAccounts:ids=>setDrilldownAccounts({ids}),scroll:ledgerScroll}}/>:
-      mode==='monthly'&&!installmentFilter&&(view==='all'||unresolved||!!query.get('transactionId'))?<UnifiedLedger {...p} unresolved={unresolved} onExit={()=>setUnresolved(false)}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&(installmentFilter||categoryFilter)?<InstallmentLedger key={JSON.stringify([installmentFilter,p.period,accountScope])} {...p} scope={accountScope} filter={(installmentFilter??categoryFilter)!}/>:<BookkeepingList
+      <LoadState error={tracking.error} loading={tracking.loading} />
+      {mode==="monthly"&&monthFilter?.kind==="STOCK"?<StockLedger key={monthFilter.accountId+monthFilter.asOf} {...p} filter={monthFilter}/>:mode==="monthly"&&loanFilter?<UnifiedLedger key={`loan:${loanFilter.part??loanFilter.loanId??"unlinked"}:${p.period.from}:${p.period.to}`} {...p} repayment={{filter:loanFilter,accounts:loanAccounts,availableAccounts:p.accounts,onAccounts:ids=>setDrilldownAccounts({ids}),scroll:ledgerScroll}}/>:
+      mode==='monthly'&&!installmentFilter&&!categoryFilter?<UnifiedLedger {...p}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&(installmentFilter||categoryFilter)?<InstallmentLedger key={JSON.stringify([installmentFilter,p.period,accountScope])} {...p} scope={accountScope} filter={(installmentFilter??categoryFilter)!}/>:<BookkeepingList
         key={`${mode}:${kind}:${p.period.from}:${p.period.to}:${categoryFilter?.categoryId??""}`}
         {...p}
         kind={kind}

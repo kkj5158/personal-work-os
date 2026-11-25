@@ -119,7 +119,7 @@ test('pending notifications expose the approved direct actions and read-only sou
   const h=await mount([item('eligible'),item('blocked',{merchant:null,moveToBookkeepingEligible:false,moveToBookkeepingBlockReason:'입출금 근거 부족'})]);
   try {
     const row=rows()[0];assert.equal(row.cells[1].querySelector('strong')?.textContent,'사조푸디스트(주)씨유(C');
-    assert.deepEqual([...row.querySelectorAll('button')].map(b=>b.textContent),['거래장 이동','제외','상세']);
+    assert.deepEqual([...row.querySelectorAll('button')].map(b=>b.textContent),['거래 등록','제외','상세']);
     assert.ok(button('등록 불가',rows()[1]).disabled);assert.equal(button('제외',rows()[1]).disabled,false);
     await click(button('상세',rows()[1]));const evidence=document.querySelector('[aria-label="원문 알림 및 처리 근거"]');
     assert.match(evidence?.textContent??'',/불변 원문 12000원 출금/);assert.match(evidence?.textContent??'',/입출금 근거 부족/);
@@ -136,7 +136,7 @@ test('FORMAT keeps ordinary admission blocked while owner can open a blank manua
     assert.ok(h.reads.includes('/review/owner/format'));assert.equal(h.writes.length,0);
   } finally {await h.close();}
 });
-for(const [label,action,state] of [['거래장 이동','MOVE_TO_BOOKKEEPING','PENDING'],['제외','DEFER','PENDING'],['복원','REOPEN','DEFERRED']] as const) test(label+' commits one guarded command in place',async()=>{
+for(const [label,action,state] of [['거래 등록','MOVE_TO_BOOKKEEPING','PENDING'],['제외','DEFER','PENDING'],['복원','REOPEN','DEFERRED']] as const) test(label+' commits one guarded command in place',async()=>{
   const h=await mount([item('direct',{state}),item('other',{state})]);
   try {
     if(state==='DEFERRED')await click(button('제외',document.querySelector('[role="tablist"]')!));
@@ -145,26 +145,26 @@ for(const [label,action,state] of [['거래장 이동','MOVE_TO_BOOKKEEPING','PE
     assert.equal(rows().length,1);assert.equal(rows()[0].dataset.rowId,'other');
     assert.equal(document.querySelector('dialog,.money-review-inline,.money-notice-preview'),null);
     assert.equal(h.dom.window.location.pathname,'/money/review');assert.deepEqual(h.selected,[]);
-    if(action==='MOVE_TO_BOOKKEEPING')assert.equal(document.querySelector('.money-notice-results a')?.getAttribute('href'),'/money/ledger?transactionId=canonical-synthetic');
+    if(action==='MOVE_TO_BOOKKEEPING')assert.equal(document.querySelector('.money-notice-results a')?.getAttribute('href'),'/money/bookkeeping?transactionId=canonical-synthetic');
   } finally {await h.close();}
 });
 test('a lost single response blocks only its original row and recovers via GET without reposting',async()=>{
   const h=await mount([item('a'),item('b')]);let original='';
   h.behavior.single=async command=>{if(command.id==='a'){original=command.requestId;throw Error('connection interrupted');}return {requestId:command.requestId,completed:true,items:[{id:command.id,kind:'RAW',status:'SAVED'}]};};
   try {
-    await click(button('거래장 이동',rows()[0]));assert.ok(button('거래장 이동',rows()[0]).disabled);assert.equal(button('제외',rows()[1]).disabled,false);
+    await click(button('거래 등록',rows()[0]));assert.ok(button('거래 등록',rows()[0]).disabled);assert.equal(button('제외',rows()[1]).disabled,false);
     await click(button('제외',rows()[1]));assert.equal(rows().length,1);assert.equal(h.writes.length,2);
     h.replace([item('a',{state:'COMPLETED'}),item('b',{state:'DEFERRED'})]);
     h.behavior.recover={requestId:original,completed:true,items:[{id:'a',kind:'RAW',status:'SAVED',transactionId:'original-cash'}]};
     await click(button('원래 요청 결과 조회'));assert.equal(h.writes.length,2);assert.ok(h.reads.includes('/review/batches/outcomes/'+original));assert.equal(rows().length,0);
-    assert.equal(document.querySelector('.money-notice-results a')?.getAttribute('href'),'/money/ledger?transactionId=original-cash');
+    assert.equal(document.querySelector('.money-notice-results a')?.getAttribute('href'),'/money/bookkeeping?transactionId=original-cash');
   } finally {await h.close();}
 });
 test('double clicks on a row in flight produce one command and leave independent rows operable',async()=>{
   const h=await mount([item('a'),item('b')]);const pending=deferred<Outcome>();let id='';
   h.behavior.single=command=>{id=command.requestId;return pending.promise;};
   try {
-    const target=button('거래장 이동',rows()[0]);await act(async()=>{target.click();target.click();});
+    const target=button('거래 등록',rows()[0]);await act(async()=>{target.click();target.click();});
     assert.equal(h.writes.length,1);assert.equal(rows().length,2);assert.ok(button('제외',rows()[0]).disabled);assert.equal(button('제외',rows()[1]).disabled,false);
     await act(async()=>pending.resolve({requestId:id,completed:true,items:[{id:'a',kind:'RAW',status:'CONFLICT',message:'원문 근거가 변경되었습니다.'}]}));
     assert.match(rows()[0].textContent??'',/원문 근거가 변경/);assert.equal(button('제외',rows()[1]).disabled,false);
@@ -190,13 +190,13 @@ test('bulk preview snapshots only selected IDs, reports exclusions, and does not
   const h=await mount([item('eligible'),item('blocked'),item('untouched')]);h.behavior.blocked.add('blocked');
   try {
     await click(checkbox(rows()[0]));await click(checkbox(rows()[1]));
-    const toolbar=document.querySelector('.money-notice-toolbar');assert.ok(toolbar);await click(button('선택 거래장 이동',toolbar));
+    const toolbar=document.querySelector('.money-notice-toolbar');assert.ok(toolbar);await click(button('선택 거래 등록',toolbar));
     const preview=document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]');assert.ok(preview);
     assert.equal(preview.tagName,'SECTION','Bulk preview is an anchored compact section');
     assert.equal(h.writes.length,1);assert.deepEqual((h.writes[0].body as PreviewRequest).items,[{kind:'RAW',id:'eligible'},{kind:'RAW',id:'blocked'}]);
     assert.match(preview.textContent??'',/선택.*2건/);assert.match(preview.textContent??'',/적격.*1건/);assert.match(preview.textContent??'',/제외.*1건/);
     assert.equal(preview.querySelectorAll('li').length,2);assert.match(preview.textContent??'',/소유 계좌/);
-    await click(button('1건 거래장 이동',preview));
+    await click(button('1건 거래 등록',preview));
     assert.equal(rows().length,2);assert.equal(rows().filter(r=>checkbox(r).checked).length,1,'Excluded row remains selected');
     assert.equal(h.writes.filter(value=>value.path.endsWith('/execute')).length,1);
   } finally {await h.close();}
@@ -210,7 +210,7 @@ test('bulk partial success leaves failed/unknown rows selected and recovery upda
     await click(button('3건 제외',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
     assert.equal(rows().length,2);assert.equal(rows().filter(r=>checkbox(r).checked).length,2);
     assert.match(document.body.textContent??'',/버전 충돌/);assert.match(document.body.textContent??'',/결과 미확인/);
-    assert.ok(button('거래장 이동',rows()[0]).disabled);
+    assert.ok(button('거래 등록',rows()[0]).disabled);
     h.replace([item('saved',{state:'DEFERRED'}),item('failed'),item('unknown',{state:'DEFERRED'})]);
     h.behavior.recover={requestId:command!.requestId,completed:true,items:[{kind:'RAW',id:'saved',status:'SAVED'},{kind:'RAW',id:'failed',status:'CONFLICT',message:'버전 충돌'},{kind:'RAW',id:'unknown',status:'SAVED'}]};
     const before=h.writes.length;await click(button('원래 요청 결과 조회'));assert.equal(h.writes.length,before);
@@ -287,9 +287,9 @@ test('completed raw bookkeeping commands show verified registration and Korean h
   try {
     await click(button('처리 이력',document.querySelector('[role="tablist"]')!));
     assert.equal(rows().length,2);
-    assert.match(rows()[0].textContent??'',/거래장 등록/);assert.match(rows()[0].textContent??'',/거래장 이동/);
-    assert.equal(rows()[0].querySelector('a')?.getAttribute('href'),'/money/ledger?transactionId=canonical-history');
-    assert.ok(!rows()[1].textContent?.includes('거래장 등록'));assert.ok(!rows()[0].textContent?.includes('MOVE_TO_BOOKKEEPING'));
+    assert.match(rows()[0].textContent??'',/거래 등록/);assert.match(rows()[0].textContent??'',/거래 등록/);
+    assert.equal(rows()[0].querySelector('a')?.getAttribute('href'),'/money/bookkeeping?transactionId=canonical-history');
+    assert.ok(!rows()[1].textContent?.includes('거래 등록'));assert.ok(!rows()[0].textContent?.includes('MOVE_TO_BOOKKEEPING'));
     assert.equal(document.querySelector('.money-notice-toolbar'),null);
     assert.equal(h.writes.length,0,'History labels remain read-only');
   } finally {await h.close();}
@@ -369,7 +369,7 @@ test('a tab reload restores owner-bound opaque keys, looks up the outcome, and r
   const storage:Record<string,string>={};
   let first:unknown;
   try {
-    await click(button('거래장 이동',rows()[0]));
+    await click(button('거래 등록',rows()[0]));
     first=h.writes[0].body;
     const k=h.dom.window.sessionStorage.key(0)!;
     storage[k]=h.dom.window.sessionStorage.getItem(k)!;
@@ -378,7 +378,7 @@ test('a tab reload restores owner-bound opaque keys, looks up the outcome, and r
   } finally {await h.close();}
   const reopened=await mount([item('source'),item('unrelated')],storage);
   try {
-    assert.ok(button('거래장 이동',rows()[0]).disabled);assert.equal(button('거래장 이동',rows()[1]).disabled,false);
+    assert.ok(button('거래 등록',rows()[0]).disabled);assert.equal(button('거래 등록',rows()[1]).disabled,false);
     assert.equal(reopened.writes.length,0);assert.equal(document.querySelector('.money-notice-recovery')?.textContent?.includes('같은 요청으로 재시도'),false);
     reopened.behavior.recoverError=new ApiError(404,'원래 요청을 찾을 수 없습니다.');
     await click(button('원래 요청 결과 조회'));assert.equal(reopened.writes.length,0);
@@ -393,7 +393,7 @@ test('a definitive HTTP rejection leaves the row actionable without a receipt re
   const h=await mount([item('changed')]);
   h.behavior.single=async()=>{throw new ApiError(409,'원문 버전이 변경되었습니다.');};
   try {
-    await click(button('거래장 이동',rows()[0]));
+    await click(button('거래 등록',rows()[0]));
     assert.ok(rows()[0].textContent?.includes('원문 버전이 변경되었습니다.'));
     assert.equal(document.querySelector('.money-notice-recovery'),null);
     assert.equal(button('제외',rows()[0]).disabled,false);assert.equal(h.dom.window.sessionStorage.length,0);

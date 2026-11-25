@@ -56,6 +56,12 @@ export type ReviewItem = {
 };
 /** Human-facing review reasons. Internal codes stay visible only under system information. */
 export const reviewReasons: Record<string, string> = {
+  SOURCE_INCOMPLETE_OR_CONFLICTED: "원본 알림과 계좌 정보를 확인하세요.",
+  OWNER_DECISION_PROTECTED: "기존 직접 결정의 근거를 확인하세요.",
+  CANONICAL_FINANCIAL_REVIEW_REQUIRED: "대출·환불·이체 연결 관계를 확인하세요.",
+  AMBIGUOUS_TRANSFER_PAIR: "반대편 이체 후보가 여러 건입니다. 원본을 비교하세요.",
+  TRANSFER_COUNTERPART_PROTECTED: "반대편 거래에 기존 결정이 있습니다. 연결 이력을 확인하세요.",
+  NO_CURRENT_APPROVED_RULE: "거래처와 원본을 확인하고 금융 유형을 선택하세요.",
   UNRESOLVED_TRANSFER_INTENT: "이체 알림의 연결 근거 확인 필요",
   OPPOSITE_OWNER_ACCOUNT_UNRESOLVED: "반대 방향 알림의 소유 계좌 미확인",
   LATE_POSTED_TRANSFER_SOURCE_OVERLAP: "기존 이체와 늦게 도착한 알림 연결 확인",

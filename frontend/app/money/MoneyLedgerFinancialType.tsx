@@ -17,11 +17,12 @@ const labels:Record<string,string>={
 export function relationLabel(row:Pick<LedgerRow,'relationStatus'>){
  return row.relationStatus && row.relationStatus!=='NONE' ? labels[row.relationStatus]??'세부정보 미확정' : '';
 }
-type TypeCommand={requestId:string;expectedVersion:number;financialType:string;v4?:boolean;decisionRequestId?:string};
+type FinancialRow=Pick<LedgerRow,'id'|'version'|'type'|'title'|'meaning_state'|'declaredFinancialType'|'meaningApplied'|'display_type'|'from_account_id'|'to_account_id'>;
+type TypeCommand={requestId:string;expectedVersion:number;financialType:string;v4?:boolean;requireApplied?:boolean;decisionRequestId?:string};
 type Receipt={intentSaved:boolean;meaningApplied:boolean;currentVersion:number;requestId:string;transactionId:string;row:LedgerRow};
 export function decisionDescription(receipt:Receipt){
  const relation=relationLabel(receipt.row);
- if(!receipt.meaningApplied)return ['선택 저장 · 금융 반영 대기',relation].filter(Boolean).join(' · ');
+ if(!receipt.meaningApplied)return relation||'금융 의미 미확정 · 거래 상세를 확인하세요.';
  return ['저장됨',relation].filter(Boolean).join(' · ');
 }
 type Phase='saving'|'saved'|'unknown'|'conflict'|'failed';
@@ -91,6 +92,10 @@ export function useFinancialDecisions(){
    }
    if(!receipt?.intentSaved||typeof receipt.meaningApplied!=='boolean'||receipt.requestId!==entry.command.requestId||receipt.transactionId!==entry.id||receipt.row?.id!==entry.id)throw Error('저장 응답을 확인할 수 없습니다.');
    remember(owner,entry.id);
+   if(entry.command.requireApplied&&(!receipt.meaningApplied||receipt.row.meaning_state!=='CONFIRMED'||receipt.row.type!==entry.command.financialType)){
+    if(refresh)cache.mutate('transaction');
+    throw new ApiError(422,relationLabel(receipt.row)||'금융 의미를 확정할 수 없습니다. 거래 상세에서 원본과 연결 관계를 확인하세요.');
+   }
    put({...entry,phase:'saved',receipt});
    if(refresh)cache.mutate('transaction');
    onReceipt?.(receipt.row);
@@ -105,12 +110,12 @@ export function useFinancialDecisions(){
    return phase;
   }finally{active.current.delete(entry.id);}
  }
- function save(row:LedgerRow,type:string,refresh=true,onReceipt?:(row:LedgerRow)=>void){
+ function save(row:FinancialRow,type:string,refresh=true,onReceipt?:(row:LedgerRow)=>void){
   const prior=entries[row.id];
   if(prior?.phase==='unknown'||prior?.phase==='saving')return Promise.resolve('busy');
-  return send({id:row.id,title:row.title??'거래',before:ledgerDisplayType(row),phase:'saving',command:{requestId:crypto.randomUUID(),expectedVersion:row.version,financialType:type,...(type==='REFUND'?{v4:true}:{})}},refresh,false,onReceipt);
+  return send({id:row.id,title:row.title??'거래',before:ledgerDisplayType(row),phase:'saving',command:{requestId:crypto.randomUUID(),expectedVersion:row.version,financialType:type,...(['INCOME','EXPENSE'].includes(type)?{requireApplied:true}:{}),...(type==='REFUND'?{v4:true}:{})}},refresh,false,onReceipt);
  }
- function retry(entry:Decision,row?:LedgerRow){
+ function retry(entry:Decision,row?:FinancialRow){
   if(entry.phase==='unknown')return send(entry,true,true);
   if(!row||entry.command.decisionRequestId)return;
   return save(row,entry.command.financialType);
@@ -124,7 +129,7 @@ export function useFinancialDecisions(){
  return {entries,save,retry,undo};
 }
 
-export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disabled:boolean;onChoose:(type:string)=>void}){
+export function FinancialTypePicker({row,disabled,onChoose}:{row:FinancialRow;disabled:boolean;onChoose:(type:string)=>void}){
  const current=baseDirection(row),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null);
  const [open,setOpen]=useState(false);
  const [position,setPosition]=useState({top:8,left:8,maxHeight:220});
@@ -168,12 +173,12 @@ export function FinancialTypePicker({row,disabled,onChoose}:{row:LedgerRow;disab
  </div>,document.body)}</>;
 }
 
-export function DecisionStatus({row,entry,retry,undo}:{row:LedgerRow;entry?:Decision;retry:(entry:Decision,row:LedgerRow)=>void;undo:(entry:Decision)=>void}){
+export function DecisionStatus({row,entry,retry,undo}:{row:FinancialRow & Partial<Pick<LedgerRow,'relationStatus'|'meaningOrigin'|'provisionalDirection'>>;entry?:Decision;retry:(entry:Decision,row:FinancialRow)=>void;undo:(entry:Decision)=>void}){
  const relation=relationLabel(row);
  if(entry?.phase==='saving')return <span role="status">저장 중…</span>;
  if(entry&&entry.phase!=='saved')return <div className="al-decision-result" role="status"><span>{ledgerTypes[entry.command.financialType]} · {entry.message}</span>{(entry.phase==='unknown'||!entry.command.decisionRequestId)&&<button type="button" onClick={()=>retry(entry,row)}>{entry.phase==='unknown'?'원래 요청 재확인':'선택 다시 적용'}</button>}</div>;
  const saved=entry?.receipt?.currentVersion===row.version;
- return <div className="al-decision-result" role="status"><span className={'al-status '+(relation||ledgerDisplayType(row)==='UNRESOLVED'?'unresolved':'')}>{saved&&entry?.receipt?decisionDescription(entry.receipt):relation||(row.meaningApplied===false?'선택 저장 · 금융 반영 대기':ledgerDisplayType(row)==='UNRESOLVED'?'금융 의미 미확정':row.meaningOrigin==='AUTO'?'자동 확정':row.declaredFinancialType||row.meaningOrigin==='OWNER'?'직접 확정':'확정')}</span>
+ return <div className="al-decision-result" role="status"><span className={'al-status '+(relation||ledgerDisplayType(row)==='UNRESOLVED'?'unresolved':'')}>{saved&&entry?.receipt?decisionDescription(entry.receipt):relation||(row.meaningApplied===false?'금융 의미 미확정':ledgerDisplayType(row)==='UNRESOLVED'?'금융 의미 미확정':row.meaningOrigin==='AUTO'?'자동 확정':row.declaredFinancialType||row.meaningOrigin==='OWNER'?'직접 확정':'확정')}</span>
  {row.provisionalDirection&&<small>{row.provisionalDirection==='EXPENSE'?'출금':'입금'} 등록 · 금융 의미 잠정</small>}
- {relation&&!saved&&<small>{row.meaningApplied===false?'유형 선택 저장 · 금융 반영 대기':'유형 저장됨'}</small>}{entry?.receipt&&entry.receipt.currentVersion<row.version&&<small>이후 수정되어 실행 취소할 수 없습니다.</small>}{saved&&entry&&!entry.command.decisionRequestId&&<button type="button" onClick={()=>undo(entry)}>실행 취소</button>}</div>;
+ {entry?.receipt&&entry.receipt.currentVersion<row.version&&<small>이후 수정되어 실행 취소할 수 없습니다.</small>}{saved&&entry&&!entry.command.decisionRequestId&&<button type="button" onClick={()=>undo(entry)}>실행 취소</button>}</div>;
 }

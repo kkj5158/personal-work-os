@@ -21,7 +21,7 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
  Object.assign(dom.window.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});
  const {createRoot}=await import('react-dom/client'),root=createRoot(document.getElementById('root')!);
  const {UnifiedFinancialAction}=await import('./MoneyFinancialEditor');
- const original={get:api.get,post:api.post};
+ const original={get:api.get,post:api.post,patch:api.patch};
  let row={...initial},shown=true,outcome:UnifiedOutcome['status']='APPLIED',failureReason='VALIDATION',loanVersion=7,readsFail=false;
  const posts:{path:string;body:Record<string,unknown>}[]=[];
  api.get=async<T,>(path:string)=>{
@@ -35,6 +35,11 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   const command=body as Record<string,unknown>;posts.push({path,body:command});
   if(outcome==='APPLIED'){row={...row,type:String(command.type??row.type),version:row.version+1};return {status:'APPLIED',result:{row}} as T;}
   return {status:outcome,result:{reason:failureReason,message:'합성 거절'}} as T;
+ };
+ api.patch=async<T,>(path:string,body:unknown)=>{
+  const command=body as Record<string,unknown>;posts.push({path,body:command});
+  row={...row,type:String(command.financialType),meaning_state:'CONFIRMED',version:row.version+1};
+  return {intentSaved:true,meaningApplied:true,requestId:command.requestId,transactionId:row.id,currentVersion:row.version,row} as T;
  };
  const render=()=>run(()=>root.render(<MoneyDataProvider>{shown&&<UnifiedFinancialAction id="fact" label="소비" accounts={[{id:'account',displayName:'합성 생활비'} as Account]}/>}</MoneyDataProvider>));
  const open=()=>run(()=>button('소비').click());
@@ -50,7 +55,7 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   await render();await open();
   assert.ok(document.activeElement===button('금융 편집 닫기'),'Opening moves focus into the editor');
   assert.equal(document.querySelector<HTMLDetailsElement>('details')?.open,false);
-  assert.equal(button('변경 저장').disabled,true);
+  assert.ok(![...document.querySelectorAll('button')].some(b=>b.textContent==='변경 저장'));
   assert.equal(document.querySelector('[aria-label="세부 금융 유형"]'),null);
   await choose('↗출금');assert.equal(posts.length,0,'Direction navigation does not post cash or liabilities');
   const categoryTrigger=button('금융 카테고리');
@@ -62,11 +67,12 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   assert.ok(document.querySelector('[aria-label="금융 유형 편집"]'));
   assert.equal(document.activeElement,categoryTrigger);
 
-  await choose('변경 저장');assert.equal(posts.at(-1)!.body.action,'OWNER_INTENT');assert.deepEqual(Object.keys(posts.at(-1)!.body).sort(),['action','expectedVersion','requestId','type']);
-  assert.match(document.body.textContent??'',/서버에 저장했습니다/);
+  assert.equal(posts.length,0,'An already confirmed identical choice is a no-op');
   await close();row={...initial,meaning_state:'UNRESOLVED',declaredFinancialType:'EXPENSE',version:2};
-  await open();await choose('↗출금');await choose('변경 저장');
-  assert.equal(posts.at(-1)!.body.type,'EXPENSE');assert.equal(posts.at(-1)!.body.action,'OWNER_INTENT');
+  await open();await choose('↗출금');
+  assert.equal(posts.length,1);assert.equal(posts[0].path,'/account-ledger/rows/fact/financial-type');
+  assert.equal(posts[0].body.financialType,'EXPENSE');assert.equal(posts[0].body.requireApplied,true);
+  assert.match(document.body.textContent??'',/금융 유형을 확정했습니다/);
   await close();row={...initial,type:'LOAN_PAYMENT',loan_id:'loan',principal:420000,interest:70000,fee:10000,version:3};await open();
   assert.equal(control('원금').value,'420000');assert.equal(control('상환 대출').disabled,true);
   await change('원금','420001');assert.equal(button('변경 저장').disabled,true,'Split must equal cash outflow');
@@ -97,5 +103,5 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   await choose('동일 금융 사실 알림 연결');
   assert.equal(posts.at(-1)!.body.otherId,'raw-source');assert.equal(posts.at(-1)!.body.otherVersion,0);assert.equal(posts.at(-1)!.body.type,undefined);
   await close();readsFail=true;await open();assert.equal(document.querySelector('.money-financial-summary'),null,'Failed reload cannot leave stale editable data');assert.match(document.body.textContent??'',/read failed/);
- }finally{api.get=original.get;api.post=original.post;await act(()=>root.unmount());dom.window.close();}
+ }finally{api.get=original.get;api.post=original.post;api.patch=original.patch;await act(()=>root.unmount());dom.window.close();}
 });

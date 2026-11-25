@@ -122,7 +122,7 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   const pendingRows=()=>[...pendingTable.querySelectorAll('tbody tr')].map(n=>n.getAttribute('data-transaction-id'));
   assert.deepEqual(pendingRows(),['pending-row','unlinked-row']);
   assert.match(document.querySelector('.money-month-summary')!.textContent!,/배분 미확정 2건 · 42,000원/);
-  assert.equal(pendingTable.querySelector('[data-transaction-id="unlinked-row"] a')?.getAttribute('href'),'/money/ledger?transactionId=unlinked-row');
+  assert.equal(pendingTable.querySelector('[data-transaction-id="unlinked-row"] a')?.getAttribute('href'),'/money/bookkeeping?transactionId=unlinked-row');
   const search=pendingTable.querySelector<HTMLInputElement>('input[aria-label="대출상환 거래 검색"]')!;
   await act(()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(search,'미연결');search.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});await tick();
   assert.deepEqual(pendingRows(),['unlinked-row']);
@@ -202,7 +202,7 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   const buttonWithText=(text:string)=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===text)!;
   await act(()=>buttonWithText('+ 거래 추가').click());assert.equal(selected,'new-transaction');
   selected='';
-  await act(()=>buttonWithText('거래 등록·정정').click());await tick();
+  assert.ok(paths.some(path=>path.startsWith('/bookkeeping/unified/confirmed?')));
   assert.ok(document.querySelector('[aria-label="전체 거래 가계부"]'));
   await act(()=>buttonWithText('+ 거래 추가').click());assert.equal(selected,'new-transaction');
   assert.equal(writes,0);
